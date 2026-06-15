@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arinar.com/schemas/events/agent-message.json",
+  "title": "Agent Message Event",
+  "description": "Message from an agent participant",
+  "allOf": [
+    {
+      "$ref": "./base-event.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_type": {
+          "const": "agent_message"
+        },
+        "content": {
+          "type": "object",
+          "required": ["message"],
+          "properties": {
+            "message": {
+              "type": "string",
+              "description": "Agent response text"
+            },
+            "model_id": {
+              "type": "string",
+              "description": "OpenRouter model identifier used"
+            },
+            "tokens_used": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "verbosity_level": {
+              "type": "string",
+              "enum": ["brief", "standard", "deep_dive"]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

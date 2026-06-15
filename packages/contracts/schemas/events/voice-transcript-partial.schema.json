@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arinar.com/schemas/events/voice-transcript-partial.json",
+  "title": "Voice Transcript Partial Event",
+  "description": "Partial voice transcription result (streaming)",
+  "allOf": [
+    {
+      "$ref": "./base-event.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_type": {
+          "const": "voice_transcript_partial"
+        },
+        "content": {
+          "type": "object",
+          "required": ["transcript_id", "text"],
+          "properties": {
+            "transcript_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "text": {
+              "type": "string",
+              "description": "Partial transcript text"
+            },
+            "is_final": {
+              "type": "boolean",
+              "const": false
+            }
+          }
+        }
+      }
+    }
+  ]
+}

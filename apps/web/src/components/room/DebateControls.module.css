@@ -1,0 +1,228 @@
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.controls h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  color: var(--danger);
+  font-size: 12px;
+  animation: shake 400ms;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  75% { transform: translateX(3px); }
+}
+
+.buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.buttons button {
+  padding: 12px 16px;
+  background: var(--surface-0);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  color: var(--text-0);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 150ms;
+}
+
+.buttons button:hover:not(:disabled) {
+  background: var(--surface-1);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.buttons button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btnPrimary {
+  background: var(--accent) !important;
+  color: var(--bg-0) !important;
+  border-color: var(--accent) !important;
+}
+
+.btnPrimary:hover:not(:disabled) {
+  background: var(--accent-hover) !important;
+}
+
+.btnDanger {
+  background: rgba(248, 113, 113, 0.1) !important;
+  border-color: var(--danger) !important;
+  color: var(--danger) !important;
+}
+
+.btnDanger:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.2) !important;
+}
+
+.btnExtend {
+  background: rgba(59, 130, 246, 0.1) !important;
+  border-color: rgba(59, 130, 246, 0.4) !important;
+  color: rgba(59, 130, 246, 1) !important;
+}
+
+.btnExtend:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.2) !important;
+  border-color: rgba(59, 130, 246, 0.6) !important;
+}
+
+.btnConclude {
+  background: linear-gradient(135deg, rgba(147, 51, 234, 0.2) 0%, rgba(59, 130, 246, 0.2) 100%) !important;
+  border-color: rgba(147, 51, 234, 0.6) !important;
+  color: rgba(147, 51, 234, 1) !important;
+  font-weight: 600 !important;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.btnConclude:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(147, 51, 234, 0.3) 0%, rgba(59, 130, 246, 0.3) 100%) !important;
+  border-color: rgba(147, 51, 234, 0.8) !important;
+  transform: translateY(-2px);
+}
+
+.confirmSheet {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+  animation: fadeIn 200ms ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.confirmContent {
+  background: var(--bg-1);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px 12px 0 0;
+  padding: 24px;
+  width: 100%;
+  max-width: 500px;
+  animation: slideUp 250ms ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.confirmContent h4 {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text-0);
+  margin-bottom: 12px;
+}
+
+.confirmContent p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-1);
+  margin-bottom: 20px;
+}
+
+.confirmActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.btnSecondary {
+  padding: 12px 20px;
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  color: var(--text-0);
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 150ms;
+}
+
+.btnSecondary:hover {
+  background: var(--surface-0);
+  border-color: var(--accent);
+}
+
+.btnYoloPause {
+  background: var(--surface-0);
+  border: 1px solid #ff6b6b;
+  color: #ff6b6b;
+  font-weight: 500;
+}
+
+.btnYoloPause:hover:not(:disabled) {
+  background: #ff6b6b;
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+}
+
+.btnYoloResume {
+  background: var(--surface-0);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.btnYoloResume:hover:not(:disabled) {
+  background: var(--accent);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(30, 27, 75, 0.3);
+}
+
+/* ── Auto Mode ─────────────────────────────────────────────────────────── */
+
+.btnAuto {
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover, var(--accent)));
+  color: #fff;
+  border: none;
+  font-weight: 700;
+}
+
+.btnAuto:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.btnAuto:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

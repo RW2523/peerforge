@@ -1,0 +1,31 @@
+.container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: var(--bg-0);
+}
+
+.card {
+  background: var(--bg-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 40px;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+}
+
+.card h1 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-0);
+  margin: 0 0 16px 0;
+}
+
+.status {
+  font-size: 14px;
+  color: var(--text-2);
+  margin: 0;
+}

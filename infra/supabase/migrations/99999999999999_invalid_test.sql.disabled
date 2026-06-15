@@ -1,0 +1,18 @@
+-- Migration: 99999999999999_invalid_test.sql
+-- Description: NEGATIVE TEST - This migration intentionally fails
+-- Purpose: Prove that invalid migrations are caught and blocked
+-- Status: DISABLED (renamed to .sql.disabled so it doesn't run)
+
+-- This will fail: duplicate table name
+CREATE TABLE tenants (
+    id UUID PRIMARY KEY
+);
+
+-- This will fail: invalid foreign key reference
+CREATE TABLE invalid_reference (
+    id UUID PRIMARY KEY,
+    nonexistent_id UUID REFERENCES nonexistent_table(id)
+);
+
+-- This will fail: syntax error
+CREATE TABLE broken SYNTAX ERROR;

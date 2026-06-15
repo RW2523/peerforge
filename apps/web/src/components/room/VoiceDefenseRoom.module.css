@@ -1,0 +1,888 @@
+/* VoiceDefenseRoom — dark OLED theme matching the rest of the app */
+
+.container {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 28px 24px 80px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: var(--text-0);
+}
+
+/* ── Header ──────────────────────────────────────────────────────────── */
+.header { margin-bottom: 28px; }
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 6px;
+}
+
+.subtitle {
+  font-size: 0.875rem;
+  color: var(--text-2);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Warnings ────────────────────────────────────────────────────────── */
+.keyWarning,
+.warning {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 16px;
+  border-radius: var(--radius-lg);
+  margin-bottom: 16px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.keyWarning {
+  background: rgba(245, 166, 35, 0.08);
+  border: 1px solid rgba(245, 166, 35, 0.25);
+  color: #f5a623;
+}
+
+.keyWarning strong { display: block; margin-bottom: 2px; }
+.keyWarning p,
+.keyWarning a { margin: 0; font-size: 0.82rem; color: #f5a623; }
+
+.warning {
+  background: rgba(255, 107, 107, 0.07);
+  border: 1px solid rgba(255, 107, 107, 0.2);
+  color: #ff6b6b;
+}
+
+/* ── Mode row ────────────────────────────────────────────────────────── */
+.modeRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 520px) { .modeRow { grid-template-columns: 1fr; } }
+
+.modeBtn {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 150ms, background 150ms;
+  font-family: inherit;
+}
+
+.modeBtn:hover { border-color: var(--accent); background: var(--surface-2); }
+
+.modeBtnActive {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.modeBtnLabel {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-0);
+}
+
+.modeBtnCost {
+  font-size: 0.72rem;
+  color: var(--text-3);
+}
+
+/* ── Options row ─────────────────────────────────────────────────────── */
+.optionRow {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.optionLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.84rem;
+  color: var(--text-2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.optionLabel input { cursor: pointer; accent-color: var(--accent); }
+
+/* ── Progress badge ──────────────────────────────────────────────────── */
+.progressBadge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 4px;
+  background: var(--accent-subtle);
+  border: 1px solid rgba(30, 27, 75, 0.2);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+/* ── Committee row ───────────────────────────────────────────────────── */
+.committeeRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.committeeCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  min-width: 90px;
+  text-align: center;
+}
+
+.committeeEmoji { font-size: 1.6rem; }
+.committeeName  { font-size: 0.78rem; font-weight: 600; color: var(--text-0); }
+.committeeRole  { font-size: 0.68rem; color: var(--text-3); }
+
+/* ── Question list ───────────────────────────────────────────────────── */
+.qList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 24px;
+}
+
+.qListRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: 0.875rem;
+  color: var(--text-1);
+  transition: background 150ms, border-color 150ms;
+}
+
+.qListRow:hover { background: var(--surface-2); border-color: var(--accent); }
+
+.qNum      { font-size: 0.68rem; color: var(--text-3); font-weight: 600; min-width: 20px; }
+.qPersona  { font-size: 1.1rem; }
+.qRowText  { flex: 1; line-height: 1.45; }
+.qCat      { font-size: 0.68rem; background: var(--surface-2); border: 1px solid var(--border-soft); color: var(--text-2); padding: 2px 6px; border-radius: 3px; }
+.qDiff     { font-size: 0.7rem; font-weight: 600; white-space: nowrap; }
+
+/* ── Question counter row ────────────────────────────────────────────── */
+.qCounterRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  font-size: 0.82rem;
+  color: var(--text-2);
+}
+
+.muteBtn {
+  background: none;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--text-2);
+  transition: background 120ms;
+}
+.muteBtn:hover { background: var(--surface-2); }
+
+/* ── Speaking card ───────────────────────────────────────────────────── */
+.speakingCard {
+  background: var(--surface-1);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  padding: 32px 24px;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.personaBubble {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 2px solid var(--border-medium);
+  margin-bottom: 12px;
+  transition: border-color 200ms;
+}
+
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(30, 27, 75, 0.5); }
+  70%  { box-shadow: 0 0 0 16px rgba(30, 27, 75, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(30, 27, 75, 0); }
+}
+
+.pulsing {
+  border-color: var(--accent) !important;
+  animation: pulse-ring 1.4s ease infinite;
+}
+
+.bigEmoji { font-size: 2.2rem; }
+
+/* ── Sound bars (TTS animation) ──────────────────────────────────────── */
+.soundBars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  height: 28px;
+  margin-bottom: 10px;
+}
+
+@keyframes soundBar {
+  0%, 100% { height: 4px;  }
+  50%       { height: 22px; }
+}
+
+.bar {
+  width: 4px;
+  height: 4px;
+  background: var(--accent);
+  border-radius: 2px;
+  animation: soundBar 0.7s ease-in-out infinite;
+}
+
+.speakingRole {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+}
+
+.questionText {
+  font-size: 1.05rem;
+  color: var(--text-0);
+  line-height: 1.65;
+  margin: 0 0 16px;
+}
+
+.qMeta {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ── Question banner ─────────────────────────────────────────────────── */
+.questionBanner {
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text-1);
+}
+
+.questionBannerLabel {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.questionBanner p { margin: 0; }
+
+/* ── Listening box ───────────────────────────────────────────────────── */
+.listeningBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 20px;
+  gap: 12px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  margin-bottom: 16px;
+}
+
+@keyframes micPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 77, 77, 0.5); }
+  50%       { transform: scale(1.06); box-shadow: 0 0 0 12px rgba(255, 77, 77, 0); }
+}
+
+.micCircle {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 2px solid var(--border-medium);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 200ms;
+}
+
+.micActive {
+  border-color: #ff4d4d;
+  animation: micPulse 1s ease infinite;
+}
+
+.micIcon { font-size: 2rem; }
+
+/* ── Mic bars ────────────────────────────────────────────────────────── */
+.micBars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 24px;
+}
+
+@keyframes micBar {
+  0%, 100% { height: 4px; }
+  50%       { height: 20px; }
+}
+
+.micBar {
+  width: 3px;
+  height: 4px;
+  background: #ff4d4d;
+  border-radius: 2px;
+  animation: micBar 0.6s ease-in-out infinite;
+}
+
+.listenLabel {
+  font-size: 0.875rem;
+  color: var(--text-2);
+  margin: 0;
+}
+
+/* ── Live transcript ─────────────────────────────────────────────────── */
+.transcriptBox {
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  min-height: 56px;
+}
+
+.transcriptFinal  { color: var(--text-0); }
+.transcriptInterim { color: var(--text-3); font-style: italic; }
+
+.sttError {
+  background: rgba(224, 0, 0, 0.07);
+  border: 1px solid rgba(224, 0, 0, 0.2);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  font-size: 0.84rem;
+  color: #ff6b6b;
+  margin-bottom: 12px;
+}
+
+/* ── Confirm box ─────────────────────────────────────────────────────── */
+.confirmBox { margin-bottom: 16px; }
+
+.confirmLabel {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+
+.confirmTextarea {
+  width: 100%;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  resize: vertical;
+  font-family: inherit;
+  color: var(--text-0);
+  background: var(--surface-1);
+  box-sizing: border-box;
+  transition: border-color 150ms;
+}
+
+.confirmTextarea::placeholder { color: var(--text-3); }
+.confirmTextarea:focus { outline: none; border-color: var(--accent); }
+
+.wordCount {
+  font-size: 0.72rem;
+  color: var(--text-3);
+  text-align: right;
+  margin-top: 4px;
+}
+
+/* ── Evaluation card ─────────────────────────────────────────────────── */
+.evalCard {
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  background: var(--surface-1);
+  margin-bottom: 20px;
+}
+
+.evalHeader {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: 22px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.bigScore {
+  font-size: 2.8rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+}
+
+.bigScore small { font-size: 1.2rem; color: var(--text-3); }
+
+.evalTitle {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-2);
+  margin-bottom: 4px;
+}
+
+.evalQuestion {
+  font-size: 0.875rem;
+  color: var(--text-1);
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
+/* 6-axis scores */
+.scoresGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-bottom: 20px;
+}
+
+.scoreRow {
+  display: grid;
+  grid-template-columns: 160px 1fr 24px;
+  align-items: center;
+  gap: 10px;
+}
+
+.scoreLabel { font-size: 0.78rem; color: var(--text-2); }
+
+.scoreBarTrack {
+  height: 4px;
+  background: var(--surface-2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.scoreBarFill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+.scoreVal {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Feedback cards */
+.feedbackGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 580px) { .feedbackGrid { grid-template-columns: 1fr; } }
+
+.strengthCard,
+.weaknessCard {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  background: var(--surface-2);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.strengthCard h4 { color: #4ade80; font-size: 0.72rem; font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+.weaknessCard h4 { color: #f5a623;  font-size: 0.72rem; font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+.strengthCard p,
+.weaknessCard p  { margin: 0; color: var(--text-1); }
+
+.improvementBox {
+  background: var(--accent-subtle);
+  border: 1px solid rgba(30, 27, 75, 0.15);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.improvementBox h4 { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 6px; color: var(--accent); }
+.improvementBox p  { font-size: 0.84rem; line-height: 1.5; margin: 0; color: var(--text-1); }
+
+.followUpBox {
+  background: var(--surface-2);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+
+.followUpBox h4 { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 6px; color: var(--text-2); }
+.followUpBox p  { font-size: 0.84rem; line-height: 1.5; margin: 0; color: var(--text-1); }
+
+/* follow-up text in loading phase */
+.followUpText {
+  font-size: 0.9rem;
+  color: var(--text-1);
+  line-height: 1.6;
+  max-width: 560px;
+  text-align: center;
+  font-style: italic;
+}
+
+/* ── Readiness report ────────────────────────────────────────────────── */
+.reportHeader {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 28px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.reportBigScore {
+  font-size: 3.4rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+}
+
+.reportTitle {
+  font-size: 1.2rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-0);
+  margin: 0 0 4px;
+}
+
+.readinessLabel {
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.dimGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+@media (max-width: 680px) { .dimGrid { grid-template-columns: repeat(2, 1fr); } }
+
+.dimCard {
+  text-align: center;
+  padding: 16px 8px 12px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+}
+
+.dimScore { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
+.dimLabel { font-size: 0.66rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+
+.dimBarTrack {
+  height: 3px;
+  background: var(--surface-2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.section { margin-bottom: 28px; }
+
+.sectionTitle {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-2);
+  margin-bottom: 12px;
+}
+
+.planList {
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.planList li {
+  font-size: 0.875rem;
+  color: var(--text-1);
+  line-height: 1.55;
+}
+
+.likelyList {
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.likelyList li {
+  font-size: 0.875rem;
+  color: var(--text-1);
+  line-height: 1.55;
+}
+
+.nextRec {
+  background: var(--accent-subtle);
+  border: 1px solid rgba(30, 27, 75, 0.15);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.nextRec h4 { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 6px; color: var(--accent); }
+.nextRec p  { margin: 0; color: var(--text-1); font-size: 0.875rem; line-height: 1.55; }
+
+/* ── Loading / spinner ───────────────────────────────────────────────── */
+.loadingBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 72px 20px;
+  gap: 16px;
+}
+
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--border-medium);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loadingTitle { font-size: 1rem; font-weight: 500; color: var(--text-1); margin: 0; }
+.loadingHint  { font-size: 0.84rem; color: var(--text-3); margin: 0; }
+
+.loadingSteps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.loadingStep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: var(--text-2);
+}
+
+.stepDone   { color: var(--text-0); }
+.stepIcon   { font-size: 1rem; }
+
+/* ── Error ───────────────────────────────────────────────────────────── */
+.errorBox {
+  background: var(--surface-1);
+  border: 1px solid rgba(224, 0, 0, 0.3);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.errorBox h3 { color: var(--text-0); margin: 0; font-size: 1rem; font-weight: 600; }
+.errorBox p  { color: var(--text-2); margin: 0; font-size: 0.875rem; line-height: 1.5; }
+
+.settingsLink {
+  color: var(--accent);
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+.settingsLink:hover { text-decoration: underline; }
+
+/* ── Buttons ─────────────────────────────────────────────────────────── */
+.actionRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+  align-items: center;
+}
+
+.primaryBtn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 10px 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 150ms;
+  font-family: inherit;
+}
+
+.primaryBtn:hover:not(:disabled) { background: var(--accent-hover); }
+.primaryBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.secondaryBtn {
+  background: var(--surface-1);
+  color: var(--text-1);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  padding: 10px 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 150ms;
+  font-family: inherit;
+}
+
+.secondaryBtn:hover:not(:disabled) { background: var(--surface-2); }
+.secondaryBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.listenBtn {
+  background: #ff4d4d;
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 10px 22px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.listenBtn:hover { background: #e03c3c; }
+
+.stopBtn {
+  background: var(--surface-2);
+  color: var(--text-0);
+  border: 1px solid rgba(255, 77, 77, 0.35);
+  border-radius: var(--radius-md);
+  padding: 10px 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms;
+  font-family: inherit;
+}
+
+.stopBtn:hover { background: rgba(255, 77, 77, 0.08); }
+
+.followUpBtn {
+  background: rgba(30, 27, 75, 0.1);
+  color: var(--accent);
+  border: 1px solid rgba(30, 27, 75, 0.3);
+  border-radius: var(--radius-md);
+  padding: 10px 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 150ms;
+}
+
+.followUpBtn:hover { background: rgba(30, 27, 75, 0.15); }
+
+.reportBtn {
+  background: var(--surface-2);
+  color: var(--text-0);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  padding: 10px 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 150ms;
+  font-family: inherit;
+}
+
+.reportBtn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Readiness outlook chip (qualitative band, never a mark) ───────────── */
+
+.outlookChip {
+  display: inline-block;
+  margin-left: 12px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  vertical-align: middle;
+  letter-spacing: 0.02em;
+}
+
+.outlookStrong {
+  background: rgba(74, 222, 128, 0.14);
+  color: #22a35a;
+  border: 1px solid rgba(74, 222, 128, 0.4);
+}
+
+.outlookAlmost {
+  background: rgba(245, 166, 35, 0.12);
+  color: #c47d12;
+  border: 1px solid rgba(245, 166, 35, 0.4);
+}
+
+.outlookPractice {
+  background: rgba(255, 107, 107, 0.12);
+  color: #d64545;
+  border: 1px solid rgba(255, 107, 107, 0.4);
+}

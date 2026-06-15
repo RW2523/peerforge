@@ -1,0 +1,3067 @@
+openapi: 3.1.0
+info:
+  title: Arinar API
+  version: 1.0.0
+  description: |
+    Arinar V2 API - AI-native knowledge platform with multi-agent realtime discussions.
+    
+    **Model Provider Policy**: This system uses OpenRouter for LLM access, not direct OpenAI/Anthropic integrations.
+  contact:
+    name: Arinar Platform Team
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+  - url: https://api.arinar.dev
+    description: Development environment
+  - url: https://api.arinar.com
+    description: Production
+
+tags:
+  - name: health
+    description: Health check endpoints
+  - name: debates
+    description: Debate session management
+  - name: participants
+    description: Debate participant management
+  - name: events
+    description: Realtime event stream
+  - name: agents
+    description: Persistent agent management (meeting setup)
+  - name: setup
+    description: Meeting/debate setup primitives (participants + materials)
+  - name: openrouter
+    description: OpenRouter integration (model catalog, BYOK)
+  - name: personas
+    description: Persona generation and validation
+  - name: memory
+    description: Memory import and retrieval (user-controlled context sharing)
+  - name: preflight
+    description: Agent preparation orchestration (pre-debate briefing)
+  - name: artifacts
+    description: Live collaborative artifacts (Figma-like documents)
+  - name: embeddings
+    description: Embeddings generation and OCR for materials (OpenRouter BYOK)
+  - name: workspace-settings
+    description: Workspace-wide settings and preferences (model defaults)
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Health check
+      description: Returns service health status
+      tags:
+        - health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /agent-templates:
+    get:
+      operationId: listAgentTemplates
+      summary: List built-in agent templates
+      description: Returns built-in templates (roles + personas) for fast meeting setup.
+      tags:
+        - agents
+      responses:
+        '200':
+          description: List of templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentTemplate'
+
+  /agents:
+    get:
+      operationId: listAgents
+      summary: List persistent agents in a workspace
+      tags:
+        - agents
+      parameters:
+        - name: workspace_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of agents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentResponse'
+    post:
+      operationId: createAgent
+      summary: Create a persistent agent
+      description: Creates an agent definition (name, prompt, model selection) that can be reused across meetings.
+      tags:
+        - agents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgentRequest'
+      responses:
+        '201':
+          description: Agent created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /debates:
+    get:
+      operationId: listDebates
+      summary: List debates in workspace
+      description: |
+        List debates with cursor pagination.
+        Protected by workspace access checks.
+      tags:
+        - debates
+      parameters:
+        - name: workspace_id
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Workspace ID to filter debates
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Max debates to return
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Cursor for pagination
+      responses:
+        '200':
+          description: Debates list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebateListResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Workspace access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      operationId: createDebate
+      summary: Create new debate session
+      description: Creates a new debate session in pending state (M2)
+      tags:
+        - debates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDebateRequest'
+      responses:
+        '201':
+          description: Debate created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebateResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  
+  /debates/{debate_id}:
+    get:
+      operationId: getDebate
+      summary: Get debate details
+      description: Retrieve details for a specific debate (M2)
+      tags:
+        - debates
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+      responses:
+        '200':
+          description: Debate retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebateResponse'
+        '404':
+          description: Debate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  
+  /debates/run:
+    post:
+      operationId: runDebate
+      summary: Run debate-in-a-box (M1)
+      description: |
+        Executes a complete 5-turn round-robin debate with 3 agents.
+        Returns summary, minutes of meeting, action items, and full event history.
+        
+        **OpenRouter BYOK**: Requires user-provided OpenRouter API key per request.
+      tags:
+        - debates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DebateRunRequest'
+      responses:
+        '200':
+          description: Debate completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebateRunResponse'
+        '400':
+          description: Invalid request (wrong number of agents, missing fields)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid OpenRouter API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /debates/setup:
+    post:
+      operationId: setupDebate
+      summary: Setup a debate (participants + materials)
+      description: Creates a pending debate plus participants and materials metadata in one call.
+      tags:
+        - setup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DebateSetupRequest'
+      responses:
+        '201':
+          description: Debate setup created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebateSetupResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /debates/{debate_id}/participants:
+    post:
+      operationId: addParticipant
+      summary: Add participant to debate
+      description: Adds an agent or human participant to the debate
+      tags:
+        - participants
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddParticipantRequest'
+      responses:
+        '201':
+          description: Participant added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParticipantResponse'
+        '404':
+          description: Debate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /debates/{debate_id}/start:
+    post:
+      operationId: startDebate
+      summary: Start debate session
+      description: Transitions debate from draft/preflight to live state
+      tags:
+        - debates
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+      responses:
+        '200':
+          description: Debate started successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebateResponse'
+        '404':
+          description: Debate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Invalid state transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /debates/{debate_id}/pause:
+    post:
+      operationId: pauseDebate
+      summary: Pause debate (M2)
+      description: Transitions debate from running to paused state
+      tags:
+        - debates
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+      responses:
+        '200':
+          description: Debate paused successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebateResponse'
+        '400':
+          description: Invalid state transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Debate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /debates/{debate_id}/resume:
+    post:
+      operationId: resumeDebate
+      summary: Resume debate (M2)
+      description: Transitions debate from paused to running state
+      tags:
+        - debates
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+      responses:
+        '200':
+          description: Debate resumed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebateResponse'
+        '400':
+          description: Invalid state transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Debate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /debates/{debate_id}/intervene:
+    post:
+      operationId: interveneDebate
+      summary: Intervene in debate
+      description: Manual or policy-triggered intervention in active debate
+      tags:
+        - debates
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InterventionRequest'
+      responses:
+        '200':
+          description: Intervention created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterventionResponse'
+        '404':
+          description: Debate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /debates/{debate_id}/end:
+    post:
+      operationId: endDebate
+      summary: End debate session
+      description: Transitions debate to synthesis/closed state
+      tags:
+        - debates
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndDebateRequest'
+      responses:
+        '200':
+          description: Debate ended successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebateResponse'
+        '404':
+          description: Debate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /debates/{debate_id}/summarize:
+    post:
+      operationId: generateSummary
+      summary: Generate debate summary (M3)
+      description: |
+        Generate end-of-meeting outputs: summary, minutes, action items.
+        Requires debate to be in 'ended' state.
+        
+        **OpenRouter BYOK**: Requires user-provided OpenRouter API key per request (never stored).
+      tags:
+        - debates
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SummarizeRequest'
+      responses:
+        '200':
+          description: Summary generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SummaryResponse'
+        '400':
+          description: Invalid request (debate not ended)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid OpenRouter API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Debate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /debates/{debate_id}/summary:
+    get:
+      operationId: getSummary
+      summary: Get debate summary (M3)
+      description: Retrieve existing summary/minutes/action items for a debate
+      tags:
+        - debates
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+      responses:
+        '200':
+          description: Summary retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SummaryResponse'
+        '404':
+          description: Debate or summary not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /debates/{debate_id}/events:
+    get:
+      operationId: getDebateEvents
+      summary: Get debate events
+      description: Retrieves paginated event stream for a debate session
+      tags:
+        - events
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+        - name: cursor
+          in: query
+          description: Pagination cursor for next page
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Number of events to return (max 100)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Events retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventsResponse'
+        '404':
+          description: Debate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /debates/{debate_id}/events/stream:
+    get:
+      operationId: streamDebateEvents
+      summary: Stream debate events via SSE (M2)
+      description: |
+        Real-time Server-Sent Events stream of debate events.
+        Stream automatically closes when debate ends.
+      tags:
+        - events
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+        - name: since
+          in: query
+          description: Start streaming from this sequence number
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        '200':
+          description: SSE stream established
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-Sent Events stream with debate_event, state_update, and stream_end messages
+        '404':
+          description: Debate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /openrouter/models:
+    get:
+      operationId: listOpenRouterModels
+      summary: Fetch OpenRouter model catalog
+      description: |
+        Fetches available models from OpenRouter API using user's BYOK key.
+        Key is never stored. Results cached 60s.
+      tags:
+        - openrouter
+      parameters:
+        - name: X-OpenRouter-Key
+          in: header
+          required: true
+          schema:
+            type: string
+          description: "OpenRouter API key (BYOK)"
+      responses:
+        '200':
+          description: Model list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelListResponse'
+        '400':
+          description: Missing API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  
+  /openrouter/account:
+    get:
+      operationId: getOpenRouterAccount
+      summary: Get OpenRouter account info
+      description: |
+        Fetches account details from OpenRouter: usage, limits, credits.
+        Key is never stored.
+      tags:
+        - openrouter
+      parameters:
+        - name: X-OpenRouter-Key
+          in: header
+          required: true
+          schema:
+            type: string
+          description: "OpenRouter API key (BYOK)"
+      responses:
+        '200':
+          description: Account information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenRouterAccountResponse'
+        '400':
+          description: Missing or empty API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: OpenRouter API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /personas/generate-draft:
+    post:
+      operationId: generatePersonaDraft
+      summary: Generate persona draft with AI
+      description: |
+        Uses OpenRouter LLM to generate persona structure.
+        Requires BYOK key. Key never stored.
+      tags:
+        - personas
+      parameters:
+        - name: X-OpenRouter-Key
+          in: header
+          required: true
+          schema:
+            type: string
+          description: "OpenRouter API key (BYOK)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeneratePersonaDraftRequest'
+      responses:
+        '200':
+          description: Persona draft generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneratePersonaDraftResponse'
+        '400':
+          description: Missing or invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /personas/validate:
+    post:
+      operationId: validatePersona
+      summary: Validate persona structure
+      description: |
+        Validates persona fields and compiled prompt.
+        No LLM call - pure validation logic.
+      tags:
+        - personas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidatePersonaRequest'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidatePersonaResponse'
+
+  /workspaces/{workspace_id}/memory/importable:
+    get:
+      operationId: listImportableSources
+      summary: List importable memory sources
+      description: |
+        Returns recent ended debates in workspace that can be imported as memory sources.
+        Shows chunk counts, material counts, and metadata.
+      tags:
+        - memory
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: List of importable debates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportableSourcesResponse'
+        '403':
+          description: Access denied to workspace
+
+  /debates/{debate_id}/memory/preview:
+    get:
+      operationId: previewMemoryImport
+      summary: Preview memory import
+      description: |
+        Shows what would be imported from a source debate.
+        Returns topics, chunk counts, and date range.
+      tags:
+        - memory
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+        - name: source_debate_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Memory preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryPreviewResponse'
+        '404':
+          description: Debate not found
+        '403':
+          description: Access denied
+
+  /debates/{debate_id}/memory/import:
+    post:
+      operationId: importMemory
+      summary: Import memory from prior debates
+      description: |
+        Creates grants to allow participants to access chunks from specified source debates.
+        Grants are immutable once debate starts (audit integrity).
+      tags:
+        - memory
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryImportRequest'
+      responses:
+        '200':
+          description: Grants created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryImportResponse'
+        '400':
+          description: Invalid request or debate already started
+        '403':
+          description: Access denied
+        '404':
+          description: Debate not found
+
+  /debates/{debate_id}/memory/grants:
+    get:
+      operationId: listMemoryGrants
+      summary: List memory grants
+      description: |
+        Lists all active memory grants for a debate.
+        Shows which source debates/artifacts participants can access.
+      tags:
+        - memory
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+      responses:
+        '200':
+          description: List of grants
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryGrantsResponse'
+        '403':
+          description: Access denied
+        '404':
+          description: Debate not found
+
+  /debates/{debate_id}/memory/grants/{grant_id}:
+    delete:
+      operationId: revokeMemoryGrant
+      summary: Revoke memory grant
+      description: |
+        Revokes a grant. Only allowed if debate is in pending state.
+        Grants are immutable once debate starts (audit integrity).
+      tags:
+        - memory
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+        - name: grant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Grant revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: revoked
+                  grant_id:
+                    type: string
+                    format: uuid
+        '400':
+          description: Cannot revoke after debate started
+        '403':
+          description: Access denied
+        '404':
+          description: Grant not found
+
+  /debates/{debate_id}/preflight/start:
+    post:
+      operationId: startPreflight
+      summary: Start agent preflight preparation
+      description: |
+        Initiates preflight preparation for all participants in a debate.
+        Creates prep packs by reviewing materials and imported memory.
+        Returns immediately with run_id; use status endpoint to monitor progress.
+      tags:
+        - preflight
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+      responses:
+        '200':
+          description: Preflight started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreflightStartResponse'
+        '400':
+          description: Preflight already running or invalid state
+        '403':
+          description: Access denied
+        '404':
+          description: Debate not found
+
+  /debates/{debate_id}/preflight/status:
+    get:
+      operationId: getPreflightStatus
+      summary: Get preflight preparation status
+      description: |
+        Returns overall run status and per-participant progress.
+        Shows which participants have completed prep packs.
+      tags:
+        - preflight
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+      responses:
+        '200':
+          description: Preflight status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreflightStatusResponse'
+        '403':
+          description: Access denied
+        '404':
+          description: No preflight run found
+
+  /debates/{debate_id}/preflight/retry:
+    post:
+      operationId: retryParticipantPreflight
+      summary: Retry failed preflight preparation
+      description: |
+        Retries preflight for a specific participant that failed.
+        Only allowed if participant status is 'failed'.
+      tags:
+        - preflight
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreflightRetryRequest'
+      responses:
+        '200':
+          description: Retry queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreflightActionResponse'
+        '400':
+          description: Cannot retry (not failed status)
+        '403':
+          description: Access denied
+        '404':
+          description: Participant run not found
+
+  /debates/{debate_id}/preflight/skip:
+    post:
+      operationId: skipParticipantPreflight
+      summary: Skip preflight preparation
+      description: |
+        Skips preflight for a specific participant.
+        Records skip reason for audit trail.
+        Allowed if status is queued, running, or failed.
+      tags:
+        - preflight
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreflightSkipRequest'
+      responses:
+        '200':
+          description: Participant skipped
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreflightActionResponse'
+        '400':
+          description: Cannot skip (already completed)
+        '403':
+          description: Access denied
+        '404':
+          description: Participant run not found
+
+  # ============================================================================
+  # Artifacts Endpoints
+  # ============================================================================
+
+  /debates/{debate_id}/artifact/init:
+    post:
+      operationId: initArtifact
+      summary: Initialize artifact
+      description: |
+        Creates a new artifact for a debate with section assignments.
+        Sections are stored in agent_knowledge_units with type=artifact_section.
+      tags:
+        - artifacts
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArtifactInitRequest'
+      responses:
+        '200':
+          description: Artifact initialized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactInitResponse'
+        '403':
+          description: Access denied
+        '404':
+          description: Debate or template not found
+
+  /debates/{debate_id}/artifact:
+    get:
+      operationId: getArtifact
+      summary: Get artifact
+      description: |
+        Returns current artifact state (latest or specific version).
+        Sections reconstructed from agent_knowledge_units.
+      tags:
+        - artifacts
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+        - name: version
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Specific version to retrieve (defaults to latest)
+      responses:
+        '200':
+          description: Artifact data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactGetResponse'
+        '403':
+          description: Access denied
+        '404':
+          description: Artifact not found
+
+  /debates/{debate_id}/artifact/sections/{section_id}/events:
+    post:
+      operationId: createSectionEvent
+      summary: Create section event
+      description: |
+        Appends/replaces section content or sends typing indicator.
+        Only section owner can write (enforced via X-Participant-Id header).
+      tags:
+        - artifacts
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+        - name: section_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Section ID from template
+        - name: X-Participant-Id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Actor participant ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SectionEventRequest'
+      responses:
+        '200':
+          description: Section event created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SectionEventResponse'
+        '403':
+          description: Not section owner or access denied
+        '404':
+          description: Section not found
+
+  /debates/{debate_id}/artifact/events:
+    get:
+      operationId: getArtifactEvents
+      summary: Get artifact events
+      description: |
+        Returns artifact event history with cursor pagination.
+        Optionally filter by section_id.
+      tags:
+        - artifacts
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+        - name: section_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter events by section
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+          description: Max events per page
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Pagination cursor (event_id)
+      responses:
+        '200':
+          description: Artifact events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactEventsResponse'
+        '403':
+          description: Access denied
+        '404':
+          description: Artifact not found
+
+  # ============================================================================
+  # Embeddings + OCR Endpoints
+  # ============================================================================
+
+  /debates/{debate_id}/materials/{material_id}/embed:
+    post:
+      operationId: generateEmbeddings
+      summary: Generate embeddings
+      description: |
+        Generate embeddings for material chunks using OpenRouter (BYOK).
+        Requires X-OpenRouter-Key header (client-driven, not stored).
+        Material must be processed (status=complete) before embeddings.
+      tags:
+        - embeddings
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+        - name: material_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: X-OpenRouter-Key
+          in: header
+          required: true
+          schema:
+            type: string
+          description: OpenRouter API key (BYOK, not stored)
+      responses:
+        '200':
+          description: Embeddings generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbeddingsResponse'
+        '400':
+          description: Missing key or material not ready
+        '403':
+          description: Access denied
+        '404':
+          description: Material not found
+
+  /debates/{debate_id}/materials/{material_id}/embed/status:
+    get:
+      operationId: getEmbeddingStatus
+      summary: Get embedding status
+      description: |
+        Returns embedding generation status for a material's chunks.
+        Shows counts by status (not_started, running, complete, failed).
+      tags:
+        - embeddings
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+        - name: material_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Embedding status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbeddingStatusResponse'
+        '403':
+          description: Access denied
+        '404':
+          description: Material not found
+
+  /debates/{debate_id}/materials/{material_id}/ocr:
+    post:
+      operationId: runOcr
+      summary: Run OCR
+      description: |
+        Run OCR on a scanned PDF material (Phase 1 baseline).
+        Only allowed if processed_status = 'needs_ocr'.
+        Uses Tesseract if available, otherwise returns 501.
+      tags:
+        - embeddings
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+        - name: material_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OCR queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcrResponse'
+        '400':
+          description: Material does not need OCR
+        '403':
+          description: Access denied
+        '404':
+          description: Material not found
+        '501':
+          description: OCR not available on server
+
+  /debates/{debate_id}/materials/{material_id}/ocr/status:
+    get:
+      operationId: getOcrStatus
+      summary: Get OCR status
+      description: |
+        Returns OCR processing status for a material.
+      tags:
+        - embeddings
+      parameters:
+        - $ref: '#/components/parameters/DebateIdParam'
+        - name: material_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OCR status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcrStatusResponse'
+        '403':
+          description: Access denied
+        '404':
+          description: Material not found
+
+  # ============================================================================
+  # Workspace Settings Endpoints
+  # ============================================================================
+
+  /workspaces/{workspace_id}/settings/models:
+    get:
+      operationId: getWorkspaceModels
+      summary: Get workspace model defaults
+      description: |
+        Returns workspace-wide default models for RAG/embeddings and OCR post-processing.
+        These settings sync across devices (stored in database).
+        Returns system defaults if workspace hasn't configured custom values.
+      tags:
+        - workspace-settings
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Workspace UUID
+      responses:
+        '200':
+          description: Workspace model defaults
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceModelsResponse'
+        '403':
+          description: Access denied
+        '404':
+          description: Workspace not found
+
+    put:
+      operationId: updateWorkspaceModels
+      summary: Update workspace model defaults
+      description: |
+        Updates workspace-wide default models for RAG/embeddings and OCR.
+        These settings:
+        - Are stored server-side (sync across devices)
+        - Apply automatically when requests don't specify a model
+        - Do NOT require OpenRouter key (can be set before key is added)
+        
+        Note: OpenRouter key remains client-only (browser storage).
+      tags:
+        - workspace-settings
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Workspace UUID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkspaceModelsRequest'
+      responses:
+        '200':
+          description: Workspace model defaults updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceModelsResponse'
+        '400':
+          description: Invalid request (missing or empty model IDs)
+        '403':
+          description: Access denied
+        '404':
+          description: Workspace not found
+
+components:
+  parameters:
+    DebateIdParam:
+      name: debate_id
+      in: path
+      description: Debate session UUID
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded]
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+        services:
+          type: object
+          properties:
+            database:
+              type: string
+              enum: [up, down]
+            queue:
+              type: string
+              enum: [up, down]
+
+    CreateDebateRequest:
+      type: object
+      required:
+        - workspace_id
+        - title
+      properties:
+        workspace_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 500
+        policy_config:
+          type: object
+          additionalProperties: true
+
+    DebateResponse:
+      type: object
+      required:
+        - debate_id
+        - workspace_id
+        - title
+        - state
+        - created_at
+      properties:
+        debate_id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        state:
+          $ref: '#/components/schemas/DebateState'
+        created_at:
+          type: string
+          format: date-time
+
+    DebateState:
+      type: string
+      enum:
+        - pending
+        - running
+        - paused
+        - ended
+    
+    DebateListItem:
+      type: object
+      required:
+        - debate_id
+        - workspace_id
+        - title
+        - state
+        - created_at
+      properties:
+        debate_id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        state:
+          $ref: '#/components/schemas/DebateState'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
+    
+    DebateListResponse:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DebateListItem'
+        next_cursor:
+          type: string
+          nullable: true
+          description: Cursor for next page (null if no more results)
+
+    AgentTemplate:
+      type: object
+      required:
+        - template_id
+        - label
+        - role_title
+        - system_prompt
+        - model_id
+        - model_config
+      properties:
+        template_id:
+          type: string
+        label:
+          type: string
+        role_title:
+          type: string
+        system_prompt:
+          type: string
+        model_id:
+          type: string
+          description: OpenRouter model ID (e.g. anthropic/claude-3.5-sonnet)
+        model_config:
+          type: object
+          additionalProperties: true
+
+    CreateAgentRequest:
+      type: object
+      required:
+        - workspace_id
+        - name
+        - system_prompt
+        - model_id
+      properties:
+        workspace_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        role_description:
+          type: string
+        system_prompt:
+          type: string
+        model_id:
+          type: string
+          description: OpenRouter model ID (e.g. anthropic/claude-3.5-sonnet)
+        agent_model_config:
+          type: object
+          additionalProperties: true
+
+    AgentResponse:
+      type: object
+      required:
+        - agent_id
+        - workspace_id
+        - name
+        - system_prompt
+        - model_id
+        - model_config
+        - created_at
+      properties:
+        agent_id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        role_description:
+          type: string
+        system_prompt:
+          type: string
+        model_id:
+          type: string
+        model_config:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+
+    DebateSetupRequest:
+      type: object
+      required:
+        - workspace_id
+        - title
+        - problem_statement
+        - participants
+      properties:
+        workspace_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 500
+        problem_statement:
+          type: string
+          minLength: 1
+        timebox_minutes:
+          type: integer
+          minimum: 1
+        participants:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items:
+            $ref: '#/components/schemas/SetupParticipant'
+        materials:
+          type: array
+          items:
+            $ref: '#/components/schemas/SetupMaterial'
+
+    SetupParticipant:
+      type: object
+      properties:
+        agent_id:
+          type: string
+          format: uuid
+          description: Reference an existing persistent agent
+        name:
+          type: string
+          description: Inline participant name (if not using agent_id)
+        role_description:
+          type: string
+        system_prompt:
+          type: string
+        model_id:
+          type: string
+        model_config:
+          type: object
+          additionalProperties: true
+
+    SetupMaterial:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum: [text, link, file_placeholder]
+        title:
+          type: string
+        body_text:
+          type: string
+        url:
+          type: string
+
+    DebateSetupResponse:
+      type: object
+      required:
+        - debate_id
+        - participant_ids
+        - material_ids
+      properties:
+        debate_id:
+          type: string
+          format: uuid
+        participant_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        material_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+    
+    DebateRunRequest:
+      type: object
+      required:
+        - problem_statement
+        - agents
+        - openrouter_api_key
+      properties:
+        problem_statement:
+          type: string
+          description: Problem or topic to discuss
+          minLength: 10
+          maxLength: 5000
+        agents:
+          type: array
+          description: Exactly 3 agents for M1
+          minItems: 3
+          maxItems: 3
+          items:
+            $ref: '#/components/schemas/AgentInput'
+        openrouter_api_key:
+          type: string
+          description: OpenRouter API key (BYOK - Bring Your Own Key)
+          minLength: 1
+        debate_title:
+          type: string
+          description: Optional debate title
+          default: "Untitled Debate"
+          maxLength: 500
+    
+    AgentInput:
+      type: object
+      required:
+        - name
+        - role
+        - model_id
+      properties:
+        name:
+          type: string
+          description: Agent display name
+          minLength: 1
+          maxLength: 100
+        role:
+          type: string
+          description: Agent role description
+          minLength: 1
+          maxLength: 500
+        model_id:
+          type: string
+          description: OpenRouter model ID (e.g. anthropic/claude-3.5-sonnet)
+          minLength: 1
+    
+    DebateRunResponse:
+      type: object
+      required:
+        - debate_id
+        - status
+        - outputs
+        - event_history
+      properties:
+        debate_id:
+          type: string
+          format: uuid
+          description: Generated debate session ID
+        status:
+          type: string
+          enum: [completed, failed]
+          description: Final debate status
+        outputs:
+          type: object
+          required:
+            - summary
+            - minutes_of_meeting
+            - action_items
+          properties:
+            summary:
+              type: string
+              description: High-level summary (2-3 sentences)
+            minutes_of_meeting:
+              type: string
+              description: Detailed minutes of meeting (200-300 words)
+            action_items:
+              type: array
+              description: Concrete action items
+              items:
+                type: string
+        event_history:
+          type: array
+          description: Ordered list of debate events (turns)
+          items:
+            type: object
+            required:
+              - event_id
+              - turn
+              - agent
+              - message
+            properties:
+              event_id:
+                type: string
+                format: uuid
+              turn:
+                type: integer
+                minimum: 1
+                maximum: 5
+              agent:
+                type: string
+              message:
+                type: string
+
+    AddParticipantRequest:
+      type: object
+      required:
+        - participant_type
+        - role_name
+      properties:
+        participant_type:
+          type: string
+          enum: [agent, human]
+        role_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        agent_config:
+          type: object
+          properties:
+            model_id:
+              type: string
+              description: OpenRouter model identifier
+            temperature:
+              type: number
+              minimum: 0
+              maximum: 2
+            system_prompt:
+              type: string
+
+    ParticipantResponse:
+      type: object
+      required:
+        - participant_id
+        - debate_id
+        - participant_type
+        - role_name
+        - created_at
+      properties:
+        participant_id:
+          type: string
+          format: uuid
+        debate_id:
+          type: string
+          format: uuid
+        participant_type:
+          type: string
+          enum: [agent, human]
+        role_name:
+          type: string
+        agent_config:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+
+    InterventionRequest:
+      type: object
+      required:
+        - intent
+        - question_or_instruction
+      properties:
+        intent:
+          type: string
+          enum:
+            - clarify
+            - challenge
+            - re_scope
+            - request_evidence
+            - decision_check
+        target_agents:
+          type: array
+          items:
+            type: string
+            format: uuid
+        question_or_instruction:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        blocking:
+          type: boolean
+          default: false
+          description: If true, pauses normal queue until addressed
+
+    InterventionResponse:
+      type: object
+      required:
+        - intervention_id
+        - debate_id
+        - created_at
+      properties:
+        intervention_id:
+          type: string
+          format: uuid
+        debate_id:
+          type: string
+          format: uuid
+        intent:
+          type: string
+        target_agents:
+          type: array
+          items:
+            type: string
+            format: uuid
+        question_or_instruction:
+          type: string
+        blocking:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    SummarizeRequest:
+      type: object
+      required:
+        - openrouter_api_key
+      properties:
+        openrouter_api_key:
+          type: string
+          minLength: 10
+          description: OpenRouter BYOK key (never stored)
+        model_id:
+          type: string
+          default: "anthropic/claude-3.5-sonnet"
+          description: Model for summary generation
+
+    ActionItem:
+      type: object
+      required:
+        - description
+        - owner
+        - priority
+      properties:
+        description:
+          type: string
+          minLength: 1
+          description: Action item description
+        owner:
+          type: string
+          minLength: 1
+          description: Responsible party (role or name)
+        priority:
+          type: string
+          enum: [high, medium, low]
+          description: Priority level
+
+    SummaryResponse:
+      type: object
+      required:
+        - output_id
+        - debate_id
+        - summary
+        - minutes
+        - action_items
+        - generated_at
+      properties:
+        output_id:
+          type: string
+          format: uuid
+          description: Unique output record ID
+        debate_id:
+          type: string
+          format: uuid
+          description: Associated debate ID
+        summary:
+          type: string
+          minLength: 10
+          description: Short summary (1-3 sentences)
+        minutes:
+          type: string
+          minLength: 50
+          description: Detailed meeting minutes
+        action_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionItem'
+          description: Extracted action items
+        generated_at:
+          type: string
+          format: date-time
+          description: When summary was generated
+        model_used:
+          type: string
+          description: Model ID used for generation
+
+    EndDebateRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+
+    EventsResponse:
+      type: object
+      required:
+        - events
+        - has_more
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/DebateEvent'
+        next_cursor:
+          type: string
+          description: Cursor for next page of results
+        has_more:
+          type: boolean
+
+    DebateEvent:
+      type: object
+      required:
+        - event_id
+        - debate_id
+        - event_type
+        - sender_type
+        - created_at
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        debate_id:
+          type: string
+          format: uuid
+        event_type:
+          $ref: '#/components/schemas/EventType'
+        sender_type:
+          type: string
+          enum: [agent, human, system]
+        sender_id:
+          type: string
+          format: uuid
+        mentions:
+          type: array
+          items:
+            type: string
+            format: uuid
+        thread_id:
+          type: string
+          format: uuid
+        content:
+          type: object
+          description: Event-specific payload
+        citation_refs:
+          type: array
+          items:
+            type: object
+            properties:
+              source_id:
+                type: string
+              excerpt:
+                type: string
+              url:
+                type: string
+                format: uri
+        priority:
+          type: integer
+          minimum: 0
+          maximum: 3
+        created_at:
+          type: string
+          format: date-time
+
+    EventType:
+      type: string
+      enum:
+        # Core message events
+        - agent_message
+        - human_message
+        - agent_question
+        - agent_rebuttal
+        - intervention
+        - evidence_request
+        - evidence_response
+        - summary_update
+        - decision_candidate
+        - decision_finalized
+        # Nudge protocol
+        - pre_turn_nudge
+        - nudge_approved
+        - nudge_rejected
+        # Research protocol (policy-controlled)
+        - research_request
+        - research_result
+        - research_denied
+        # Knowledge import
+        - knowledge_imported
+        - knowledge_rejected
+        # Response handling
+        - unknown_response
+        # Tool calling (MCP future)
+        - tool_call_request
+        - tool_call_result
+        - tool_call_denied
+        # Voice/transcription
+        - voice_transcript_partial
+        - voice_transcript_final
+        - voice_tts_started
+        - voice_tts_completed
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+
+    ModelListResponse:
+      type: object
+      required:
+        - models
+      properties:
+        models:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpenRouterModel'
+        cached:
+          type: boolean
+          default: false
+
+    OpenRouterModel:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        context_length:
+          type: integer
+        pricing:
+          type: object
+          additionalProperties: true
+        description:
+          type: string
+
+    OpenRouterAccountResponse:
+      type: object
+      properties:
+        key:
+          type: object
+          description: "Key usage and limits from /api/v1/auth/key"
+          properties:
+            usage:
+              type: number
+              description: "Current usage in USD"
+            limit:
+              type: number
+              nullable: true
+              description: "Usage limit in USD (null for unlimited)"
+            label:
+              type: string
+              nullable: true
+              description: "Key label"
+            rate_limit:
+              type: object
+              nullable: true
+              properties:
+                requests:
+                  type: integer
+                  description: "Max requests per interval"
+                interval:
+                  type: string
+                  description: "Time interval (e.g., '1m', '1h')"
+            is_free_tier:
+              type: boolean
+              nullable: true
+              description: "Whether key is on free tier"
+        credits:
+          type: object
+          nullable: true
+          description: "Credits info from /api/v1/credits (null if not available)"
+          properties:
+            total_credits:
+              type: number
+              description: "Total credits purchased"
+            total_usage:
+              type: number
+              description: "Total credits used"
+            balance:
+              type: number
+              description: "Remaining credits"
+        note:
+          type: string
+          nullable: true
+          description: "Informational message (e.g., why credits unavailable)"
+
+    GeneratePersonaDraftRequest:
+      type: object
+      required:
+        - role_title
+        - style_brief
+        - tone
+        - risk_appetite
+      properties:
+        role_title:
+          type: string
+          minLength: 1
+          maxLength: 100
+        style_brief:
+          type: string
+          minLength: 1
+          maxLength: 500
+        tone:
+          type: string
+          minLength: 1
+          maxLength: 100
+        risk_appetite:
+          type: string
+          minLength: 1
+          maxLength: 100
+        model_id:
+          type: string
+          default: "anthropic/claude-3.5-sonnet"
+
+    GeneratePersonaDraftResponse:
+      type: object
+      required:
+        - persona
+        - compiled_prompt
+      properties:
+        persona:
+          $ref: '#/components/schemas/PersonaData'
+        compiled_prompt:
+          type: string
+
+    PersonaData:
+      type: object
+      required:
+        - role_title
+        - description
+        - traits
+        - behavior_policy
+        - knowledge_policy
+      properties:
+        name:
+          type: string
+        role_title:
+          type: string
+        description:
+          type: string
+        traits:
+          $ref: '#/components/schemas/PersonaTraits'
+        behavior_policy:
+          type: string
+        knowledge_policy:
+          type: string
+
+    PersonaTraits:
+      type: object
+      required:
+        - assertiveness
+        - analytical_depth
+        - creativity
+        - risk_tolerance
+      properties:
+        assertiveness:
+          type: number
+          minimum: 1
+          maximum: 10
+        analytical_depth:
+          type: number
+          minimum: 1
+          maximum: 10
+        creativity:
+          type: number
+          minimum: 1
+          maximum: 10
+        risk_tolerance:
+          type: number
+          minimum: 1
+          maximum: 10
+
+    ValidatePersonaRequest:
+      type: object
+      required:
+        - persona
+        - compiled_prompt
+      properties:
+        persona:
+          type: object
+          additionalProperties: true
+        compiled_prompt:
+          type: string
+
+    ValidatePersonaResponse:
+      type: object
+      required:
+        - valid
+      properties:
+        valid:
+          type: boolean
+        errors:
+          type: array
+          items:
+            type: string
+          default: []
+        warnings:
+          type: array
+          items:
+            type: string
+          default: []
+
+    # Memory Import Schemas
+    ImportableDebate:
+      type: object
+      required:
+        - debate_id
+        - title
+        - state
+        - created_at
+        - chunk_count
+        - material_count
+        - artifact_count
+        - participant_count
+      properties:
+        debate_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        state:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
+        chunk_count:
+          type: integer
+          description: Total chunks available (materials + agent knowledge)
+        material_count:
+          type: integer
+          description: Number of materials attached
+        artifact_count:
+          type: integer
+          description: Number of artifacts created
+        participant_count:
+          type: integer
+          description: Number of participants
+
+    ImportableSourcesResponse:
+      type: object
+      required:
+        - workspace_id
+        - debates
+        - total_count
+      properties:
+        workspace_id:
+          type: string
+          format: uuid
+        debates:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportableDebate'
+        total_count:
+          type: integer
+
+    MemoryPreviewChunk:
+      type: object
+      required:
+        - source_type
+        - title
+        - chunk_count
+        - last_updated
+      properties:
+        source_type:
+          type: string
+          description: Type of chunks (material, agent_knowledge, artifact)
+        title:
+          type: string
+        chunk_count:
+          type: integer
+        last_updated:
+          type: string
+          format: date-time
+
+    MemoryPreviewResponse:
+      type: object
+      required:
+        - source_debate_id
+        - source_title
+        - total_chunks
+        - breakdown
+        - date_range
+      properties:
+        source_debate_id:
+          type: string
+          format: uuid
+        source_title:
+          type: string
+        total_chunks:
+          type: integer
+        breakdown:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemoryPreviewChunk'
+        date_range:
+          type: object
+          properties:
+            start:
+              type: string
+              format: date-time
+              nullable: true
+            end:
+              type: string
+              format: date-time
+              nullable: true
+
+    MemoryImportRequest:
+      type: object
+      required:
+        - source_debate_ids
+      properties:
+        source_debate_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+          description: Debate IDs to import from
+        source_type:
+          type: string
+          enum: [debate_full, materials_only]
+          default: debate_full
+          description: What to import
+        scope:
+          type: string
+          enum: [all_agents, specific_agents]
+          default: all_agents
+          description: Who can access
+        participant_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          nullable: true
+          description: Required if scope='specific_agents'
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Import context
+
+    MemoryImportResponse:
+      type: object
+      required:
+        - debate_id
+        - grants_created
+        - grant_ids
+      properties:
+        debate_id:
+          type: string
+          format: uuid
+        grants_created:
+          type: integer
+        grant_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    MemoryGrant:
+      type: object
+      required:
+        - grant_id
+        - source_type
+        - scope
+        - granted_by
+        - granted_at
+        - metadata
+      properties:
+        grant_id:
+          type: string
+          format: uuid
+        source_debate_id:
+          type: string
+          format: uuid
+          nullable: true
+        source_debate_title:
+          type: string
+          nullable: true
+        source_artifact_id:
+          type: string
+          format: uuid
+          nullable: true
+        source_artifact_title:
+          type: string
+          nullable: true
+        source_type:
+          type: string
+        scope:
+          type: string
+        allowed_participant_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          nullable: true
+        granted_by:
+          type: string
+        granted_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+
+    MemoryGrantsResponse:
+      type: object
+      required:
+        - debate_id
+        - grants
+        - total_count
+      properties:
+        debate_id:
+          type: string
+          format: uuid
+        grants:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemoryGrant'
+        total_count:
+          type: integer
+
+    # Preflight Schemas
+    PreflightStartResponse:
+      type: object
+      required:
+        - run_id
+        - debate_id
+        - status
+        - participant_count
+        - participant_runs
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        debate_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [queued, running, completed, failed]
+        participant_count:
+          type: integer
+        participant_runs:
+          type: array
+          items:
+            type: object
+            properties:
+              participant_run_id:
+                type: string
+                format: uuid
+              participant_id:
+                type: string
+                format: uuid
+              agent_id:
+                type: string
+                format: uuid
+                nullable: true
+              status:
+                type: string
+
+    ParticipantRunStatus:
+      type: object
+      required:
+        - participant_run_id
+        - participant_id
+        - status
+        - metadata
+      properties:
+        participant_run_id:
+          type: string
+          format: uuid
+        participant_id:
+          type: string
+          format: uuid
+        agent_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+          enum: [queued, running, success, failed, skipped]
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        skip_reason:
+          type: string
+          nullable: true
+        prep_pack_knowledge_id:
+          type: string
+          format: uuid
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+
+    PreflightStatusResponse:
+      type: object
+      required:
+        - run_id
+        - debate_id
+        - status
+        - created_at
+        - participant_runs
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        debate_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [queued, running, completed, failed]
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        participant_runs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ParticipantRunStatus'
+
+    PreflightRetryRequest:
+      type: object
+      required:
+        - participant_id
+      properties:
+        participant_id:
+          type: string
+          format: uuid
+
+    PreflightSkipRequest:
+      type: object
+      required:
+        - participant_id
+        - reason
+      properties:
+        participant_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+
+    PreflightActionResponse:
+      type: object
+      required:
+        - participant_run_id
+        - participant_id
+        - status
+        - message
+      properties:
+        participant_run_id:
+          type: string
+          format: uuid
+        participant_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        message:
+          type: string
+
+    # ============================================================================
+    # Artifacts Schemas
+    # ============================================================================
+    
+    SectionAssignment:
+      type: object
+      required:
+        - section_id
+        - participant_id
+      properties:
+        section_id:
+          type: string
+          description: Section key from template (e.g., "goals", "risks")
+        participant_id:
+          type: string
+          format: uuid
+          description: Owner participant ID for this section
+
+    ArtifactInitRequest:
+      type: object
+      required:
+        - template_id
+        - section_assignments
+      properties:
+        template_id:
+          type: string
+          description: Template ID (e.g., "prd", "brief", "memo")
+        title:
+          type: string
+          nullable: true
+          description: Custom artifact title (defaults to template title)
+        section_assignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/SectionAssignment'
+          description: Section ownership assignments
+
+    SectionInfo:
+      type: object
+      required:
+        - section_id
+        - title
+        - status
+        - content
+        - word_count
+        - citations
+        - block_type
+      properties:
+        section_id:
+          type: string
+        title:
+          type: string
+        owner_participant_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+          enum: [drafting, committed, locked]
+        content:
+          type: string
+        word_count:
+          type: integer
+        citations:
+          type: array
+          items:
+            type: object
+        block_type:
+          type: string
+          enum: [rich_text, chart, table, diagram_mermaid]
+
+    ArtifactInitResponse:
+      type: object
+      required:
+        - artifact_id
+        - debate_id
+        - template_id
+        - title
+        - version
+        - status
+        - sections
+        - created_at
+      properties:
+        artifact_id:
+          type: string
+          format: uuid
+        debate_id:
+          type: string
+          format: uuid
+        template_id:
+          type: string
+        title:
+          type: string
+        version:
+          type: integer
+        status:
+          type: string
+        sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/SectionInfo'
+        created_at:
+          type: string
+          format: date-time
+
+    ArtifactGetResponse:
+      type: object
+      required:
+        - artifact_id
+        - debate_id
+        - template_id
+        - title
+        - version
+        - status
+        - sections
+        - created_at
+        - updated_at
+      properties:
+        artifact_id:
+          type: string
+          format: uuid
+        debate_id:
+          type: string
+          format: uuid
+        template_id:
+          type: string
+        title:
+          type: string
+        version:
+          type: integer
+        status:
+          type: string
+        sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/SectionInfo'
+        quality_report:
+          type: object
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        finalized_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    SectionEventRequest:
+      type: object
+      required:
+        - event_type
+        - content
+      properties:
+        event_type:
+          type: string
+          enum: [append, replace, typing]
+          description: Type of content update
+        content:
+          type: string
+          description: Markdown content or JSON payload for charts/tables
+        citations:
+          type: array
+          items:
+            type: object
+          nullable: true
+          description: Citations for this content
+
+    SectionEventResponse:
+      type: object
+      required:
+        - event_id
+        - section_id
+        - artifact_id
+        - event_type
+        - actor_participant_id
+        - content_preview
+        - created_at
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        section_id:
+          type: string
+        artifact_id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+        actor_participant_id:
+          type: string
+          format: uuid
+        content_preview:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    ArtifactEvent:
+      type: object
+      required:
+        - event_id
+        - artifact_id
+        - event_type
+        - payload
+        - created_at
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        artifact_id:
+          type: string
+          format: uuid
+        section_id:
+          type: string
+          nullable: true
+        event_type:
+          type: string
+        actor_participant_id:
+          type: string
+          format: uuid
+          nullable: true
+        payload:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+
+    ArtifactEventsResponse:
+      type: object
+      required:
+        - events
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArtifactEvent'
+        next_cursor:
+          type: string
+          nullable: true
+
+    # ============================================================================
+    # Embeddings + OCR Schemas
+    # ============================================================================
+
+    EmbeddingsResponse:
+      type: object
+      required:
+        - material_id
+        - embedding_model_id
+        - chunks_processed
+        - status
+      properties:
+        material_id:
+          type: string
+          format: uuid
+        embedding_model_id:
+          type: string
+          description: OpenRouter model ID used for embeddings
+        chunks_processed:
+          type: integer
+          description: Number of chunks processed
+        status:
+          type: string
+
+    EmbeddingStatusResponse:
+      type: object
+      required:
+        - material_id
+        - total_chunks
+        - overall_status
+        - status_breakdown
+      properties:
+        material_id:
+          type: string
+          format: uuid
+        total_chunks:
+          type: integer
+        overall_status:
+          type: string
+          enum: [no_chunks, not_started, in_progress, complete, partial_failure]
+        status_breakdown:
+          type: object
+          additionalProperties:
+            type: integer
+
+    OcrResponse:
+      type: object
+      required:
+        - material_id
+        - job_id
+        - message
+        - status
+      properties:
+        material_id:
+          type: string
+          format: uuid
+        job_id:
+          type: string
+          format: uuid
+        message:
+          type: string
+        status:
+          type: string
+
+    OcrStatusResponse:
+      type: object
+      required:
+        - material_id
+        - processed_status
+      properties:
+        material_id:
+          type: string
+          format: uuid
+        processed_status:
+          type: string
+        ocr_job_id:
+          type: string
+          format: uuid
+          nullable: true
+        ocr_job_status:
+          type: string
+          nullable: true
+        ocr_completed:
+          type: boolean
+        ocr_page_count:
+          type: integer
+          nullable: true
+        ocr_confidence_avg:
+          type: number
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    # ============================================================================
+    # Workspace Settings Schemas
+    # ============================================================================
+
+    WorkspaceModelsRequest:
+      type: object
+      required:
+        - embeddings_model_id
+        - ocr_model_id
+      properties:
+        embeddings_model_id:
+          type: string
+          minLength: 1
+          description: "OpenRouter model ID for embeddings/RAG (e.g., moonshot/kimi-embeddings-v1)"
+          example: "moonshot/kimi-embeddings-v1"
+        ocr_model_id:
+          type: string
+          minLength: 1
+          description: "OpenRouter model ID for OCR post-processing (e.g., qwen/qwen-2.5-72b-instruct)"
+          example: "qwen/qwen-2.5-72b-instruct"
+
+    WorkspaceModelsResponse:
+      type: object
+      required:
+        - workspace_id
+        - embeddings_model_id
+        - ocr_model_id
+        - updated_at
+      properties:
+        workspace_id:
+          type: string
+          format: uuid
+          description: "Workspace UUID"
+        embeddings_model_id:
+          type: string
+          description: "OpenRouter model ID for embeddings/RAG"
+        ocr_model_id:
+          type: string
+          description: "OpenRouter model ID for OCR post-processing"
+        updated_at:
+          type: string
+          format: date-time
+          description: "When settings were last updated"

@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arinar.com/schemas/events/unknown-response.json",
+  "title": "Unknown Response Event",
+  "description": "Agent cannot answer due to lack of knowledge (strict mode)",
+  "allOf": [
+    {
+      "$ref": "./base-event.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_type": {
+          "const": "unknown_response"
+        },
+        "sender_type": {
+          "const": "agent"
+        },
+        "content": {
+          "type": "object",
+          "required": ["question_id", "reason"],
+          "properties": {
+            "question_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Reference to question event"
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "no_knowledge_source",
+                "insufficient_confidence",
+                "requires_research",
+                "out_of_scope"
+              ]
+            },
+            "suggested_action": {
+              "type": "string",
+              "description": "Optional suggestion (e.g., 'enable research', 'import document')"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

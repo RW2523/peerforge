@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arinar.com/schemas/events/tool-call-request.json",
+  "title": "Tool Call Request Event",
+  "description": "Agent requesting tool/MCP execution (policy-controlled)",
+  "allOf": [
+    {
+      "$ref": "./base-event.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_type": {
+          "const": "tool_call_request"
+        },
+        "sender_type": {
+          "const": "agent"
+        },
+        "content": {
+          "type": "object",
+          "required": ["tool_name", "args", "justification"],
+          "properties": {
+            "tool_name": {
+              "type": "string",
+              "description": "Tool or MCP function name"
+            },
+            "args": {
+              "type": "object",
+              "description": "Tool-specific arguments"
+            },
+            "justification": {
+              "type": "string",
+              "description": "Why this tool call is needed"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

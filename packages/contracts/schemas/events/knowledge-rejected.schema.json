@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arinar.com/schemas/events/knowledge-rejected.json",
+  "title": "Knowledge Rejected Event",
+  "description": "Knowledge import rejected by policy or validation",
+  "allOf": [
+    {
+      "$ref": "./base-event.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_type": {
+          "const": "knowledge_rejected"
+        },
+        "sender_type": {
+          "const": "system"
+        },
+        "content": {
+          "type": "object",
+          "required": ["source_type", "reason"],
+          "properties": {
+            "source_type": {
+              "type": "string",
+              "enum": ["document", "url", "database", "api"]
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "invalid_format",
+                "access_denied",
+                "policy_violation",
+                "size_exceeded"
+              ]
+            },
+            "details": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

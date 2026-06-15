@@ -1,0 +1,156 @@
+"""
+Simple Live Artifacts V1 API Tests
+Tests artifact endpoints without complex setup
+"""
+import uuid
+import pytest
+from fastapi.testclient import TestClient
+import psycopg2
+from src.main import app
+from src.config import settings
+
+
+client = TestClient(app)
+
+WORKSPACE_ID = '00000000-0000-0000-0000-000000000101'
+
+
+def test_artifact_templates_exist():
+    """Test: Built-in artifact templates are available after migration"""
+    conn = psycopg2.connect(settings.database_url)
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT template_id FROM artifact_templates ORDER BY template_id")
+    templates = cursor.fetchall()
+    
+    template_ids = [t[0] for t in templates]
+    
+    # Verify all 4 built-in templates exist
+    assert 'prd' in template_ids
+    assert 'brief' in template_ids
+    assert 'memo' in template_ids
+    assert 'plan' in template_ids
+    
+    # Verify PRD template has sections
+    cursor.execute("SELECT sections FROM artifact_templates WHERE template_id = 'prd'")
+    prd_sections = cursor.fetchone()[0]
+    assert len(prd_sections) >= 4
+    assert any(s['section_id'] == 'goals' for s in prd_sections)
+    assert any(s['section_id'] == 'risks' for s in prd_sections)
+    
+    cursor.close()
+    conn.close()
+
+
+def test_artifact_init_requires_valid_template():
+    """Test: Artifact init fails with invalid template_id"""
+    # Create a debate first
+    response = client.post("/debates", json={
+        "workspace_id": WORKSPACE_ID,
+        "title": "Test Debate",
+        "problem_statement": "Test",
+        "policy_config": {},
+        "participants": []
+    })
+    assert response.status_code == 201
+    debate_id = response.json()['debate_id']
+    
+    # Try to init with invalid template
+    response = client.post(f"/debates/{debate_id}/artifact/init", json={
+        "template_id": "invalid_template_id",
+        "section_assignments": []
+    })
+    
+    assert response.status_code == 404
+
+
+def test_artifact_tables_created():
+    """Test: Artifact tables exist in database"""
+    conn = psycopg2.connect(settings.database_url)
+    cursor = conn.cursor()
+    
+    # Check artifact_templates table
+    cursor.execute("""
+        SELECT table_name FROM information_schema.tables 
+        WHERE table_name = 'artifact_templates'
+    """)
+    assert cursor.fetchone() is not None
+    
+    # Check artifacts table
+    cursor.execute("""
+        SELECT table_name FROM information_schema.tables 
+        WHERE table_name = 'artifacts'
+    """)
+    assert cursor.fetchone() is not None
+    
+    # Check indexes exist
+    cursor.execute("""
+        SELECT indexname FROM pg_indexes 
+        WHERE tablename = 'artifacts' AND indexname = 'idx_artifacts_debate'
+    """)
+    assert cursor.fetchone() is not None
+    
+    cursor.close()
+    conn.close()
+
+
+def test_artifact_init_creates_metadata_row():
+    """Test: Artifact init creates row in artifacts table"""
+    # Create debate
+    response = client.post("/debates", json={
+        "workspace_id": WORKSPACE_ID,
+        "title": "Test Debate",
+        "problem_statement": "Test",
+        "policy_config": {},
+        "participants": []
+    })
+    assert response.status_code == 201
+    debate_id = response.json()['debate_id']
+    
+    # Init artifact (no section assignments for simplicity)
+    response = client.post(f"/debates/{debate_id}/artifact/init", json={
+        "template_id": "brief",
+        "section_assignments": []
+    })
+    
+    assert response.status_code == 200
+    data = response.json()
+    artifact_id = data['artifact_id']
+    
+    # Verify artifact row exists in DB
+    conn = psycopg2.connect(settings.database_url)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT artifact_id, debate_id, template_id, status, version
+        FROM artifacts
+        WHERE artifact_id = %s
+    """, (artifact_id,))
+    
+    row = cursor.fetchone()
+    assert row is not None
+    assert row[1] == debate_id  # debate_id
+    assert row[2] == 'brief'     # template_id
+    assert row[3] == 'drafting'  # status
+    assert row[4] == 1           # version
+    
+    cursor.close()
+    conn.close()
+
+
+def test_get_artifact_returns_404_when_none_exists():
+    """Test: GET artifact returns 404 when no artifact exists for debate"""
+    # Create debate
+    response = client.post("/debates", json={
+        "workspace_id": WORKSPACE_ID,
+        "title": "Test Debate",
+        "problem_statement": "Test",
+        "policy_config": {},
+        "participants": []
+    })
+    assert response.status_code == 201
+    debate_id = response.json()['debate_id']
+    
+    # Try to get artifact (none exists yet)
+    response = client.get(f"/debates/{debate_id}/artifact")
+    assert response.status_code == 404

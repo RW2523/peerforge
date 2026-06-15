@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SSE Test - Frontend Simulation</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #fff; }
+        .event { 
+            border: 1px solid #333; 
+            padding: 10px; 
+            margin: 10px 0; 
+            background: #2a2a2a;
+            border-left: 4px solid #4a9eff;
+        }
+        .raw { background: #111; padding: 10px; margin: 10px 0; overflow-x: auto; }
+        .error { color: #ff4444; }
+        .success { color: #44ff44; }
+        .warning { color: #ffaa44; }
+        h2 { color: #4a9eff; }
+        pre { white-space: pre-wrap; word-wrap: break-word; }
+    </style>
+</head>
+<body>
+    <h1>SSE Stream Test - Frontend Simulation</h1>
+    <div id="status">Connecting...</div>
+    <div id="events"></div>
+
+    <script>
+        const debateId = 'ff97d8d1-c9e3-4c0e-b347-9a9bdb88c489';
+        const url = `http://localhost:8000/debates/${debateId}/events/stream`;
+        
+        console.log('Connecting to:', url);
+        document.getElementById('status').innerHTML = `<div class="success">Connecting to: ${url}</div>`;
+
+        let eventCount = 0;
+        let controller = new AbortController();
+
+        fetch(url, {
+            method: 'GET',
+            headers: {
+                'Accept': 'text/event-stream',
+                'Cache-Control': 'no-cache'
+            },
+            signal: controller.signal
+        })
+        .then(async (response) => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            document.getElementById('status').innerHTML = `<div class="success">Connected! Status: ${response.status}</div>`;
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let currentMessage = { event: 'message' };
+
+            while (true) {
+                const { done, value } = await reader.read();
+                
+                if (done) {
+                    console.log('Stream ended');
+                    document.getElementById('status').innerHTML += '<div class="warning">Stream ended</div>';
+                    break;
+                }
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    // Log raw line
+                    console.log('RAW LINE:', JSON.stringify(line));
+
+                    if (line.trim() === '') {
+                        // Empty line = end of message
+                        if (currentMessage.data !== undefined) {
+                            eventCount++;
+                            
+                            // This is what the frontend receives
+                            const msg = {
+                                id: currentMessage.id,
+                                event: currentMessage.event || 'message',
+                                data: currentMessage.data
+                            };
+
+                            console.log('RECEIVED MESSAGE:', msg);
+
+                            // Parse the data (this is what EventFeed.tsx does)
+                            try {
+                                const event = JSON.parse(msg.data);
+                                
+                                console.log('PARSED EVENT:', event);
+                                
+                                // Display in UI
+                                const eventDiv = document.createElement('div');
+                                eventDiv.className = 'event';
+                                
+                                const actor = event.payload?.agent_name || event.payload?.actor || 'System';
+                                const eventType = event.event_type || 'unknown';
+                                const message = event.payload?.message || event.payload?.content || event.payload?.text || '(no message)';
+                                
+                                eventDiv.innerHTML = `
+                                    <h3>Event #${eventCount}: ${msg.event}</h3>
+                                    <div><strong>Actor:</strong> ${actor}</div>
+                                    <div><strong>Event Type:</strong> ${eventType}</div>
+                                    <div><strong>Message:</strong> ${message.substring(0, 200)}...</div>
+                                    <details>
+                                        <summary>Raw SSE Message</summary>
+                                        <pre class="raw">${JSON.stringify(msg, null, 2)}</pre>
+                                    </details>
+                                    <details>
+                                        <summary>Parsed Event</summary>
+                                        <pre class="raw">${JSON.stringify(event, null, 2)}</pre>
+                                    </details>
+                                `;
+                                
+                                document.getElementById('events').appendChild(eventDiv);
+                                
+                            } catch (err) {
+                                console.error('Failed to parse event:', err);
+                                const errorDiv = document.createElement('div');
+                                errorDiv.className = 'event error';
+                                errorDiv.innerHTML = `
+                                    <h3>Parse Error</h3>
+                                    <pre>${err.message}</pre>
+                                    <pre class="raw">${JSON.stringify(msg, null, 2)}</pre>
+                                `;
+                                document.getElementById('events').appendChild(errorDiv);
+                            }
+                        }
+                        currentMessage = { event: 'message' };
+                        continue;
+                    }
+
+                    if (line.startsWith(':')) {
+                        // Comment line, ignore
+                        continue;
+                    }
+
+                    const colonIndex = line.indexOf(':');
+                    if (colonIndex === -1) {
+                        continue;
+                    }
+
+                    const field = line.substring(0, colonIndex);
+                    let value = line.substring(colonIndex + 1);
+                    if (value.startsWith(' ')) {
+                        value = value.substring(1);
+                    }
+
+                    switch (field) {
+                        case 'event':
+                            currentMessage.event = value;
+                            break;
+                        case 'data':
+                            currentMessage.data = (currentMessage.data || '') + value;
+                            break;
+                        case 'id':
+                            currentMessage.id = value;
+                            break;
+                    }
+                }
+
+                // Stop after 10 events for testing
+                if (eventCount >= 10) {
+                    console.log('Stopping after 10 events');
+                    controller.abort();
+                    break;
+                }
+            }
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            document.getElementById('status').innerHTML += `<div class="error">Error: ${error.message}</div>`;
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,178 @@
+/* PracticeJourneyCard — preparation funnel shown with the session report */
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-left: 4px solid var(--accent);
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.intro {
+  margin: 8px 0 16px;
+  color: var(--text-2);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* ── Steps ─────────────────────────────────────────────────────────────── */
+
+.steps {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.stepMarker {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: var(--surface-2);
+  border: 1px solid var(--border-medium);
+  color: var(--text-2);
+}
+
+.stepDone .stepMarker {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.stepActive .stepMarker {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.stepBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stepTitle {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.stepActive .stepTitle {
+  color: var(--accent);
+}
+
+.stepDetail {
+  font-size: 0.82rem;
+  color: var(--text-2);
+}
+
+/* ── Readiness outlook (qualitative band, never a mark) ────────────────── */
+
+.outlookChip {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.outlookStrong {
+  background: rgba(74, 222, 128, 0.14);
+  color: #22a35a;
+  border: 1px solid rgba(74, 222, 128, 0.4);
+}
+
+.outlookAlmost {
+  background: rgba(245, 166, 35, 0.12);
+  color: #c47d12;
+  border: 1px solid rgba(245, 166, 35, 0.4);
+}
+
+.outlookPractice {
+  background: rgba(255, 107, 107, 0.12);
+  color: #d64545;
+  border: 1px solid rgba(255, 107, 107, 0.4);
+}
+
+.outlookBox {
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.outlookHint {
+  margin: 0 0 6px;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.nextStep {
+  margin: 0 0 6px;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.outlookNote {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-2);
+  font-style: italic;
+}
+
+/* ── CTA ───────────────────────────────────────────────────────────────── */
+
+.ctaRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.ctaBtn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 22px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ctaBtn:hover {
+  background: var(--accent-hover, var(--accent));
+}
+
+.ctaHint {
+  font-size: 0.8rem;
+  color: var(--text-2);
+}

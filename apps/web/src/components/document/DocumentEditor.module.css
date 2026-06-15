@@ -1,0 +1,60 @@
+.editorWrapper {
+  min-height: 150px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  margin-bottom: 24px;
+}
+
+.editor {
+  min-height: 120px;
+  color: #1a1a1a !important;
+  font-size: 15px;
+  line-height: 1.8;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.editor :global(.ProseMirror) {
+  outline: none;
+  padding: 8px 0;
+  color: #1a1a1a !important;
+}
+
+.editor :global(.ProseMirror p) {
+  margin: 0 0 16px 0;
+  text-align: justify;
+  color: #1a1a1a !important;
+}
+
+.editor :global(.ProseMirror strong) {
+  color: #000 !important;
+  font-weight: 600;
+}
+
+.editor :global(.ProseMirror) * {
+  color: #1a1a1a !important;
+}
+
+.editor :global(.ProseMirror h1),
+.editor :global(.ProseMirror h2),
+.editor :global(.ProseMirror h3) {
+  margin: 24px 0 12px 0;
+  font-weight: 600;
+}
+
+.editor :global(.ProseMirror ul),
+.editor :global(.ProseMirror ol) {
+  margin: 0 0 16px 0;
+  padding-left: 24px;
+}
+
+.editor :global(.ProseMirror li) {
+  margin-bottom: 8px;
+}
+
+.loading {
+  padding: 40px;
+  text-align: center;
+  color: var(--text-2);
+}

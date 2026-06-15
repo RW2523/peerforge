@@ -1,0 +1,129 @@
+.container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: var(--bg-0);
+}
+
+.card {
+  background: var(--bg-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 40px;
+  max-width: 420px;
+  width: 100%;
+}
+
+.loginHeader {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+
+.loginIcon {
+  font-size: 36px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 12px rgba(59, 130, 246, 0.4));
+}
+
+.card h1 {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-0);
+  margin: 0;
+  background: linear-gradient(135deg, var(--text-0) 0%, var(--accent) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--text-2);
+  margin: 0 0 32px 0;
+}
+
+.toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.toggle button {
+  flex: 1;
+  padding: 10px;
+  background: var(--bg-1);
+  color: var(--text-1);
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.toggle button:hover:not(:disabled) {
+  background: var(--bg-2);
+  border-color: var(--accent);
+}
+
+.toggle button.active {
+  background: var(--accent);
+  color: var(--text-0);
+  border-color: var(--accent);
+}
+
+.toggle button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-1);
+}
+
+.field input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.btn {
+  padding: 12px !important;
+  background: var(--accent) !important;
+  color: var(--text-0) !important;
+  font-weight: 600 !important;
+  font-size: 16px !important;
+  margin-top: 8px !important;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--accent-hover) !important;
+}
+
+.status {
+  margin-top: 20px;
+  padding: 12px;
+  background: var(--bg-1);
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  font-size: 14px;
+  color: var(--text-1);
+  text-align: center;
+}

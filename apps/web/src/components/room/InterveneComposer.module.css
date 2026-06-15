@@ -1,0 +1,145 @@
+.composer {
+  border-top: 2px solid var(--accent);
+  padding: 16px;
+  background: var(--bg-1);
+  border-radius: 8px 8px 0 0;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+  min-height: 180px;
+}
+
+.composer::before {
+  content: "Intervene in Debate";
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 12px;
+  letter-spacing: 0.02em;
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  color: var(--danger);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.inputWrapper {
+  position: relative;
+}
+
+.inputWrapper textarea {
+  width: 100%;
+  padding: 12px;
+  background: var(--bg-0);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  color: var(--text-0);
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 80px;
+  max-height: 200px;
+  transition: border-color 150ms;
+}
+
+.inputWrapper textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.inputWrapper textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mentionDropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 8px;
+  background: var(--bg-1);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+  animation: slideUp 150ms ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mentionItem {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-0);
+  font-size: 14px;
+  text-align: left;
+  transition: background 150ms;
+}
+
+.mentionItem:hover {
+  background: var(--surface-0);
+}
+
+.mentionIcon {
+  font-size: 16px;
+  color: var(--accent);
+}
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.sendBtn {
+  padding: 10px 20px;
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  color: var(--bg-0);
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 150ms;
+}
+
+.sendBtn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.sendBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}

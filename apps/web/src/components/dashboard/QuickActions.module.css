@@ -1,0 +1,106 @@
+.container {
+  margin-top: var(--space-5);
+  animation: fadeIn 400ms ease-out 200ms backwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.container h2 {
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--text-0);
+  margin-bottom: var(--space-3);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-3);
+}
+
+.action {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--bg-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  text-decoration: none;
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.action::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent);
+  transform: translateX(-3px);
+  transition: transform 200ms;
+}
+
+.action:hover {
+  background: var(--surface-0);
+  border-color: var(--accent);
+  transform: translateX(4px);
+}
+
+.action:hover::before {
+  transform: translateX(0);
+}
+
+.actionIcon {
+  font-size: 28px;
+  flex-shrink: 0;
+  transition: transform 200ms;
+}
+
+.action:hover .actionIcon {
+  transform: scale(1.1) rotate(5deg);
+}
+
+.actionContent {
+  flex: 1;
+}
+
+.actionContent h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-0);
+  margin: 0 0 4px 0;
+}
+
+.actionContent p {
+  font-size: 13px;
+  color: var(--text-2);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.actionArrow {
+  font-size: 20px;
+  color: var(--text-2);
+  flex-shrink: 0;
+  transition: all 200ms;
+  opacity: 0.5;
+}
+
+.action:hover .actionArrow {
+  color: var(--accent);
+  opacity: 1;
+  transform: translateX(4px);
+}

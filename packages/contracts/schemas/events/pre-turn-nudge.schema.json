@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arinar.com/schemas/events/pre-turn-nudge.json",
+  "title": "Pre-Turn Nudge Event",
+  "description": "Agent requesting permission to speak before scheduled turn",
+  "allOf": [
+    {
+      "$ref": "./base-event.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_type": {
+          "const": "pre_turn_nudge"
+        },
+        "sender_type": {
+          "const": "agent"
+        },
+        "content": {
+          "type": "object",
+          "required": ["reason", "proposed_response_brief"],
+          "properties": {
+            "reason": {
+              "type": "string",
+              "enum": [
+                "urgent_correction",
+                "new_evidence",
+                "direct_challenge",
+                "critical_risk"
+              ]
+            },
+            "target_message_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "proposed_response_brief": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        }
+      }
+    }
+  ]
+}

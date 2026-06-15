@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arinar.com/schemas/events/debate-summary.json",
+  "title": "Debate Summary Event",
+  "description": "System event emitted when end-of-meeting outputs are generated (M3).",
+  "allOf": [
+    {
+      "$ref": "./base-event.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_type": {
+          "const": "debate_summary"
+        },
+        "sender_type": {
+          "enum": ["system"]
+        },
+        "content": {
+          "type": "object",
+          "required": ["summary", "action_item_count"],
+          "properties": {
+            "summary": {
+              "type": "string",
+              "minLength": 10,
+              "description": "Short summary (1-3 sentences)."
+            },
+            "action_item_count": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of action items generated."
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}
+

@@ -1,0 +1,28 @@
+Sample Material Document for Testing
+
+This is a sample text file used to test the materials ingestion pipeline.
+
+Section 1: Introduction
+This section introduces the key concepts that will be discussed in the document.
+The materials pipeline must extract, chunk, and store this content with full provenance tracking.
+
+Section 2: Requirements
+All uploaded materials must:
+- Be validated for file type and size
+- Have text extracted correctly
+- Be chunked with paragraph awareness
+- Include provenance metadata (material_id, page_num, offsets, SHA256)
+- Be retrievable by agents during debates
+
+Section 3: Expected Behavior
+When this file is uploaded through the API endpoint, the system should:
+1. Create a meeting_materials row with kind='file'
+2. Upload the file to MinIO storage
+3. Queue a Celery task for processing
+4. Extract this text content
+5. Generate multiple chunks with overlap
+6. Store chunks in memory_chunks table with agent_id=NULL
+7. Update processed_status to 'complete'
+8. Include chunk_count and word_count in processing_metadata
+
+This text provides sufficient content for testing chunking behavior and provenance tracking.

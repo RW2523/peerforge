@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arinar.com/schemas/events/research-request.json",
+  "title": "Research Request Event",
+  "description": "Agent requesting internet research (policy-controlled)",
+  "allOf": [
+    {
+      "$ref": "./base-event.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_type": {
+          "const": "research_request"
+        },
+        "sender_type": {
+          "const": "agent"
+        },
+        "content": {
+          "type": "object",
+          "required": ["query", "justification"],
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Search query or URL to fetch"
+            },
+            "justification": {
+              "type": "string",
+              "description": "Why this research is needed"
+            },
+            "domains": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Optional specific domains to search"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

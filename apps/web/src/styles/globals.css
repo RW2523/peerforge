@@ -1,0 +1,195 @@
+/* PeerForge — Scholarly Indigo + Forge Copper Design System
+   Light theme is default; dark theme applies via html[data-theme="dark"]. */
+:root {
+  color-scheme: light;
+
+  /* Backgrounds - Academic white */
+  --bg-0: #F8FAFC;
+  --bg-1: #FFFFFF;
+  --bg-2: #F1F5F9;
+
+  /* Surfaces - Cards */
+  --surface-0: #FFFFFF;
+  --surface-1: #FFFFFF;
+  --surface-2: #F1F5F9;
+
+  /* Borders - Cool slate */
+  --border-soft: #E2E8F0;
+  --border-medium: #CBD5E1;
+
+  /* Typography - Charcoal on white */
+  --text-0: #111827;
+  --text-1: #334155;
+  --text-2: #64748B;
+  --text-3: #94A3B8;
+
+  /* Primary - Deep Scholarly Indigo */
+  --accent: #1E1B4B;
+  --accent-hover: #312E81;
+  --accent-subtle: rgba(30, 27, 75, 0.08);
+
+  /* Secondary - Forge Copper (legacy --gold name retained for cascade) */
+  --gold: #C47A3A;
+  --gold-hover: #A8632C;
+  --gold-subtle: rgba(196, 122, 58, 0.14);
+  --secondary: #C47A3A;
+  --secondary-hover: #A8632C;
+  --secondary-subtle: rgba(196, 122, 58, 0.14);
+
+  /* Accent - Intelligent Cyan (AI / tech touches, focus rings) */
+  --cyan: #06B6D4;
+  --cyan-subtle: rgba(6, 182, 212, 0.12);
+
+  /* Semantic */
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger: #DC2626;
+
+  /* Spacing scale (4px grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Radii - Subtle */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+
+  /* Shadows - Soft, indigo-tinted */
+  --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.06);
+  --shadow-md: 0 4px 12px rgba(17, 24, 39, 0.08);
+  --shadow-lg: 0 10px 28px rgba(17, 24, 39, 0.12);
+}
+
+/* ── Dark theme ─────────────────────────────────────────────────────────
+   Deep indigo/charcoal surfaces; copper & cyan accents brightened for contrast. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Deep navy-blue backgrounds (darker, bluer than indigo) */
+  --bg-0: #050A16;
+  --bg-1: #08101F;
+  --bg-2: #0D182B;
+
+  --surface-0: #0B1422;
+  --surface-1: #0F1B2E;
+  --surface-2: #15243A;
+
+  --border-soft: #1B2C46;
+  --border-medium: #284064;
+
+  --text-0: #F1F5FB;
+  --text-1: #D5E0EF;
+  --text-2: #93A4BE;
+  --text-3: #64748B;
+
+  --accent: #5B8DEF;
+  --accent-hover: #7BA6F5;
+  --accent-subtle: rgba(91, 141, 239, 0.16);
+
+  --gold: #D08A4A;
+  --gold-hover: #E0A060;
+  --gold-subtle: rgba(208, 138, 74, 0.18);
+  --secondary: #D08A4A;
+  --secondary-hover: #E0A060;
+  --secondary-subtle: rgba(208, 138, 74, 0.18);
+
+  --cyan: #22D3EE;
+  --cyan-subtle: rgba(34, 211, 238, 0.14);
+
+  --success: #34D399;
+  --warning: #FBBF24;
+  --danger: #F87171;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 28px rgba(0, 0, 0, 0.6);
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  background-color: var(--bg-0);
+  color: var(--text-0);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-weight: 400;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display, var(--font-sans, sans-serif));
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input,
+textarea {
+  font-family: inherit;
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--surface-0);
+  border: 1px solid var(--border-medium);
+  border-radius: 6px;
+  color: var(--text-0);
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+input:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 2px var(--cyan-subtle);
+}
+
+input:disabled,
+textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-soft);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--surface-1);
+}

@@ -1,0 +1,117 @@
+.container {
+  position: relative;
+  background: transparent;
+  border-radius: 0;
+  padding: 24px 0;
+  margin: 16px 0;
+  border-top: 1px solid #e8e8e8;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.diagram {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+  padding: 20px;
+  background: #fafafa;
+  border-radius: 4px;
+}
+
+.diagram :global(svg) {
+  max-width: 100%;
+  height: auto;
+}
+
+.error {
+  padding: 20px;
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  color: var(--danger);
+}
+
+.error pre {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  font-size: 12px;
+  overflow-x: auto;
+}
+
+.btnEdit {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: var(--surface-0);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  color: var(--text-0);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnEdit:hover {
+  border-color: var(--accent);
+  background: var(--bg-1);
+}
+
+.editContainer {
+  background: var(--surface-1);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.codeEditor {
+  width: 100%;
+  padding: 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  color: var(--text-0);
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.codeEditor:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.editActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.btnSave, .btnCancel {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnSave {
+  background: var(--accent);
+  border: none;
+  color: white;
+}
+
+.btnSave:hover {
+  background: var(--accent-hover);
+}
+
+.btnCancel {
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  color: var(--text-0);
+}
+
+.btnCancel:hover {
+  border-color: var(--accent);
+}

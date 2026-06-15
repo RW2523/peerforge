@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arinar.com/schemas/events/research-result.json",
+  "title": "Research Result Event",
+  "description": "Internet research results returned to agent",
+  "allOf": [
+    {
+      "$ref": "./base-event.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_type": {
+          "const": "research_result"
+        },
+        "sender_type": {
+          "const": "system"
+        },
+        "content": {
+          "type": "object",
+          "required": ["request_id", "results"],
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Original research request event ID"
+            },
+            "results": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["source_url", "snippet"],
+                "properties": {
+                  "source_url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "snippet": {
+                    "type": "string"
+                  },
+                  "fetched_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

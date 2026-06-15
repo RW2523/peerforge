@@ -1,0 +1,292 @@
+.generatePanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  animation: fadeIn 300ms ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.generatePanel h3 {
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--text-0);
+  margin-bottom: 12px;
+}
+
+.generatePanel p {
+  font-size: 14px;
+  color: var(--text-1);
+  max-width: 400px;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+.warning,
+.error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.warning {
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid var(--warning);
+  color: var(--warning);
+}
+
+.error {
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+}
+
+.generateBtn {
+  padding: 14px 28px;
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  color: var(--bg-0);
+  font-size: 15px;
+  font-weight: 600;
+  transition: all 150ms;
+}
+
+.generateBtn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: translateY(-2px);
+}
+
+.generateBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.report {
+  padding: 24px;
+  animation: fadeIn 400ms ease-out;
+}
+
+.reportHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.reportHeader h2 {
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--text-0);
+}
+
+.headerActions {
+  display: flex;
+  gap: 12px;
+}
+
+.historyBtn {
+  padding: 8px 16px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  color: var(--text-0);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 150ms;
+}
+
+.historyBtn:hover {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.regenerateBtn {
+  padding: 8px 16px;
+  background: var(--surface-0);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  color: var(--text-0);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 150ms;
+}
+
+.regenerateBtn:hover {
+  background: var(--surface-1);
+  border-color: var(--accent);
+}
+
+.section {
+  margin-bottom: 32px;
+}
+
+.section h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 16px;
+}
+
+.section h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-0);
+  margin-bottom: 8px;
+}
+
+.section h5 {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-1);
+  margin: 12px 0 8px 0;
+}
+
+.agendaReview,
+.outcomeReview {
+  padding: 16px;
+  background: var(--surface-0);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.agendaReview ol,
+.outcomeReview ul {
+  padding-left: 24px;
+  margin-top: 8px;
+}
+
+.agendaReview li,
+.outcomeReview li {
+  font-size: 13px;
+  color: var(--text-1);
+  line-height: 1.6;
+  margin-bottom: 6px;
+}
+
+.outcomeReview p {
+  font-size: 14px;
+  color: var(--text-0);
+  line-height: 1.6;
+}
+
+.summaryBox,
+.minutesBox {
+  padding: 20px;
+  background: var(--bg-1);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text-1);
+  white-space: pre-wrap;
+}
+
+.summaryBox {
+  color: var(--text-0);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.minutesBox {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.actionItems {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.actionItem {
+  padding: 16px;
+  background: var(--bg-1);
+  border-left: 4px solid var(--border-soft);
+  border-radius: 8px;
+  animation: slideIn 250ms ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.actionItem.priority-high {
+  border-left-color: #ff4444;
+}
+
+.actionItem.priority-medium {
+  border-left-color: #ffaa00;
+}
+
+.actionItem.priority-low {
+  border-left-color: #44ff44;
+}
+
+.actionDesc {
+  font-size: 14px;
+  color: var(--text-0);
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+
+.actionMeta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.owner {
+  font-weight: 500;
+}
+
+.priority {
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.empty {
+  font-size: 13px;
+  color: var(--text-2);
+  text-align: center;
+  padding: 24px;
+}
+
+/* Wrapper for the pre-report state (journey card + generate panel) */
+.generateWrap {
+  padding: 24px;
+}

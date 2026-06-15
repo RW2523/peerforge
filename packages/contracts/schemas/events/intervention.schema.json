@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arinar.com/schemas/events/intervention.json",
+  "title": "Intervention Event",
+  "description": "Manual or policy-triggered intervention in debate",
+  "allOf": [
+    {
+      "$ref": "./base-event.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_type": {
+          "const": "intervention"
+        },
+        "content": {
+          "type": "object",
+          "required": ["intent", "question_or_instruction"],
+          "properties": {
+            "intent": {
+              "type": "string",
+              "enum": [
+                "clarify",
+                "challenge",
+                "re_scope",
+                "request_evidence",
+                "decision_check"
+              ]
+            },
+            "question_or_instruction": {
+              "type": "string"
+            },
+            "target_agents": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "blocking": {
+              "type": "boolean",
+              "description": "If true, pauses normal queue until addressed"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

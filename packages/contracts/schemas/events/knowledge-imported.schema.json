@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arinar.com/schemas/events/knowledge-imported.json",
+  "title": "Knowledge Imported Event",
+  "description": "External knowledge successfully imported into debate context",
+  "allOf": [
+    {
+      "$ref": "./base-event.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_type": {
+          "const": "knowledge_imported"
+        },
+        "sender_type": {
+          "const": "system"
+        },
+        "content": {
+          "type": "object",
+          "required": ["source_type", "knowledge_id"],
+          "properties": {
+            "source_type": {
+              "type": "string",
+              "enum": ["document", "url", "database", "api"]
+            },
+            "knowledge_id": {
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "metadata": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

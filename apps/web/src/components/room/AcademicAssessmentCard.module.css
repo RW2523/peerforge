@@ -1,0 +1,258 @@
+/* AcademicAssessmentCard — ten-dimension formative assessment matrix */
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.title {
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--text-2);
+  line-height: 1.5;
+  max-width: 520px;
+}
+
+/* ── Overall badge ─────────────────────────────────────────────────────── */
+
+.overallBadge {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+
+.overallScore {
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.overallDenominator {
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.overallBand {
+  margin-left: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── Score bands (text + border colour; bar background) ────────────────── */
+
+.bandStrong        { color: #1e9e57; border-color: rgba(34, 163, 90, 0.45); }
+.bandCompetent     { color: var(--accent); border-color: var(--accent-subtle, rgba(91, 141, 239, 0.35)); }
+.bandDeveloping    { color: #c47d12; border-color: rgba(245, 166, 35, 0.45); }
+.bandUnderPrepared { color: #d64545; border-color: rgba(255, 107, 107, 0.45); }
+
+.dimensionBarFill.bandStrong        { background: #2dbd6e; }
+.dimensionBarFill.bandCompetent     { background: var(--accent); }
+.dimensionBarFill.bandDeveloping    { background: #f5a623; }
+.dimensionBarFill.bandUnderPrepared { background: #ff6b6b; }
+
+/* ── Matrix rows ───────────────────────────────────────────────────────── */
+
+.matrix {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border-soft);
+}
+
+.dimensionRow {
+  display: grid;
+  grid-template-columns: 28px minmax(180px, 220px) 1fr 44px;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 4px;
+  border: none;
+  border-bottom: 1px solid var(--border-soft);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: background 0.12s;
+}
+
+.dimensionRow:hover {
+  background: var(--surface-2);
+}
+
+.dimensionIndex {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.dimensionLabel {
+  font-size: 0.87rem;
+  font-weight: 600;
+}
+
+.dimensionBarTrack {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.dimensionBarFill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease-out;
+}
+
+.dimensionScore {
+  font-size: 0.86rem;
+  font-weight: 800;
+  text-align: right;
+  border: none;
+}
+
+.dimensionComment {
+  grid-column: 2 / -1;
+  font-size: 0.82rem;
+  color: var(--text-2);
+  line-height: 1.5;
+  padding: 4px 0 2px;
+}
+
+.dimensionRowOpen {
+  background: var(--surface-2);
+}
+
+/* ── Remarks, basis, actions ───────────────────────────────────────────── */
+
+.remarks {
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-top: 16px;
+}
+
+.remarks h4 {
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-2);
+}
+
+.remarks p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.basis {
+  margin: 10px 0 0;
+  font-size: 0.75rem;
+  color: var(--text-2);
+  font-style: italic;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.generateBtn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.generateBtn:hover:not(:disabled) {
+  background: var(--accent-hover, var(--accent));
+}
+
+.generateBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.note {
+  font-size: 0.76rem;
+  color: var(--text-2);
+}
+
+.error {
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.84rem;
+  color: #d64545;
+  margin-bottom: 12px;
+}
+
+.emptyState p,
+.loadingState p {
+  color: var(--text-2);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.loadingState {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-soft);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: assessmentSpin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes assessmentSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 640px) {
+  .dimensionRow {
+    grid-template-columns: 22px 1fr 44px;
+  }
+  .dimensionBarTrack {
+    display: none;
+  }
+}

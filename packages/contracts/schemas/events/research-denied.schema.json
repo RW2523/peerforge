@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arinar.com/schemas/events/research-denied.json",
+  "title": "Research Denied Event",
+  "description": "Research request rejected by policy engine",
+  "allOf": [
+    {
+      "$ref": "./base-event.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_type": {
+          "const": "research_denied"
+        },
+        "sender_type": {
+          "const": "system"
+        },
+        "content": {
+          "type": "object",
+          "required": ["request_id", "reason"],
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "policy_disabled",
+                "permission_denied",
+                "domain_blocked",
+                "rate_limit_exceeded",
+                "requires_approval"
+              ]
+            },
+            "details": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

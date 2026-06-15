@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arinar.com/schemas/events/voice-transcript-final.json",
+  "title": "Voice Transcript Final Event",
+  "description": "Final voice transcription result",
+  "allOf": [
+    {
+      "$ref": "./base-event.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_type": {
+          "const": "voice_transcript_final"
+        },
+        "content": {
+          "type": "object",
+          "required": ["transcript_id", "text"],
+          "properties": {
+            "transcript_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "text": {
+              "type": "string",
+              "description": "Final transcript text"
+            },
+            "is_final": {
+              "type": "boolean",
+              "const": true
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "language": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

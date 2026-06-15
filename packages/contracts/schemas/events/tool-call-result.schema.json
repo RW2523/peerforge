@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arinar.com/schemas/events/tool-call-result.json",
+  "title": "Tool Call Result Event",
+  "description": "Tool execution result returned to agent",
+  "allOf": [
+    {
+      "$ref": "./base-event.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_type": {
+          "const": "tool_call_result"
+        },
+        "sender_type": {
+          "const": "system"
+        },
+        "content": {
+          "type": "object",
+          "required": ["request_id", "result"],
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "result": {
+              "type": "object",
+              "description": "Tool output"
+            },
+            "metadata": {
+              "type": "object",
+              "properties": {
+                "execution_time_ms": {
+                  "type": "integer"
+                },
+                "tool_version": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

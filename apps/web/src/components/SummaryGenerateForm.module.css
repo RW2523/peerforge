@@ -1,0 +1,35 @@
+.container {
+  margin-bottom: 24px;
+}
+
+.container h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+
+.container label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-1);
+  margin-bottom: 8px;
+  margin-top: 16px;
+}
+
+.container input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.btnPrimary {
+  background: var(--accent) !important;
+  color: var(--text-0) !important;
+  font-weight: 600 !important;
+  margin-top: 16px;
+}
+
+.btnPrimary:hover:not(:disabled) {
+  background: var(--accent-hover) !important;
+}

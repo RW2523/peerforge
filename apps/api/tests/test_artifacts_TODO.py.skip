@@ -1,0 +1,508 @@
+"""
+Test Live Artifacts V1 API
+DB-backed tests proving artifact init, sections, events, and ownership enforcement.
+"""
+import uuid
+import pytest
+from fastapi.testclient import TestClient
+from src.main import app
+
+
+client = TestClient(app)
+
+WORKSPACE_ID = '00000000-0000-0000-0000-000000000101'
+
+
+def setup_test_debate():
+    """Create a debate with participants for testing"""
+    # Create debate
+    debate_id = str(uuid.uuid4())
+    response = client.post("/debates", json={
+        "workspace_id": WORKSPACE_ID,
+        "title": "Test Artifact Debate",
+        "problem_statement": "Test problem for artifacts",
+        "policy_config": {},
+        "participants": []
+    })
+    assert response.status_code == 201
+    debate_data = response.json()
+    debate_id = debate_data['debate_id']
+    
+    # Add participants (3 agents)
+    participants = []
+    for i, role in enumerate(['PM', 'Engineer', 'Designer']):
+        agent_config = {
+            'agent_id': str(uuid.uuid4()),
+            'name': f'Agent {role}',
+            'role_description': role,
+            'model_id': 'anthropic/claude-3.5-sonnet',
+            'model_config': {'temperature': 0.7},
+            'system_prompt': f'You are a {role}.'
+        }
+        
+        response = client.post(f"/debates/{debate_id}/participants", json={
+            "agent_config": agent_config
+        })
+        assert response.status_code == 200
+        participant = response.json()
+        participants.append(participant)
+    
+    return debate_id, participants
+
+
+def test_artifact_init_creates_artifact_and_sections():
+    """
+    Test: Initialize artifact creates artifact metadata + section placeholders.
+    Verifies sections are stored in agent_knowledge_units with correct metadata.
+    """
+    debate_id, participants = setup_test_debate()
+    
+    # Initialize artifact with PRD template
+    response = client.post(f"/debates/{debate_id}/artifact/init", json={
+        "template_id": "prd",
+        "section_assignments": [
+            {"section_id": "goals", "participant_id": participants[0]['participant_id']},
+            {"section_id": "non_goals", "participant_id": participants[0]['participant_id']},
+            {"section_id": "technical_approach", "participant_id": participants[1]['participant_id']},
+            {"section_id": "risks", "participant_id": participants[2]['participant_id']}
+        ]
+    })
+    
+    assert response.status_code == 200
+    data = response.json()
+    
+    # Verify response structure
+    assert data['artifact_id']
+    assert data['debate_id'] == debate_id
+    assert data['template_id'] == 'prd'
+    assert data['version'] == 1
+    assert data['status'] == 'drafting'
+    assert len(data['sections']) >= 4
+    
+    # Verify sections have expected structure
+    goals_section = next((s for s in data['sections'] if s['section_id'] == 'goals'), None)
+    assert goals_section is not None
+    assert goals_section['owner_participant_id'] == participants[0]['participant_id']
+    assert goals_section['status'] == 'drafting'
+    assert goals_section['content'] == ''
+    assert goals_section['word_count'] == 0
+    
+    # Verify artifact_init event was emitted
+    events_response = client.get(f"/debates/{debate_id}/events")
+    assert events_response.status_code == 200
+    events = events_response.json()['events']
+    init_events = [e for e in events if e['event_type'] == 'artifact_init']
+    assert len(init_events) == 1
+
+
+def test_artifact_get_returns_current_state():
+    """
+    Test: GET artifact returns current artifact with all sections.
+    """
+    debate_id, participants = setup_test_debate()
+    
+    # Init artifact
+    init_response = client.post(f"/debates/{debate_id}/artifact/init", json={
+        "template_id": "brief",
+        "section_assignments": [
+            {"section_id": "summary", "participant_id": participants[0]['participant_id']},
+            {"section_id": "situation", "participant_id": participants[1]['participant_id']}
+        ]
+    })
+    assert init_response.status_code == 200
+    artifact_id = init_response.json()['artifact_id']
+    
+    # Get artifact
+    response = client.get(f"/debates/{debate_id}/artifact")
+    assert response.status_code == 200
+    data = response.json()
+    
+    assert data['artifact_id'] == artifact_id
+    assert data['template_id'] == 'brief'
+    assert len(data['sections']) >= 2
+    assert data['created_at']
+    assert data['updated_at']
+
+
+def test_section_event_append_updates_content():
+    """
+    Test: POST section event with append type appends content to section.
+    """
+    debate_id, participants = setup_test_debate()
+    
+    # Init artifact
+    init_response = client.post(f"/debates/{debate_id}/artifact/init", json={
+        "template_id": "memo",
+        "section_assignments": [
+            {"section_id": "background", "participant_id": participants[0]['participant_id']}
+        ]
+    })
+    assert init_response.status_code == 200
+    
+    # Append content to section (as owner)
+    response = client.post(
+        f"/debates/{debate_id}/artifact/sections/background/events",
+        json={
+            "event_type": "append",
+            "content": "## Background\n\nThis is the first paragraph.",
+            "citations": []
+        },
+        headers={"X-Participant-Id": participants[0]['participant_id']}
+    )
+    
+    assert response.status_code == 200
+    event_data = response.json()
+    
+    assert event_data['event_id']
+    assert event_data['section_id'] == 'background'
+    assert event_data['event_type'] == 'append'
+    assert event_data['actor_participant_id'] == participants[0]['participant_id']
+    
+    # Verify section content was updated
+    artifact_response = client.get(f"/debates/{debate_id}/artifact")
+    assert artifact_response.status_code == 200
+    sections = artifact_response.json()['sections']
+    
+    background_section = next((s for s in sections if s['section_id'] == 'background'), None)
+    assert background_section is not None
+    assert 'first paragraph' in background_section['content']
+    assert background_section['word_count'] > 0
+
+
+def test_section_event_replace_replaces_content():
+    """
+    Test: POST section event with replace type replaces section content.
+    """
+    debate_id, participants = setup_test_debate()
+    
+    # Init artifact
+    init_response = client.post(f"/debates/{debate_id}/artifact/init", json={
+        "template_id": "plan",
+        "section_assignments": [
+            {"section_id": "objective", "participant_id": participants[0]['participant_id']}
+        ]
+    })
+    assert init_response.status_code == 200
+    
+    # Append initial content
+    client.post(
+        f"/debates/{debate_id}/artifact/sections/objective/events",
+        json={
+            "event_type": "append",
+            "content": "Initial draft.",
+            "citations": []
+        },
+        headers={"X-Participant-Id": participants[0]['participant_id']}
+    )
+    
+    # Replace content
+    response = client.post(
+        f"/debates/{debate_id}/artifact/sections/objective/events",
+        json={
+            "event_type": "replace",
+            "content": "## Objective\n\nRevised and improved version.",
+            "citations": []
+        },
+        headers={"X-Participant-Id": participants[0]['participant_id']}
+    )
+    
+    assert response.status_code == 200
+    
+    # Verify content was replaced (not appended)
+    artifact_response = client.get(f"/debates/{debate_id}/artifact")
+    sections = artifact_response.json()['sections']
+    objective_section = next((s for s in sections if s['section_id'] == 'objective'), None)
+    
+    assert objective_section is not None
+    assert 'Initial draft' not in objective_section['content']
+    assert 'Revised and improved' in objective_section['content']
+
+
+def test_section_ownership_enforcement():
+    """
+    Test: Only section owner can write to their section (403 for others).
+    Critical for trust and auditability.
+    """
+    debate_id, participants = setup_test_debate()
+    
+    # Init artifact with owner assignments
+    init_response = client.post(f"/debates/{debate_id}/artifact/init", json={
+        "template_id": "prd",
+        "section_assignments": [
+            {"section_id": "goals", "participant_id": participants[0]['participant_id']},
+            {"section_id": "risks", "participant_id": participants[1]['participant_id']}
+        ]
+    })
+    assert init_response.status_code == 200
+    
+    # Owner can write to their section
+    owner_response = client.post(
+        f"/debates/{debate_id}/artifact/sections/goals/events",
+        json={
+            "event_type": "append",
+            "content": "Owner writing to goals.",
+            "citations": []
+        },
+        headers={"X-Participant-Id": participants[0]['participant_id']}
+    )
+    assert owner_response.status_code == 200
+    
+    # Non-owner cannot write to section (should get 403)
+    non_owner_response = client.post(
+        f"/debates/{debate_id}/artifact/sections/goals/events",
+        json={
+            "event_type": "append",
+            "content": "Non-owner trying to write.",
+            "citations": []
+        },
+        headers={"X-Participant-Id": participants[1]['participant_id']}  # Different participant
+    )
+    assert non_owner_response.status_code == 403
+
+
+def test_artifact_events_returns_event_history():
+    """
+    Test: GET artifact events returns event ledger with cursor pagination.
+    """
+    debate_id, participants = setup_test_debate()
+    
+    # Init artifact
+    init_response = client.post(f"/debates/{debate_id}/artifact/init", json={
+        "template_id": "memo",
+        "section_assignments": [
+            {"section_id": "background", "participant_id": participants[0]['participant_id']},
+            {"section_id": "analysis", "participant_id": participants[1]['participant_id']}
+        ]
+    })
+    assert init_response.status_code == 200
+    artifact_id = init_response.json()['artifact_id']
+    
+    # Create multiple events
+    for i in range(3):
+        client.post(
+            f"/debates/{debate_id}/artifact/sections/background/events",
+            json={
+                "event_type": "append",
+                "content": f"Event {i} content.",
+                "citations": []
+            },
+            headers={"X-Participant-Id": participants[0]['participant_id']}
+        )
+    
+    # Get events
+    response = client.get(f"/debates/{debate_id}/artifact/events?limit=10")
+    assert response.status_code == 200
+    data = response.json()
+    
+    assert 'events' in data
+    assert len(data['events']) >= 4  # init + 3 section events
+    
+    # Verify event structure
+    for event in data['events']:
+        assert event['event_id']
+        assert event['artifact_id'] == artifact_id
+        assert event['event_type']
+        assert event['payload']
+        assert event['created_at']
+
+
+def test_artifact_events_filter_by_section():
+    """
+    Test: GET artifact events with section_id filter returns only events for that section.
+    """
+    debate_id, participants = setup_test_debate()
+    
+    # Init artifact
+    init_response = client.post(f"/debates/{debate_id}/artifact/init", json={
+        "template_id": "prd",
+        "section_assignments": [
+            {"section_id": "goals", "participant_id": participants[0]['participant_id']},
+            {"section_id": "risks", "participant_id": participants[1]['participant_id']}
+        ]
+    })
+    assert init_response.status_code == 200
+    
+    # Create events for different sections
+    client.post(
+        f"/debates/{debate_id}/artifact/sections/goals/events",
+        json={"event_type": "append", "content": "Goals content.", "citations": []},
+        headers={"X-Participant-Id": participants[0]['participant_id']}
+    )
+    
+    client.post(
+        f"/debates/{debate_id}/artifact/sections/risks/events",
+        json={"event_type": "append", "content": "Risks content.", "citations": []},
+        headers={"X-Participant-Id": participants[1]['participant_id']}
+    )
+    
+    # Filter events by goals section
+    response = client.get(f"/debates/{debate_id}/artifact/events?section_id=goals")
+    assert response.status_code == 200
+    data = response.json()
+    
+    # All events should be for goals section
+    for event in data['events']:
+        if event['section_id']:  # Skip artifact_init event
+            assert event['section_id'] == 'goals'
+
+
+def test_artifact_events_cursor_pagination():
+    """
+    Test: Cursor pagination works for artifact events.
+    """
+    debate_id, participants = setup_test_debate()
+    
+    # Init artifact
+    init_response = client.post(f"/debates/{debate_id}/artifact/init", json={
+        "template_id": "brief",
+        "section_assignments": [
+            {"section_id": "summary", "participant_id": participants[0]['participant_id']}
+        ]
+    })
+    assert init_response.status_code == 200
+    
+    # Create 5 events
+    for i in range(5):
+        client.post(
+            f"/debates/{debate_id}/artifact/sections/summary/events",
+            json={"event_type": "append", "content": f"Content {i}.", "citations": []},
+            headers={"X-Participant-Id": participants[0]['participant_id']}
+        )
+    
+    # Get first page (limit 3)
+    response1 = client.get(f"/debates/{debate_id}/artifact/events?limit=3")
+    assert response1.status_code == 200
+    page1 = response1.json()
+    
+    assert len(page1['events']) == 3
+    assert page1['next_cursor'] is not None
+    
+    # Get second page using cursor
+    response2 = client.get(f"/debates/{debate_id}/artifact/events?limit=3&cursor={page1['next_cursor']}")
+    assert response2.status_code == 200
+    page2 = response2.json()
+    
+    assert len(page2['events']) > 0
+    
+    # Verify no overlap (different event IDs)
+    page1_ids = {e['event_id'] for e in page1['events']}
+    page2_ids = {e['event_id'] for e in page2['events']}
+    assert page1_ids.isdisjoint(page2_ids)
+
+
+def test_typing_event_does_not_update_section():
+    """
+    Test: Typing event is logged but does NOT update section content (ephemeral).
+    """
+    debate_id, participants = setup_test_debate()
+    
+    # Init artifact
+    init_response = client.post(f"/debates/{debate_id}/artifact/init", json={
+        "template_id": "memo",
+        "section_assignments": [
+            {"section_id": "background", "participant_id": participants[0]['participant_id']}
+        ]
+    })
+    assert init_response.status_code == 200
+    
+    # Add initial content
+    client.post(
+        f"/debates/{debate_id}/artifact/sections/background/events",
+        json={"event_type": "append", "content": "Initial content.", "citations": []},
+        headers={"X-Participant-Id": participants[0]['participant_id']}
+    )
+    
+    # Get initial state
+    artifact1 = client.get(f"/debates/{debate_id}/artifact").json()
+    initial_content = next(
+        (s['content'] for s in artifact1['sections'] if s['section_id'] == 'background'),
+        None
+    )
+    
+    # Send typing event
+    typing_response = client.post(
+        f"/debates/{debate_id}/artifact/sections/background/events",
+        json={"event_type": "typing", "content": "Typing indicator...", "citations": []},
+        headers={"X-Participant-Id": participants[0]['participant_id']}
+    )
+    assert typing_response.status_code == 200
+    
+    # Verify section content did NOT change
+    artifact2 = client.get(f"/debates/{debate_id}/artifact").json()
+    final_content = next(
+        (s['content'] for s in artifact2['sections'] if s['section_id'] == 'background'),
+        None
+    )
+    
+    assert initial_content == final_content
+    assert 'Typing indicator' not in final_content
+
+
+def test_artifact_init_with_custom_title():
+    """
+    Test: Artifact init with custom title uses that title instead of template title.
+    """
+    debate_id, participants = setup_test_debate()
+    
+    response = client.post(f"/debates/{debate_id}/artifact/init", json={
+        "template_id": "prd",
+        "title": "Custom Product Spec V2",
+        "section_assignments": [
+            {"section_id": "goals", "participant_id": participants[0]['participant_id']}
+        ]
+    })
+    
+    assert response.status_code == 200
+    data = response.json()
+    
+    assert data['title'] == "Custom Product Spec V2"
+
+
+def test_section_citations_are_accumulated():
+    """
+    Test: Citations are accumulated across multiple appends to a section.
+    """
+    debate_id, participants = setup_test_debate()
+    
+    # Init artifact
+    init_response = client.post(f"/debates/{debate_id}/artifact/init", json={
+        "template_id": "memo",
+        "section_assignments": [
+            {"section_id": "analysis", "participant_id": participants[0]['participant_id']}
+        ]
+    })
+    assert init_response.status_code == 200
+    
+    # Append with citations
+    client.post(
+        f"/debates/{debate_id}/artifact/sections/analysis/events",
+        json={
+            "event_type": "append",
+            "content": "First point with citation.",
+            "citations": [{"type": "event", "event_id": str(uuid.uuid4())}]
+        },
+        headers={"X-Participant-Id": participants[0]['participant_id']}
+    )
+    
+    # Append more with additional citations
+    client.post(
+        f"/debates/{debate_id}/artifact/sections/analysis/events",
+        json={
+            "event_type": "append",
+            "content": "Second point with citation.",
+            "citations": [{"type": "material_chunk", "chunk_id": str(uuid.uuid4())}]
+        },
+        headers={"X-Participant-Id": participants[0]['participant_id']}
+    )
+    
+    # Verify citations accumulated
+    artifact = client.get(f"/debates/{debate_id}/artifact").json()
+    analysis_section = next(
+        (s for s in artifact['sections'] if s['section_id'] == 'analysis'),
+        None
+    )
+    
+    assert analysis_section is not None
+    assert len(analysis_section['citations']) == 2
+    assert any(c['type'] == 'event' for c in analysis_section['citations'])
+    assert any(c['type'] == 'material_chunk' for c in analysis_section['citations'])

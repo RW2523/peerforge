@@ -1,0 +1,105 @@
+.card {
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.card h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-0);
+  margin-bottom: 8px;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.btnSecondary {
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  color: var(--text-0);
+  padding: 12px 20px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 150ms;
+}
+
+.btnSecondary:hover:not(:disabled) {
+  background: var(--surface-0);
+  border-color: var(--accent);
+}
+
+.error {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--danger);
+  margin-bottom: var(--space-2);
+}
+
+.loading {
+  text-align: center;
+  padding: var(--space-4);
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.metric {
+  padding: var(--space-3);
+  background: var(--surface-0);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
+}
+
+.metric h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+}
+
+.metricValue {
+  font-size: 32px;
+  font-weight: 500;
+  color: var(--text-0);
+  margin-bottom: 8px;
+}
+
+.metricDetails {
+  display: flex;
+  gap: var(--space-2);
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.note {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--warning);
+  margin-bottom: var(--space-2);
+}
+
+.timestamp {
+  font-size: 11px;
+  color: var(--text-2);
+  text-align: right;
+}

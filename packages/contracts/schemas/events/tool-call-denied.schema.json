@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arinar.com/schemas/events/tool-call-denied.json",
+  "title": "Tool Call Denied Event",
+  "description": "Tool request rejected by policy engine",
+  "allOf": [
+    {
+      "$ref": "./base-event.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_type": {
+          "const": "tool_call_denied"
+        },
+        "sender_type": {
+          "const": "system"
+        },
+        "content": {
+          "type": "object",
+          "required": ["request_id", "reason"],
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "policy_disabled",
+                "permission_denied",
+                "tool_unavailable",
+                "requires_approval"
+              ]
+            },
+            "details": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  ]
+}
