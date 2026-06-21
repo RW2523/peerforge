@@ -202,5 +202,19 @@ class MeetingSetupService:
                 )
                 ids.append(material_id)
 
+        # Chunk text/link materials so they are retrievable by prep + live turns
+        # (file uploads are chunked by the Celery task; inline materials were not).
+        from src.tasks.material_processing import chunk_inline_material
+        for m, material_id in zip(materials, ids):
+            kind = m.get("kind")
+            try:
+                if kind == "text" and (m.get("body_text") or "").strip():
+                    chunk_inline_material(debate_id, material_id, m["body_text"], category="supplementary")
+                elif kind == "link" and (m.get("url") or "").strip():
+                    descriptor = f"Reference link: {m.get('title') or ''}\n{m.get('url')}".strip()
+                    chunk_inline_material(debate_id, material_id, descriptor, category="supplementary")
+            except Exception as exc:
+                print(f"Inline material chunking failed (non-fatal) for {material_id}: {exc}")
+
         return ids
 

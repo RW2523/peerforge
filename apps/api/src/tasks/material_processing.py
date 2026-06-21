@@ -205,6 +205,87 @@ def _generate_and_store_embeddings(
     return total_embedded
 
 
+def chunk_inline_material(
+    debate_id: str,
+    material_id: str,
+    text: str,
+    category: str = "supplementary",
+    openrouter_key: Optional[str] = None,
+) -> int:
+    """
+    Chunk a TEXT/LINK material's content into memory_chunks so it is retrievable
+    (semantic + keyword) by preflight prep and live turns — the same pipeline
+    file uploads use. Without this, inline materials are stored in
+    meeting_materials but invisible to retrieval ("0 materials analyzed").
+
+    Idempotent per material_id. Returns the number of chunks created.
+    """
+    text = (text or "").strip()
+    if not text:
+        return 0
+
+    chunks = TextChunker.chunk_text(
+        text=text,
+        material_id=material_id,
+        extraction_metadata={"source": "inline_material"},
+    )
+    if not chunks:
+        return 0
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        # Serialize concurrent runs for the same material (row lock), then
+        # idempotently clear any prior chunks — mirrors process_material so two
+        # racing calls can't produce duplicate chunks.
+        cursor.execute(
+            "SELECT material_id FROM meeting_materials WHERE material_id = %s FOR UPDATE",
+            (material_id,),
+        )
+        cursor.execute(
+            "DELETE FROM memory_chunks WHERE source_debate_id = %s AND chunk_metadata->>'material_id' = %s",
+            (debate_id, str(material_id)),
+        )
+        chunk_ids: List[str] = []
+        chunk_texts: List[str] = []
+        for chunk in chunks:
+            chunk_meta = {**chunk["chunk_metadata"], "category": category}
+            cursor.execute(
+                """
+                INSERT INTO memory_chunks (
+                    chunk_id, agent_id, source_debate_id, chunk_text, chunk_metadata, embedding_status
+                )
+                VALUES (gen_random_uuid(), NULL, %s, %s, %s, 'not_started')
+                RETURNING chunk_id
+                """,
+                (debate_id, chunk["chunk_text"], Json(chunk_meta)),
+            )
+            chunk_ids.append(str(cursor.fetchone()[0]))
+            chunk_texts.append(chunk["chunk_text"])
+        conn.commit()
+
+        # Embed if a key is available (keyword retrieval still works without it).
+        resolved_key = openrouter_key or settings.openrouter_api_key
+        if resolved_key and chunk_ids:
+            try:
+                _generate_and_store_embeddings(conn, chunk_ids, chunk_texts, resolved_key)
+            except Exception as exc:
+                print(f"Inline material embedding failed (non-fatal): {exc}")
+                conn.rollback()  # discard any partial embedding UPDATEs
+
+        # Mark the material processed so the UI shows it as ready.
+        try:
+            cursor.execute(
+                "UPDATE meeting_materials SET processed_status = 'complete', updated_at = NOW() WHERE material_id = %s",
+                (material_id,),
+            )
+            conn.commit()
+        except Exception as exc:
+            print(f"Failed to mark material {material_id} complete: {exc}")
+            conn.rollback()
+
+    return len(chunk_ids)
+
+
 @celery_app.task(name="src.tasks.material_processing.process_material", bind=True)
 def process_material(
     self,

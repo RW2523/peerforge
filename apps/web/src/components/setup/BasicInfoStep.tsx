@@ -2,6 +2,11 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOpenRouterKey } from '@/hooks/useOpenRouterKey';
 import * as api from '@/lib/api';
+import {
+  SETUP_LIMITS,
+  validateTimebox,
+  validateRounds,
+} from '@/lib/setupValidation';
 import styles from './SetupSteps.module.css';
 
 interface BasicInfoStepProps {
@@ -51,12 +56,38 @@ export function BasicInfoStep({
   const [isGenerating, setIsGenerating] = useState(false);
   const [showKeyPoints, setShowKeyPoints] = useState(false);
   const [keyPoints, setKeyPoints] = useState<string[]>([]);
+  const [agendaError, setAgendaError] = useState('');
+  const [outcomeError, setOutcomeError] = useState('');
+
+  // Live validation hints (BUG-001..005) — Next is gated by the shared
+  // validator in setup/page.tsx; these just surface the reason inline.
+  const titleTrim = title.trim();
+  const abstractTrim = problemStatement.trim();
+  const titleError =
+    titleTrim.length > 0 && titleTrim.length < SETUP_LIMITS.TITLE_MIN
+      ? `Title must be at least ${SETUP_LIMITS.TITLE_MIN} characters.`
+      : '';
+  const abstractError =
+    abstractTrim.length > 0 && abstractTrim.length < SETUP_LIMITS.ABSTRACT_MIN
+      ? `Abstract must be at least ${SETUP_LIMITS.ABSTRACT_MIN} characters (currently ${abstractTrim.length}).`
+      : '';
+  const roundsError = meetingType === 'rounds' ? validateRounds(maxRounds) : null;
+  const timeboxError = meetingType === 'time' ? validateTimebox(timeboxMinutes) : null;
 
   const handleAddAgendaItem = () => {
-    if (agendaInput.trim()) {
-      onAgendaChange([...agenda, agendaInput.trim()]);
-      setAgendaInput('');
+    const item = agendaInput.trim();
+    if (!item) return;
+    if (item.length > SETUP_LIMITS.ITEM_MAX) {
+      setAgendaError(`Keep items under ${SETUP_LIMITS.ITEM_MAX} characters.`);
+      return;
     }
+    if (agenda.some((a) => a.trim().toLowerCase() === item.toLowerCase())) {
+      setAgendaError('This item is already added.');
+      return;
+    }
+    onAgendaChange([...agenda, item]);
+    setAgendaInput('');
+    setAgendaError('');
   };
 
   const handleRemoveAgendaItem = (index: number) => {
@@ -64,10 +95,19 @@ export function BasicInfoStep({
   };
 
   const handleAddOutcome = () => {
-    if (outcomeInput.trim()) {
-      onDesiredOutcomesChange([...desiredOutcomes, outcomeInput.trim()]);
-      setOutcomeInput('');
+    const item = outcomeInput.trim();
+    if (!item) return;
+    if (item.length > SETUP_LIMITS.ITEM_MAX) {
+      setOutcomeError(`Keep items under ${SETUP_LIMITS.ITEM_MAX} characters.`);
+      return;
     }
+    if (desiredOutcomes.some((o) => o.trim().toLowerCase() === item.toLowerCase())) {
+      setOutcomeError('This item is already added.');
+      return;
+    }
+    onDesiredOutcomesChange([...desiredOutcomes, item]);
+    setOutcomeInput('');
+    setOutcomeError('');
   };
 
   const handleRemoveOutcome = (index: number) => {
@@ -85,8 +125,16 @@ export function BasicInfoStep({
       return;
     }
 
+    // BUG-006: warn before AI overwrites existing agenda/objectives.
+    if (agenda.length > 0 || desiredOutcomes.length > 0) {
+      const ok = window.confirm(
+        'Refine with AI will replace your current agenda and objectives with AI-generated ones. Continue?'
+      );
+      if (!ok) return;
+    }
+
     setIsGenerating(true);
-    
+
     // Set a 25 second timeout (backend times out at 20s)
     const timeoutId = setTimeout(() => {
       setIsGenerating(false);
@@ -106,16 +154,32 @@ export function BasicInfoStep({
         setShowKeyPoints(true);
       }
       
-      // Update agenda items if provided
+      // Update agenda items if provided (cap length, drop duplicates)
       if (result.agenda_items && result.agenda_items.length > 0) {
-        onAgendaChange(result.agenda_items);
+        const cleaned = Array.from(
+          new Map(
+            result.agenda_items
+              .map((s) => s.trim())
+              .filter((s) => s && s.length <= SETUP_LIMITS.ITEM_MAX)
+              .map((s) => [s.toLowerCase(), s])
+          ).values()
+        );
+        onAgendaChange(cleaned);
       }
-      
-      // Update desired outcomes if provided
+
+      // Update desired outcomes if provided (cap length, drop duplicates)
       if (result.desired_outcomes && result.desired_outcomes.length > 0) {
-        onDesiredOutcomesChange(result.desired_outcomes);
+        const cleaned = Array.from(
+          new Map(
+            result.desired_outcomes
+              .map((s) => s.trim())
+              .filter((s) => s && s.length <= SETUP_LIMITS.ITEM_MAX)
+              .map((s) => [s.toLowerCase(), s])
+          ).values()
+        );
+        onDesiredOutcomesChange(cleaned);
       }
-      
+
     } catch (err) {
       clearTimeout(timeoutId);
       console.error('Failed to improve problem statement:', err);
@@ -152,7 +216,11 @@ export function BasicInfoStep({
         onChange={(e) => onTitleChange(e.target.value)}
         placeholder="e.g., Transformer-based models for low-resource NLP"
         disabled={isLoading}
+        aria-invalid={!!titleError}
       />
+      {titleError
+        ? <span className={styles.fieldError}>{titleError}</span>
+        : <span className={styles.fieldHint}>At least {SETUP_LIMITS.TITLE_MIN} characters.</span>}
 
       <label>
         Research Question / Abstract *
@@ -180,7 +248,11 @@ export function BasicInfoStep({
         placeholder="Describe your research question, hypothesis, methodology, or what you want reviewed. Include key contributions and open questions."
         rows={4}
         disabled={isLoading || isGenerating}
+        aria-invalid={!!abstractError}
       />
+      {abstractError
+        ? <span className={styles.fieldError}>{abstractError}</span>
+        : <span className={styles.fieldHint}>At least {SETUP_LIMITS.ABSTRACT_MIN} characters — the more detail, the better the review.</span>}
       {showKeyPoints && keyPoints.length > 0 && (
         <div className={styles.keyPoints}>
           <div className={styles.keyPointsHeader}>
@@ -206,7 +278,7 @@ export function BasicInfoStep({
         <input
           type="text"
           value={agendaInput}
-          onChange={(e) => setAgendaInput(e.target.value)}
+          onChange={(e) => { setAgendaInput(e.target.value); if (agendaError) setAgendaError(''); }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
@@ -214,6 +286,7 @@ export function BasicInfoStep({
             }
           }}
           placeholder="Add agenda item and press Enter"
+          maxLength={SETUP_LIMITS.ITEM_MAX}
           disabled={isLoading}
         />
         <button 
@@ -225,6 +298,7 @@ export function BasicInfoStep({
           + Add
         </button>
       </div>
+      {agendaError && <span className={styles.fieldError}>{agendaError}</span>}
       {agenda.length > 0 && (
         <ul className={styles.itemList}>
           {agenda.map((item, index) => (
@@ -248,7 +322,7 @@ export function BasicInfoStep({
         <input
           type="text"
           value={outcomeInput}
-          onChange={(e) => setOutcomeInput(e.target.value)}
+          onChange={(e) => { setOutcomeInput(e.target.value); if (outcomeError) setOutcomeError(''); }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
@@ -256,6 +330,7 @@ export function BasicInfoStep({
             }
           }}
           placeholder="Add desired outcome and press Enter"
+          maxLength={SETUP_LIMITS.ITEM_MAX}
           disabled={isLoading}
         />
         <button 
@@ -267,6 +342,7 @@ export function BasicInfoStep({
           + Add
         </button>
       </div>
+      {outcomeError && <span className={styles.fieldError}>{outcomeError}</span>}
       {desiredOutcomes.length > 0 && (
         <ul className={styles.itemList}>
           {desiredOutcomes.map((item, index) => (
@@ -347,22 +423,34 @@ export function BasicInfoStep({
             Each agent speaks once per round
           </div>
           {meetingType === 'rounds' && (
+            <>
             <div className={styles.cardInput}>
               <input
                 type="number"
-                value={maxRounds || ''}
+                value={maxRounds ?? ''}
                 onChange={(e) => {
                   e.stopPropagation();
-                  onMaxRoundsChange(e.target.value ? parseInt(e.target.value) : undefined);
+                  const raw = e.target.value;
+                  if (raw === '') { onMaxRoundsChange(undefined); return; }
+                  let n = parseInt(raw, 10);
+                  if (Number.isNaN(n)) { onMaxRoundsChange(undefined); return; }
+                  // Clamp to [1, 20] so negatives / huge values can't be entered.
+                  n = Math.max(SETUP_LIMITS.ROUNDS_MIN, Math.min(SETUP_LIMITS.ROUNDS_MAX, n));
+                  onMaxRoundsChange(n);
                 }}
                 placeholder="3"
                 disabled={isLoading}
-                min="1"
-                max="20"
+                min={SETUP_LIMITS.ROUNDS_MIN}
+                max={SETUP_LIMITS.ROUNDS_MAX}
+                step="1"
                 onClick={(e) => e.stopPropagation()}
               />
               <span>rounds</span>
             </div>
+            {roundsError
+              ? <span className={styles.fieldError}>{roundsError}</span>
+              : <span className={styles.fieldHint}>{SETUP_LIMITS.ROUNDS_MIN}–{SETUP_LIMITS.ROUNDS_MAX} rounds.</span>}
+            </>
           )}
         </div>
 
@@ -382,22 +470,34 @@ export function BasicInfoStep({
             Unlimited rounds within time limit
           </div>
           {meetingType === 'time' && (
+            <>
             <div className={styles.cardInput}>
               <input
                 type="number"
-                value={timeboxMinutes || ''}
+                value={timeboxMinutes ?? ''}
                 onChange={(e) => {
                   e.stopPropagation();
-                  onTimeboxChange(e.target.value ? parseInt(e.target.value) : undefined);
+                  const raw = e.target.value;
+                  if (raw === '') { onTimeboxChange(undefined); return; }
+                  let n = parseInt(raw, 10);
+                  if (Number.isNaN(n)) { onTimeboxChange(undefined); return; }
+                  // Clamp to [1, 120] so negatives / huge values can't be entered.
+                  n = Math.max(SETUP_LIMITS.TIMEBOX_MIN, Math.min(SETUP_LIMITS.TIMEBOX_MAX, n));
+                  onTimeboxChange(n);
                 }}
                 placeholder="30"
                 disabled={isLoading}
-                min="5"
-                max="240"
+                min={SETUP_LIMITS.TIMEBOX_MIN}
+                max={SETUP_LIMITS.TIMEBOX_MAX}
+                step="1"
                 onClick={(e) => e.stopPropagation()}
               />
               <span>minutes</span>
             </div>
+            {timeboxError
+              ? <span className={styles.fieldError}>{timeboxError}</span>
+              : <span className={styles.fieldHint}>{SETUP_LIMITS.TIMEBOX_MIN}–{SETUP_LIMITS.TIMEBOX_MAX} minutes (5–60 recommended).</span>}
+            </>
           )}
         </div>
       </div>

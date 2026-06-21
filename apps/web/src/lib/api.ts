@@ -1235,7 +1235,32 @@ export async function addParticipantsToDebate(
     const error = await response.json().catch(() => null);
     throw new Error(formatErrorDetail(error?.detail, `Failed to add participants: ${response.statusText}`));
   }
-  
+
+  return response.json();
+}
+
+/**
+ * Persist inline TEXT/LINK materials to an existing debate and chunk them for
+ * grounding. The wizard creates the debate early, so these are sent at finalize.
+ */
+export async function addInlineMaterials(
+  debateId: string,
+  materials: SetupMaterial[],
+  openrouterKey?: string | null
+): Promise<{ debate_id: string; materials_added: number; chunks_created: number }> {
+  const headers = (await getAuthHeaders()) as Record<string, string>;
+  if (openrouterKey) headers['X-OpenRouter-Key'] = openrouterKey;
+  const response = await fetch(`${API_URL}/debates/${debateId}/materials`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ materials }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => null);
+    throw new Error(formatErrorDetail(error?.detail, `Failed to add materials: ${response.statusText}`));
+  }
+
   return response.json();
 }
 

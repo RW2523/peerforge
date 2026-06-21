@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import * as api from '@/lib/api';
 import { keyStore } from '@/lib/openrouterKeyStore';
+import { validateMaterials, normalizeUrl, SETUP_LIMITS } from '@/lib/setupValidation';
 import styles from './SetupSteps.module.css';
 
 interface MaterialsStepProps {
@@ -210,6 +211,15 @@ export function MaterialsStep({
   );
   const transcriptFiles = uploadedFiles.filter((f) => f.material_category === 'transcript');
 
+  // Per-card validation issues (empty/partial/duplicate) — same source of truth
+  // the Next button uses, so the UI and navigation never disagree.
+  const materialIssues = new Map<number, string>();
+  validateMaterials(materials).forEach((i) => materialIssues.set(i.index, i.issue));
+
+  // BUG-009: warn (non-blocking) when there is nothing to ground the review on.
+  const hasNoMaterials =
+    uploadedFiles.length === 0 && materials.length === 0;
+
   const disabled = !debateId || uploading !== null;
 
   const renderFileCard = (file: api.MaterialStatus, extra?: React.ReactNode) => (
@@ -324,7 +334,9 @@ export function MaterialsStep({
             ))
           )}
 
-          {materials.map((material, idx) => (
+          {materials.map((material, idx) => {
+            const issue = materialIssues.get(idx);
+            return (
             <div key={idx} className={styles.materialCard}>
               <div className={styles.cardHeader}>
                 <span className={styles.badge}>{material.kind}</span>
@@ -334,14 +346,15 @@ export function MaterialsStep({
                 type="text"
                 value={material.title || ''}
                 onChange={(e) => onUpdate(idx, { title: e.target.value })}
-                placeholder="Title"
+                placeholder={material.kind === 'text' ? 'Title (optional)' : 'Title'}
               />
               {material.kind === 'text' && (
                 <textarea
                   value={material.body_text || ''}
                   onChange={(e) => onUpdate(idx, { body_text: e.target.value })}
-                  placeholder="Paste text content here"
+                  placeholder={`Paste text content here (at least ${SETUP_LIMITS.TEXT_BODY_MIN} characters)`}
                   rows={3}
+                  aria-invalid={!!issue}
                 />
               )}
               {(material.kind === 'link' || material.kind === 'file_placeholder') && (
@@ -349,16 +362,31 @@ export function MaterialsStep({
                   type="text"
                   value={material.url || ''}
                   onChange={(e) => onUpdate(idx, { url: e.target.value })}
-                  placeholder="https://..."
+                  onBlur={(e) => {
+                    // Auto-normalize (prepend https://, lowercase host) on blur.
+                    const n = normalizeUrl(e.target.value);
+                    if (n && n !== material.url) onUpdate(idx, { url: n });
+                  }}
+                  placeholder="https://example.com"
+                  aria-invalid={!!issue}
                 />
               )}
+              {issue && <span className={styles.materialCardError}>{issue}</span>}
             </div>
-          ))}
+            );
+          })}
 
           {researchFiles.length === 0 && supplementaryFiles.length === 0 && materials.length === 0 && (
             <p className={styles.empty}>No supporting files yet (optional)</p>
           )}
         </div>
+
+        {hasNoMaterials && (
+          <div className={styles.materialWarning}>
+            <span>ℹ️</span>
+            <span>No research materials added — the review will be based only on your title and abstract. Add materials for deeper, grounded feedback.</span>
+          </div>
+        )}
       </div>
 
       {/* ── Section 3: Transcripts & Recordings ─────────────────────────── */}

@@ -2286,3 +2286,35 @@
 .suggestionList strong {
   color: var(--text-1, inherit);
 }
+
+/* ── Inline field validation (bug-report hardening) ─────────────────────── */
+.fieldHint {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-2);
+  margin: -6px 0 10px;
+}
+.fieldError {
+  display: block;
+  font-size: 0.78rem;
+  color: #d64545;
+  margin: -6px 0 10px;
+}
+.materialWarning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(245, 166, 35, 0.1);
+  border: 1px solid rgba(245, 166, 35, 0.4);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.84rem;
+  color: var(--text-1, inherit);
+  margin: 12px 0;
+}
+.materialCardError {
+  display: block;
+  font-size: 0.78rem;
+  color: #d64545;
+  margin-top: 6px;
+}

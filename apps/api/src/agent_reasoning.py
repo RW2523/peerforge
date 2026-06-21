@@ -88,6 +88,7 @@ class AgentReasoningEngine:
             session_title=session_title,
         )
 
+        regenerated = False
         if not is_valid:
             print(f"    [reasoning] Validation failed for {agent_name}: {failure_reason}")
             regenerated_prompt = self._build_reasoning_prompt(
@@ -106,9 +107,13 @@ class AgentReasoningEngine:
                 debate_id=debate_id,
                 agent_name=agent_name,
             )
+            regenerated = True
 
         # ── Repetition handling ─────────────────────────────────────────
-        if reasoning.get("am_i_repeating") == "repeat":
+        # Cap reasoning at two LLM calls/turn (BUG-027): if we already
+        # regenerated for a validation failure, the reasoning is fresh — skip
+        # the extra repetition regeneration to keep live turns responsive.
+        if not regenerated and reasoning.get("am_i_repeating") == "repeat":
             print(f"    [reasoning] Repetition detected for {agent_name} — regenerating")
             repeat_prompt = self._build_reasoning_prompt(
                 agent_name=agent_name,

@@ -115,6 +115,29 @@ def _round_instruction(current_round: int, max_rounds: int) -> str:
         )
 
 
+# Placeholder-citation patterns LLMs emit when they lack a real source (BUG-024).
+_PLACEHOLDER_CITATION_PATTERNS = [
+    re.compile(r"\(\s*[A-Z][a-zA-Z]+\s*,\s*URL\s*\)", re.IGNORECASE),   # (Kaggle, URL)
+    re.compile(r"\(\s*Author[^)]*,\s*URL\s*\)", re.IGNORECASE),          # (Author, URL)
+    re.compile(r"\(\s*URL\s*\)", re.IGNORECASE),                          # (URL)
+    re.compile(r"\[\s*(?:website|url|link|source)\s*\]", re.IGNORECASE),  # [website]
+    re.compile(r"\(\s*[A-Za-z ]+,\s*\d{4}\s*,\s*URL\s*\)", re.IGNORECASE),
+]
+
+
+def _strip_placeholder_citations(text: str) -> str:
+    """Remove fabricated placeholder citations from a generated message."""
+    if not text:
+        return text
+    cleaned = text
+    for pat in _PLACEHOLDER_CITATION_PATTERNS:
+        cleaned = pat.sub("", cleaned)
+    # Tidy doubled spaces / space-before-punctuation left behind.
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    cleaned = re.sub(r"\s+([,.;:])", r"\1", cleaned)
+    return cleaned.strip()
+
+
 class AgentResponseGenerator:
     """
     Stage 2: Generate the debate/review message based on Stage 1 reasoning.
@@ -169,6 +192,16 @@ class AgentResponseGenerator:
                 "content": (
                     "SOURCE MATERIALS — ground every evaluative claim in these documents:\n\n"
                     + material_context
+                    + "\n\nGROUNDING RULES:\n"
+                    "- First ACKNOWLEDGE the specifics the author actually provided "
+                    "(datasets, metrics such as accuracy/precision/recall/F1/confusion matrix, "
+                    "methods, baselines), then critique whether they are sufficient or well chosen.\n"
+                    "- Never claim something is 'missing' or 'not defined' if it appears in the "
+                    "materials above — quote it instead and assess its adequacy.\n"
+                    "- CITATIONS: cite only sources that actually appear in these materials. "
+                    "NEVER invent placeholder citations such as '(Kaggle, URL)', '(Author, URL)', "
+                    "'[website]', or fabricated years. If you lack a specific source, write "
+                    "'[source not provided]' rather than inventing one."
                 ),
             })
 
@@ -201,7 +234,7 @@ class AgentResponseGenerator:
                 _stage="response_generation",
                 _participant=agent_name,
             )
-            return response["content"].strip()
+            return _strip_placeholder_citations(response["content"].strip())
         except Exception as exc:
             print(f"    [response_gen] Error for {agent_name}: {exc}")
             stance = reasoning.get("current_stance", "")

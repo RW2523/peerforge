@@ -1,22 +1,12 @@
 /**
- * Setup wizard validation helpers
+ * Setup wizard validation — thin hook over the shared validation module
+ * (src/lib/setupValidation.ts) so navigation, material cards, and the
+ * request preview all agree on what is valid.
  */
 
-import * as api from '@/lib/api';
+import { canAdvance, type SetupState } from '@/lib/setupValidation';
 
 export function useSetupValidation() {
-  const canGoNext = (
-    step: number,
-    title: string,
-    problemStatement: string,
-    participants: api.SetupParticipant[]
-  ): boolean => {
-    if (step === 1) return Boolean(title.trim() && problemStatement.trim());
-    if (step === 3) return participants.length > 0;
-    if (step === 4) return true; // Memory import is optional
-    if (step === 5) return false; // Preflight step: no next
-    return true;
-  };
-
+  const canGoNext = (step: number, state: SetupState): boolean => canAdvance(step, state);
   return { canGoNext };
 }

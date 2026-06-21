@@ -19,6 +19,19 @@ export default function InterveneComposer({ debateId, participants, sendCommand 
   const [mentionFilter, setMentionFilter] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Which panel members are @mentioned in the message (quoted or plain).
+  const extractTaggedAgents = (text: string): string[] => {
+    const lower = text.toLowerCase();
+    const tagged: string[] = [];
+    for (const p of participants) {
+      const n = p.name.toLowerCase();
+      if (lower.includes(`@"${n}"`) || lower.includes(`@${n}`)) {
+        tagged.push(p.name);
+      }
+    }
+    return tagged;
+  };
+
   const handleSend = async () => {
     if (!message.trim() || loading) return;
 
@@ -26,15 +39,18 @@ export default function InterveneComposer({ debateId, participants, sendCommand 
     setError(null);
 
     try {
+      const tagged_agents = extractTaggedAgents(message);
       // Prefer WebSocket if available, fallback to REST
       if (sendCommand) {
         await sendCommand('intervene', {
           message: message.trim(),
-          actor: 'Moderator'
+          actor: 'Moderator',
+          tagged_agents,
         });
       } else {
         await api.intervene(debateId, {
           message: message.trim(),
+          tagged_agents,
         });
       }
 
@@ -88,9 +104,11 @@ export default function InterveneComposer({ debateId, participants, sendCommand 
     const textAfterCursor = message.substring(cursorPos);
     const lastAtIndex = textBeforeCursor.lastIndexOf('@');
 
+    // Quote multi-word names so the full name is preserved and rendered (BUG-022).
+    const token = /\s/.test(name) ? `@"${name}" ` : `@${name} `;
     const newText =
       message.substring(0, lastAtIndex) +
-      `@${name} ` +
+      token +
       textAfterCursor;
 
     setMessage(newText);
@@ -99,7 +117,7 @@ export default function InterveneComposer({ debateId, participants, sendCommand 
     // Focus back on textarea
     setTimeout(() => {
       textarea.focus();
-      const newCursorPos = lastAtIndex + name.length + 2;
+      const newCursorPos = lastAtIndex + token.length;
       textarea.setSelectionRange(newCursorPos, newCursorPos);
     }, 0);
   };

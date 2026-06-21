@@ -293,7 +293,8 @@ export function PreflightStep({
             Start preparation
           </button>
           <p style={{ marginTop: '1rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-            This will gather context and prepare each agent. Takes ~5-15 seconds per agent.
+            This gathers context and prepares all agents in parallel — usually under a minute.
+            Larger panels or heavy reasoning modes can take a few minutes.
           </p>
         </div>
       )}

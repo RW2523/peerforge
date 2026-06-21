@@ -77,18 +77,19 @@ def orchestrate_preflight_impl(run_id: str, debate_id: str):
             conn.commit()
             return
         
-        # Process each participant synchronously (V1 simplicity)
-        # Later: can use Celery group/chord for parallel execution
-        print(f"📋 Processing {len(participant_runs)} participants...")
-        for run in participant_runs:
-            participant_run_id = run['participant_run_id']
+        # Prepare participants in parallel — each prep is I/O-bound (DB +
+        # OpenRouter HTTP) and self-contained (own connection), so threads cut
+        # wall-clock from sum-of-agents to ~slowest-agent (BUG-019).
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def _prep(run):
             participant_id = run['participant_id']
             try:
                 print(f"  → Processing participant {participant_id}...")
                 prepare_participant_preflight(
-                    participant_run_id=participant_run_id,
+                    participant_run_id=run['participant_run_id'],
                     participant_id=participant_id,
-                    debate_id=debate_id
+                    debate_id=debate_id,
                 )
                 print(f"  ✅ Participant {participant_id} prepared successfully")
             except Exception as e:
@@ -96,6 +97,13 @@ def orchestrate_preflight_impl(run_id: str, debate_id: str):
                 import traceback
                 traceback.print_exc()
                 # Continue with other participants
+
+        print(f"📋 Processing {len(participant_runs)} participants (parallel)...")
+        max_workers = min(len(participant_runs), 4)
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = [pool.submit(_prep, run) for run in participant_runs]
+            for _ in as_completed(futures):
+                pass
         
         # Check if all participants completed
         cursor.execute("""
@@ -176,13 +184,15 @@ def prepare_participant_preflight(participant_run_id: str, participant_id: str, 
         if not result:
             raise ValueError(f"Participant {participant_id} not found")
         
-        agent_config = result['agent_config']
+        # agent_config is nullable in the schema — default to {} so a NULL
+        # config can't crash preflight with AttributeError.
+        agent_config = result['agent_config'] or {}
         debate_title = result['title']
         policy_config = result['policy_config']
-        
+
         # Extract agent details
         # agent_id can be None for inline agents (created from templates)
-        agent_id = agent_config.get('agent_id') if agent_config else None
+        agent_id = agent_config.get('agent_id')
         model_id = agent_config.get('model_id', 'openai/gpt-4o-mini')  # Cost-optimized: $0.15/$0.60 (was $3/$15!)
         system_prompt = agent_config.get('system_prompt', '')
         model_config = agent_config.get('model_config', {})

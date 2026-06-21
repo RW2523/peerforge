@@ -4,6 +4,7 @@ import random
 import asyncio
 import os
 import re
+import json
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 import psycopg2.extras
@@ -233,9 +234,44 @@ class TurnOrchestrator:
             
             # Get current turn index from policy_config
             current_turn_index = policy_config.get('current_turn_index', 0)
-            
-            # Determine next participant (round-robin)
-            next_participant_idx = current_turn_index % len(participants)
+
+            # Mention-based routing (BUG-023): if the latest activity is a human
+            # intervention tagging specific panel members, let the first tagged
+            # member respond next instead of strict round-robin. Falls back to
+            # round-robin when there is no (matching) tag.
+            override_idx = None
+            try:
+                cursor.execute("""
+                    SELECT event_type, content
+                    FROM events
+                    WHERE debate_id = %s AND event_type IN ('human_message', 'agent_message')
+                    ORDER BY sequence_number DESC
+                    LIMIT 1
+                """, (debate_id,))
+                latest = cursor.fetchone()
+                if latest and latest['event_type'] == 'human_message':
+                    content = latest['content'] or {}
+                    if isinstance(content, str):
+                        content = json.loads(content)
+                    tagged = content.get('tagged_agents') or []
+                    tagged_norm = [str(t).strip().lower().lstrip('@').strip('"').strip() for t in tagged]
+                    tagged_norm = [t for t in tagged_norm if t]
+                    if tagged_norm:
+                        for i, p in enumerate(participants):
+                            pname = ((p['agent_config'] or {}).get('name') or p['role_name'] or '').strip().lower()
+                            if pname and pname in tagged_norm:
+                                override_idx = i
+                                break
+            except Exception as _route_exc:
+                print(f"   ⚠️ Mention routing skipped: {_route_exc}")
+                override_idx = None
+
+            # Determine next participant (mention override, else round-robin)
+            if override_idx is not None:
+                next_participant_idx = override_idx
+                print(f"   🎯 Mention routing → participant index {override_idx}")
+            else:
+                next_participant_idx = current_turn_index % len(participants)
             next_participant = participants[next_participant_idx]
             
             # Debug logging for turn selection

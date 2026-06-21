@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import List, Optional
 import psycopg2
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Header
+from pydantic import BaseModel
 from psycopg2.extras import Json
 
 from src.config import settings
@@ -22,9 +23,100 @@ from src.utils.storage import get_storage_client
 from src.utils.text_extraction import TextExtractor
 from src.tasks.material_processing import process_material
 from src.auth import require_auth
-from src.tasks.material_processing import generate_debate_embeddings
+from src.tasks.material_processing import generate_debate_embeddings, chunk_inline_material
+from src.database import get_db_connection, get_cursor
 
 router = APIRouter()
+
+
+class InlineMaterial(BaseModel):
+    kind: str  # 'text' | 'link'
+    title: Optional[str] = None
+    body_text: Optional[str] = None
+    url: Optional[str] = None
+
+
+class AddInlineMaterialsRequest(BaseModel):
+    materials: List[InlineMaterial]
+
+
+@router.post("/debates/{debate_id}/materials")
+async def add_inline_materials(
+    debate_id: str,
+    request: AddInlineMaterialsRequest,
+    x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
+    _workspace_id: str = Depends(require_auth),
+):
+    """
+    Add (replace) inline TEXT/LINK materials for an existing debate and chunk
+    them so they are retrievable by prep + live turns.
+
+    The setup wizard creates the debate early (before materials are entered),
+    so inline text/link cards are persisted here. Idempotent: replaces all
+    existing inline (kind in text/link) materials for the debate.
+    """
+    resolved_key = x_openrouter_key or settings.openrouter_api_key
+
+    with get_db_connection() as conn:
+        cur = get_cursor(conn)
+        cur.execute("SELECT debate_id FROM debates WHERE debate_id = %s", (debate_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Debate not found")
+
+        # Remove prior inline materials + their chunks (idempotent re-submit).
+        cur.execute(
+            "SELECT material_id FROM meeting_materials WHERE debate_id = %s AND kind IN ('text','link')",
+            (debate_id,),
+        )
+        old_ids = [str(r["material_id"]) for r in cur.fetchall()]
+        for old_id in old_ids:
+            cur.execute(
+                "DELETE FROM memory_chunks WHERE source_debate_id = %s AND chunk_metadata->>'material_id' = %s",
+                (debate_id, old_id),
+            )
+        cur.execute(
+            "DELETE FROM meeting_materials WHERE debate_id = %s AND kind IN ('text','link')",
+            (debate_id,),
+        )
+        conn.commit()
+
+        created = []
+        for m in request.materials:
+            kind = m.kind
+            body = (m.body_text or "").strip()
+            url = (m.url or "").strip()
+            if kind == "text" and not body:
+                continue
+            if kind == "link" and not url:
+                continue
+            material_id = str(uuid.uuid4())
+            now = datetime.utcnow()
+            cur.execute(
+                """
+                INSERT INTO meeting_materials (material_id, debate_id, kind, title, body_text, url, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (material_id, debate_id, kind, m.title, m.body_text, m.url, now, now),
+            )
+            conn.commit()
+            created.append((material_id, kind, body, url, m.title))
+
+    total_chunks = 0
+    for material_id, kind, body, url, title in created:
+        try:
+            if kind == "text":
+                total_chunks += chunk_inline_material(debate_id, material_id, body, "supplementary", resolved_key)
+            elif kind == "link":
+                descriptor = f"Reference link: {title or ''}\n{url}".strip()
+                total_chunks += chunk_inline_material(debate_id, material_id, descriptor, "supplementary", resolved_key)
+        except Exception as exc:
+            print(f"Inline material chunking failed (non-fatal) for {material_id}: {exc}")
+
+    return {
+        "debate_id": debate_id,
+        "materials_added": len(created),
+        "chunks_created": total_chunks,
+    }
 
 # Valid knowledge-base categories for uploaded materials
 VALID_CATEGORIES = {'main_research', 'research', 'transcript', 'supplementary'}

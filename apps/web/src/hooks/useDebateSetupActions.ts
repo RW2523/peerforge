@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import * as api from '@/lib/api';
 import type { SetupParticipant, SetupMaterial } from '@/lib/api';
 import { getAccessToken } from '@/lib/supabase';
+import { isValidMaterial, normalizeUrl } from '@/lib/setupValidation';
 
 interface UseDebateSetupActionsOptions {
   workspaceId: string;
@@ -69,6 +70,16 @@ export function useDebateSetupActions(
     // Validation happens later at preflight
     setIsLoading(true);
     try {
+      // Only send valid materials, with link URLs normalized — prevents empty/
+      // invalid cards from reaching the backend and skewing material counts.
+      const cleanMaterials = (materials || [])
+        .map((m) =>
+          m.kind === 'link' || m.kind === 'file_placeholder'
+            ? { ...m, url: normalizeUrl(m.url || '') }
+            : m
+        )
+        .filter(isValidMaterial);
+
       // 1. Create debate (returns participant_ids)
       // Host is NOT a participant - it's stored in policy_config
       const setupResponse = await api.setupDebate({
@@ -82,7 +93,7 @@ export function useDebateSetupActions(
         enable_host: enableHost || false,
         host_model_id: enableHost ? (hostModelId || 'openai/gpt-4o-mini') : undefined,
         participants: participants,
-        materials: materials && materials.length > 0 ? materials : undefined,
+        materials: cleanMaterials.length > 0 ? cleanMaterials : undefined,
         reasoning_mode: reasoningMode || 'medium',
       });
 

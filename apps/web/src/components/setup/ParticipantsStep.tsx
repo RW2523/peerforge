@@ -307,10 +307,19 @@ export function ParticipantsStep({
                 return (
                   <button
                     key={template.template_id}
-                    onClick={() => onAddFromTemplate(template)}
+                    onClick={() => {
+                      if (isSelected) {
+                        // Toggle off — remove the matching selected participant (BUG-018).
+                        const idx = participants.findIndex(p => !p.agent_id && p.name === template.label);
+                        if (idx >= 0) onRemove(idx);
+                      } else {
+                        onAddFromTemplate(template);
+                      }
+                    }}
                     className={`${styles.templateCard} ${isSelected ? styles.templateCardSelected : ''}`}
-                    disabled={participants.length >= 8 || isSelected}
-                    title={isSelected ? 'Already selected' : 'Click to add'}
+                    // Only block UNSELECTED cards at max; selected cards stay removable.
+                    disabled={!isSelected && participants.length >= 8}
+                    title={isSelected ? 'Selected — click to remove' : (participants.length >= 8 ? 'Maximum 8 panel members' : 'Click to add')}
                   >
                     {isSelected && <div className={styles.selectedBadge}>✓</div>}
                     <div className={styles.templateLabel}>{template.label}</div>
@@ -351,10 +360,17 @@ export function ParticipantsStep({
                   return (
                     <button
                       key={agent.agent_id}
-                      onClick={() => onAddExisting(agent)}
+                      onClick={() => {
+                        if (isSelected) {
+                          const idx = participants.findIndex(p => p.agent_id === agent.agent_id);
+                          if (idx >= 0) onRemove(idx);
+                        } else {
+                          onAddExisting(agent);
+                        }
+                      }}
                       className={`${styles.templateCard} ${isSelected ? styles.templateCardSelected : ''}`}
-                      disabled={participants.length >= 8 || isSelected}
-                      title={isSelected ? 'Already selected' : 'Click to add'}
+                      disabled={!isSelected && participants.length >= 8}
+                      title={isSelected ? 'Selected — click to remove' : (participants.length >= 8 ? 'Maximum 8 panel members' : 'Click to add')}
                     >
                       {isSelected && <div className={styles.selectedBadge}>✓</div>}
                       <div className={styles.templateLabel}>{agent.name}</div>

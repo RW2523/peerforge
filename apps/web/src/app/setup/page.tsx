@@ -13,6 +13,7 @@ import { LiteratureStep } from '@/components/setup/LiteratureStep';
 import { ReviewStep } from '@/components/setup/ReviewStep';
 import { SetupStepper } from '@/components/setup/SetupStepper';
 import { useMemoryImport } from '@/hooks/useMemoryImport';
+import { isValidMaterial, normalizeUrl } from '@/lib/setupValidation';
 import { useSetupValidation } from '@/hooks/useSetupValidation';
 import { useParticipants } from '@/hooks/useParticipants';
 import { useMaterials } from '@/hooks/useMaterials';
@@ -188,8 +189,10 @@ export default function SetupPage() {
 
     let result;
     
-    // If debate already exists (from step 2 file uploads), just add participants
-    if (createdDebateId && participantIds.length === 0) {
+    // If debate already exists (from step 2 file uploads), just add participants.
+    // Use the hook's createdParticipantIds (authoritative across calls) — the
+    // local participantIds can desync and cause a duplicate debate to be created.
+    if (createdDebateId && createdParticipantIds.length === 0) {
       try {
         const addResult = await api.addParticipantsToDebate(createdDebateId, participants);
         setParticipantIds(addResult.participant_ids);
@@ -207,6 +210,24 @@ export default function SetupPage() {
       }
     }
     if (result) {
+      // Persist inline text/link materials (added in Step 2) and chunk them so
+      // the review panel can actually use them — the debate was created early
+      // (Step 1) before these existed, so they are sent here.
+      try {
+        const inline = materials
+          .map((m) =>
+            m.kind === 'link' || m.kind === 'file_placeholder'
+              ? { ...m, url: normalizeUrl(m.url || '') }
+              : m
+          )
+          .filter(isValidMaterial);
+        if (inline.length > 0) {
+          await api.addInlineMaterials(result.debateId, inline, apiKey);
+        }
+      } catch (matErr: any) {
+        console.warn('Failed to persist inline materials:', matErr);
+      }
+
       // Create memory grants if enabled, then advance to Literature step
       const shouldContinue = await createMemoryGrants(result.debateId, result.participantIds);
       if (shouldContinue) {
@@ -221,7 +242,14 @@ export default function SetupPage() {
     }
   };
 
-  const canGoNext = () => validateStep(step, title, problemStatement, participants);
+  const canGoNext = () => validateStep(step, {
+    title,
+    problemStatement,
+    participants,
+    materials,
+    timeboxMinutes,
+    maxRounds,
+  });
 
   return (
     <>
