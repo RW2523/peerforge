@@ -1,0 +1,204 @@
+name: CI Quality Gates
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & Type Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'packages/contracts/package-lock.json'
+      
+      - name: Install dependencies
+        working-directory: packages/contracts
+        run: npm ci
+      
+      - name: Validate OpenAPI specification
+        working-directory: packages/contracts
+        run: npm run validate:openapi
+      
+      - name: Validate event schemas
+        working-directory: packages/contracts
+        run: npm run validate:schemas
+      
+      - name: Generate TypeScript types
+        working-directory: packages/contracts
+        run: npm run generate:types
+      
+      - name: Check for contract drift
+        working-directory: packages/contracts
+        run: |
+          # Verify generated types are up to date
+          git diff --exit-code src/generated/api-types.ts || {
+            echo "❌ Generated types are out of sync with OpenAPI spec"
+            echo "Run: npm run generate:types"
+            exit 1
+          }
+
+  test:
+    name: Contract Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'packages/contracts/package-lock.json'
+      
+      - name: Install dependencies
+        working-directory: packages/contracts
+        run: npm ci
+      
+      - name: Run contract tests
+        working-directory: packages/contracts
+        run: npm test
+  
+  api-test:
+    name: API Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+      
+      minio:
+        image: minio/minio:latest
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        options: >-
+          --health-cmd "mc ready local"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 9000:9000
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'apps/api/requirements*.txt'
+      
+      - name: Install dependencies
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+      
+      - name: Apply database migrations
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: |
+          # Apply migrations using psql
+          for migration in ../../infra/supabase/migrations/*.sql; do
+            echo "Applying $(basename $migration)..."
+            psql "$DATABASE_URL" -f "$migration"
+          done
+      
+      - name: Run API tests
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          REDIS_URL: redis://localhost:6379/0
+          MINIO_ENDPOINT: localhost:9000
+          MINIO_ACCESS_KEY: minioadmin
+          MINIO_SECRET_KEY: minioadmin
+          MINIO_BUCKET: arinar-materials
+          MINIO_SECURE: "false"
+          REQUIRE_AUTH: "false"
+        run: pytest tests/ -v
+
+  quality-gates:
+    name: Quality Gates
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Check file sizes
+        run: bash scripts/check_file_sizes.sh
+      
+      - name: Check for duplicates
+        run: bash scripts/check_duplicates.sh
+      
+      - name: Check forbidden patterns
+        run: bash scripts/check_forbidden_patterns.sh
+      
+      - name: Verify OpenRouter policy
+        run: |
+          # Ensure no direct provider SDK usage
+          if grep -r "from openai import\|import openai" apps/ packages/ --include="*.py" --exclude-dir=generated | grep -v "# OpenRouter gateway" | grep -v "openapi"; then
+            echo "❌ Direct OpenAI SDK usage detected. Use OpenRouter gateway instead."
+            exit 1
+          fi
+          
+          if grep -r "from anthropic import\|import anthropic" apps/ packages/ --include="*.py" --exclude-dir=generated; then
+            echo "❌ Direct Anthropic SDK usage detected. Use OpenRouter gateway instead."
+            exit 1
+          fi
+          
+          echo "✅ OpenRouter policy compliance verified"
+
+  summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, test, api-test, quality-gates]
+    if: always()
+    
+    steps:
+      - name: Check job results
+        run: |
+          if [ "${{ needs.lint-and-typecheck.result }}" != "success" ] || \
+             [ "${{ needs.test.result }}" != "success" ] || \
+             [ "${{ needs.api-test.result }}" != "success" ] || \
+             [ "${{ needs.quality-gates.result }}" != "success" ]; then
+            echo "❌ One or more CI jobs failed"
+            exit 1
+          fi
+          echo "✅ All CI checks passed!"
