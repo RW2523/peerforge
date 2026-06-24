@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import AppNav from '@/components/layout/AppNav';
 import * as api from '@/lib/api';
@@ -19,6 +19,8 @@ import { useParticipants } from '@/hooks/useParticipants';
 import { useMaterials } from '@/hooks/useMaterials';
 import { useOpenRouterKey } from '@/hooks/useOpenRouterKey';
 import { useDebateSetupActions } from '@/hooks/useDebateSetupActions';
+import { useStep1Draft } from '@/hooks/useStep1Draft';
+import { loadStep1Draft, step1DraftToState } from '@/lib/step1Draft';
 import styles from './setup.module.css';
 
 export default function SetupPage() {
@@ -31,10 +33,12 @@ export default function SetupPage() {
   // Step 1: Basic Info
   const [title, setTitle] = useState('');
   const [problemStatement, setProblemStatement] = useState('');
+  const [keyPoints, setKeyPoints] = useState<string[]>([]);
   const [agenda, setAgenda] = useState<string[]>([]);
   const [desiredOutcomes, setDesiredOutcomes] = useState<string[]>([]);
   const [timeboxMinutes, setTimeboxMinutes] = useState<number | undefined>(30);
   const [maxRounds, setMaxRounds] = useState<number | undefined>(undefined);
+  const [sessionLengthMode, setSessionLengthMode] = useState<'rounds' | 'time'>('time');
   
   // YOLO Mode Configuration
   const [yoloMode, setYoloMode] = useState(false);
@@ -52,12 +56,67 @@ export default function SetupPage() {
   const [documentTemplateId, setDocumentTemplateId] = useState('meeting-summary');
   const [documentTitle, setDocumentTitle] = useState('');
 
-  // Pre-fill from draft if coming from home page
+  const step1DraftState = useMemo(
+    () => ({
+      title,
+      problemStatement,
+      keyPoints,
+      agenda,
+      desiredOutcomes,
+      yoloMode,
+      autoTurnDelay,
+      sessionLengthMode,
+      timeboxMinutes,
+      maxRounds,
+    }),
+    [
+      title,
+      problemStatement,
+      keyPoints,
+      agenda,
+      desiredOutcomes,
+      yoloMode,
+      autoTurnDelay,
+      sessionLengthMode,
+      timeboxMinutes,
+      maxRounds,
+    ]
+  );
+
+  const { draftSaved, clearDraft, suppressNextSave } = useStep1Draft(step1DraftState);
+
+  const applyStep1State = useCallback(
+    (state: ReturnType<typeof step1DraftToState>) => {
+      setTitle(state.title);
+      setProblemStatement(state.problemStatement);
+      setKeyPoints(state.keyPoints);
+      setAgenda(state.agenda);
+      setDesiredOutcomes(state.desiredOutcomes);
+      setYoloMode(state.yoloMode);
+      setAutoTurnDelay(state.autoTurnDelay);
+      setSessionLengthMode(state.sessionLengthMode);
+      setTimeboxMinutes(state.timeboxMinutes);
+      setMaxRounds(state.maxRounds);
+    },
+    []
+  );
+
+  const handleClearDraft = useCallback(() => {
+    const defaults = clearDraft();
+    applyStep1State(defaults);
+  }, [applyStep1State, clearDraft]);
+
+  // Restore Step 1 draft from localStorage; home-page draft overrides title/abstract.
   useEffect(() => {
-    const draft = sessionStorage.getItem('debate_draft');
-    if (draft) {
+    const savedDraft = loadStep1Draft();
+    if (savedDraft) {
+      applyStep1State(step1DraftToState(savedDraft));
+    }
+
+    const homeDraft = sessionStorage.getItem('debate_draft');
+    if (homeDraft) {
       try {
-        const data = JSON.parse(draft);
+        const data = JSON.parse(homeDraft);
         setTitle(data.title || '');
         setProblemStatement(data.problemStatement || '');
         sessionStorage.removeItem('debate_draft');
@@ -65,7 +124,9 @@ export default function SetupPage() {
         console.error('Failed to parse debate draft:', e);
       }
     }
-  }, []);
+
+    suppressNextSave();
+  }, [applyStep1State, suppressNextSave]);
   
   // Step 2: Materials
   const {
@@ -116,6 +177,7 @@ export default function SetupPage() {
     desiredOutcomes,
     timeboxMinutes,
     maxRounds,
+    sessionLengthMode,
     enableHost,
     hostModelId,
     yoloMode,
@@ -249,6 +311,7 @@ export default function SetupPage() {
     materials,
     timeboxMinutes,
     maxRounds,
+    sessionLengthMode,
   });
 
   return (
@@ -289,14 +352,18 @@ export default function SetupPage() {
             <BasicInfoStep
               title={title}
               problemStatement={problemStatement}
+              keyPoints={keyPoints}
               agenda={agenda}
               desiredOutcomes={desiredOutcomes}
               timeboxMinutes={timeboxMinutes}
               maxRounds={maxRounds}
+              sessionLengthMode={sessionLengthMode}
+              onSessionLengthModeChange={setSessionLengthMode}
               yoloMode={yoloMode}
               autoTurnDelay={autoTurnDelay}
               onTitleChange={setTitle}
               onProblemChange={setProblemStatement}
+              onKeyPointsChange={setKeyPoints}
               onAgendaChange={setAgenda}
               onDesiredOutcomesChange={setDesiredOutcomes}
               onTimeboxChange={setTimeboxMinutes}
@@ -411,14 +478,26 @@ export default function SetupPage() {
           <div style={{ flex: 1 }} />
           
           {step === 1 && (
-            <button
-              onClick={handleCreateDebateEarly}
-              disabled={!canGoNext() || isLoading}
-              className={styles.btnNext}
-            >
-              <span>{isLoading ? 'Creating...' : 'Next'}</span>
-              <span className={styles.btnIcon}>→</span>
-            </button>
+            <div className={styles.step1NavGroup}>
+              {draftSaved && (
+                <button
+                  type="button"
+                  onClick={handleClearDraft}
+                  className={styles.btnClearDraft}
+                  disabled={isLoading}
+                >
+                  Clear draft
+                </button>
+              )}
+              <button
+                onClick={handleCreateDebateEarly}
+                disabled={!canGoNext() || isLoading}
+                className={styles.btnNext}
+              >
+                <span>{isLoading ? 'Creating...' : 'Next'}</span>
+                <span className={styles.btnIcon}>→</span>
+              </button>
+            </div>
           )}
           
           {step > 1 && step < 4 && (

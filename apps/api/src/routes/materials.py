@@ -29,6 +29,61 @@ from src.database import get_db_connection, get_cursor
 router = APIRouter()
 
 
+def _delete_material_record(cur, debate_id: str, material_id: str) -> Optional[str]:
+    """Delete one material row and its chunks. Returns file_key when present."""
+    cur.execute(
+        "SELECT file_key FROM meeting_materials WHERE material_id = %s AND debate_id = %s",
+        (material_id, debate_id),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    file_key = row["file_key"] if isinstance(row, dict) else row[0]
+
+    cur.execute(
+        """
+        DELETE FROM memory_chunks
+        WHERE source_debate_id = %s AND chunk_metadata->>'material_id' = %s
+        """,
+        (debate_id, material_id),
+    )
+    cur.execute(
+        "DELETE FROM meeting_materials WHERE material_id = %s AND debate_id = %s",
+        (material_id, debate_id),
+    )
+    return file_key
+
+
+def _delete_existing_main_research_files(cur, debate_id: str) -> List[str]:
+    """Remove all main research files for a debate. Returns storage keys to purge."""
+    cur.execute(
+        """
+        SELECT material_id FROM meeting_materials
+        WHERE debate_id = %s AND (is_primary = true OR material_category = 'main_research')
+        """,
+        (debate_id,),
+    )
+    rows = cur.fetchall()
+    file_keys: List[str] = []
+    for row in rows:
+        material_id = row["material_id"] if isinstance(row, dict) else row[0]
+        file_key = _delete_material_record(cur, debate_id, str(material_id))
+        if file_key:
+            file_keys.append(file_key)
+    return file_keys
+
+
+def _purge_storage_keys(file_keys: List[str]) -> None:
+    if not file_keys:
+        return
+    storage_client = get_storage_client()
+    for file_key in file_keys:
+        try:
+            storage_client.delete_file(file_key)
+        except Exception as exc:
+            print(f"Storage delete failed (non-fatal) for {file_key}: {exc}")
+
+
 class InlineMaterial(BaseModel):
     kind: str  # 'text' | 'link'
     title: Optional[str] = None
@@ -179,14 +234,12 @@ async def upload_materials(
 
     material_ids = []
     job_ids = []
+    stale_storage_keys: List[str] = []
 
     try:
-        # A new primary file replaces any existing pinned main research file
+        # A new primary file fully replaces any existing main research file(s).
         if is_primary:
-            cursor.execute(
-                "UPDATE meeting_materials SET is_primary = false WHERE debate_id = %s AND is_primary = true",
-                (debate_id,),
-            )
+            stale_storage_keys = _delete_existing_main_research_files(cursor, debate_id)
 
         for upload_file in files:
             # Read file contents
@@ -261,6 +314,7 @@ async def upload_materials(
             job_ids.append(task.id)
 
         conn.commit()
+        _purge_storage_keys(stale_storage_keys)
         
         return MaterialUploadResponse(
             material_ids=material_ids,
@@ -351,6 +405,37 @@ async def get_materials_status(
         status_summary=status_summary,
         materials=materials
     )
+
+
+@router.delete("/debates/{debate_id}/materials/{material_id}")
+async def delete_material(
+    debate_id: str,
+    material_id: str,
+    _workspace_id: str = Depends(require_auth),
+):
+    """Remove a material from the debate session (DB row, chunks, and stored file)."""
+    with get_db_connection() as conn:
+        cur = get_cursor(conn)
+        cur.execute(
+            """
+            SELECT mm.material_id, d.workspace_id
+            FROM meeting_materials mm
+            JOIN debates d ON d.debate_id = mm.debate_id
+            WHERE mm.material_id = %s AND mm.debate_id = %s
+            """,
+            (material_id, debate_id),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Material not found")
+        if str(row["workspace_id"]) != _workspace_id:
+            raise HTTPException(status_code=403, detail="Access denied to this debate")
+
+        file_key = _delete_material_record(cur, debate_id, material_id)
+
+    _purge_storage_keys([file_key] if file_key else [])
+
+    return {"material_id": material_id, "deleted": True}
 
 
 @router.post("/debates/{debate_id}/materials/retry", response_model=MaterialRetryResponse)

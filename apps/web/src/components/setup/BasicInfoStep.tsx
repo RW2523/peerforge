@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOpenRouterKey } from '@/hooks/useOpenRouterKey';
 import * as api from '@/lib/api';
@@ -6,24 +6,31 @@ import {
   SETUP_LIMITS,
   validateTimebox,
   validateRounds,
+  validateListItem,
+  type SessionLengthMode,
 } from '@/lib/setupValidation';
+import { EditableListItem } from './EditableListItem';
 import styles from './SetupSteps.module.css';
 
 interface BasicInfoStepProps {
   title: string;
   problemStatement: string;
+  keyPoints: string[];
   agenda: string[];
   desiredOutcomes: string[];
   timeboxMinutes?: number;
   maxRounds?: number;
+  sessionLengthMode: SessionLengthMode;
   yoloMode?: boolean;
   autoTurnDelay?: number;
   onTitleChange: (value: string) => void;
   onProblemChange: (value: string) => void;
+  onKeyPointsChange: (value: string[]) => void;
   onAgendaChange: (value: string[]) => void;
   onDesiredOutcomesChange: (value: string[]) => void;
   onTimeboxChange: (value: number | undefined) => void;
   onMaxRoundsChange: (value: number | undefined) => void;
+  onSessionLengthModeChange: (mode: SessionLengthMode) => void;
   onYoloModeChange?: (value: boolean) => void;
   onAutoTurnDelayChange?: (value: number) => void;
   isLoading: boolean;
@@ -32,18 +39,22 @@ interface BasicInfoStepProps {
 export function BasicInfoStep({
   title,
   problemStatement,
+  keyPoints,
   agenda,
   desiredOutcomes,
   timeboxMinutes,
   maxRounds,
+  sessionLengthMode,
   yoloMode = false,
   autoTurnDelay = 10,
   onTitleChange,
   onProblemChange,
+  onKeyPointsChange,
   onAgendaChange,
   onDesiredOutcomesChange,
   onTimeboxChange,
   onMaxRoundsChange,
+  onSessionLengthModeChange,
   onYoloModeChange,
   onAutoTurnDelayChange,
   isLoading,
@@ -52,12 +63,36 @@ export function BasicInfoStep({
   const { apiKey } = useOpenRouterKey();
   const [agendaInput, setAgendaInput] = useState('');
   const [outcomeInput, setOutcomeInput] = useState('');
-  const [meetingType, setMeetingType] = useState<'rounds' | 'time'>(maxRounds ? 'rounds' : 'time');
   const [isGenerating, setIsGenerating] = useState(false);
   const [showKeyPoints, setShowKeyPoints] = useState(false);
-  const [keyPoints, setKeyPoints] = useState<string[]>([]);
   const [agendaError, setAgendaError] = useState('');
   const [outcomeError, setOutcomeError] = useState('');
+  const [editingAgendaIndex, setEditingAgendaIndex] = useState<number | null>(null);
+  const [agendaEditValue, setAgendaEditValue] = useState('');
+  const [agendaEditError, setAgendaEditError] = useState('');
+  const [editingOutcomeIndex, setEditingOutcomeIndex] = useState<number | null>(null);
+  const [outcomeEditValue, setOutcomeEditValue] = useState('');
+  const [outcomeEditError, setOutcomeEditError] = useState('');
+
+  useEffect(() => {
+    setShowKeyPoints(keyPoints.length > 0);
+  }, [keyPoints]);
+
+  useEffect(() => {
+    if (editingAgendaIndex !== null && editingAgendaIndex >= agenda.length) {
+      setEditingAgendaIndex(null);
+      setAgendaEditValue('');
+      setAgendaEditError('');
+    }
+  }, [agenda.length, editingAgendaIndex]);
+
+  useEffect(() => {
+    if (editingOutcomeIndex !== null && editingOutcomeIndex >= desiredOutcomes.length) {
+      setEditingOutcomeIndex(null);
+      setOutcomeEditValue('');
+      setOutcomeEditError('');
+    }
+  }, [desiredOutcomes.length, editingOutcomeIndex]);
 
   // Live validation hints (BUG-001..005) — Next is gated by the shared
   // validator in setup/page.tsx; these just surface the reason inline.
@@ -71,47 +106,153 @@ export function BasicInfoStep({
     abstractTrim.length > 0 && abstractTrim.length < SETUP_LIMITS.ABSTRACT_MIN
       ? `Abstract must be at least ${SETUP_LIMITS.ABSTRACT_MIN} characters (currently ${abstractTrim.length}).`
       : '';
-  const roundsError = meetingType === 'rounds' ? validateRounds(maxRounds) : null;
-  const timeboxError = meetingType === 'time' ? validateTimebox(timeboxMinutes) : null;
+  const roundsError = sessionLengthMode === 'rounds' ? validateRounds(maxRounds) : null;
+  const timeboxError = sessionLengthMode === 'time' ? validateTimebox(timeboxMinutes) : null;
+
+  const selectRoundsMode = () => {
+    if (isLoading || sessionLengthMode === 'rounds') return;
+    onSessionLengthModeChange('rounds');
+    if (maxRounds === undefined) {
+      onMaxRoundsChange(SETUP_LIMITS.ROUNDS_MIN);
+    }
+  };
+
+  const selectTimeMode = () => {
+    if (isLoading || sessionLengthMode === 'time') return;
+    onSessionLengthModeChange('time');
+    if (timeboxMinutes === undefined) {
+      onTimeboxChange(30);
+    }
+  };
+
+  const handleRoundsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    const raw = e.target.value;
+    if (raw === '') {
+      onMaxRoundsChange(undefined);
+      return;
+    }
+    const n = Number(raw);
+    if (Number.isNaN(n)) {
+      onMaxRoundsChange(undefined);
+      return;
+    }
+    onMaxRoundsChange(n);
+  };
+
+  const handleRoundsBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    const raw = e.target.value;
+    if (raw === '') return;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || !Number.isInteger(n)) return;
+    if (n < SETUP_LIMITS.ROUNDS_MIN) {
+      onMaxRoundsChange(SETUP_LIMITS.ROUNDS_MIN);
+    } else if (n > SETUP_LIMITS.ROUNDS_MAX) {
+      onMaxRoundsChange(SETUP_LIMITS.ROUNDS_MAX);
+    }
+  };
 
   const handleAddAgendaItem = () => {
-    const item = agendaInput.trim();
-    if (!item) return;
-    if (item.length > SETUP_LIMITS.ITEM_MAX) {
-      setAgendaError(`Keep items under ${SETUP_LIMITS.ITEM_MAX} characters.`);
+    const trimmed = agendaInput.trim();
+    const error = validateListItem(trimmed, agenda, null);
+    if (error) {
+      setAgendaError(error);
       return;
     }
-    if (agenda.some((a) => a.trim().toLowerCase() === item.toLowerCase())) {
-      setAgendaError('This item is already added.');
-      return;
-    }
-    onAgendaChange([...agenda, item]);
+    onAgendaChange([...agenda, trimmed]);
     setAgendaInput('');
     setAgendaError('');
   };
 
   const handleRemoveAgendaItem = (index: number) => {
+    if (editingAgendaIndex === index) {
+      setEditingAgendaIndex(null);
+      setAgendaEditValue('');
+      setAgendaEditError('');
+    }
     onAgendaChange(agenda.filter((_, i) => i !== index));
   };
 
+  const startAgendaEdit = (index: number) => {
+    setEditingOutcomeIndex(null);
+    setOutcomeEditValue('');
+    setOutcomeEditError('');
+    setEditingAgendaIndex(index);
+    setAgendaEditValue(agenda[index]);
+    setAgendaEditError('');
+  };
+
+  const saveAgendaEdit = () => {
+    if (editingAgendaIndex === null) return;
+    const error = validateListItem(agendaEditValue, agenda, editingAgendaIndex);
+    if (error) {
+      setAgendaEditError(error);
+      return;
+    }
+    const next = [...agenda];
+    next[editingAgendaIndex] = agendaEditValue.trim();
+    onAgendaChange(next);
+    setEditingAgendaIndex(null);
+    setAgendaEditValue('');
+    setAgendaEditError('');
+  };
+
+  const cancelAgendaEdit = () => {
+    setEditingAgendaIndex(null);
+    setAgendaEditValue('');
+    setAgendaEditError('');
+  };
+
   const handleAddOutcome = () => {
-    const item = outcomeInput.trim();
-    if (!item) return;
-    if (item.length > SETUP_LIMITS.ITEM_MAX) {
-      setOutcomeError(`Keep items under ${SETUP_LIMITS.ITEM_MAX} characters.`);
+    const trimmed = outcomeInput.trim();
+    const error = validateListItem(trimmed, desiredOutcomes, null);
+    if (error) {
+      setOutcomeError(error);
       return;
     }
-    if (desiredOutcomes.some((o) => o.trim().toLowerCase() === item.toLowerCase())) {
-      setOutcomeError('This item is already added.');
-      return;
-    }
-    onDesiredOutcomesChange([...desiredOutcomes, item]);
+    onDesiredOutcomesChange([...desiredOutcomes, trimmed]);
     setOutcomeInput('');
     setOutcomeError('');
   };
 
   const handleRemoveOutcome = (index: number) => {
+    if (editingOutcomeIndex === index) {
+      setEditingOutcomeIndex(null);
+      setOutcomeEditValue('');
+      setOutcomeEditError('');
+    }
     onDesiredOutcomesChange(desiredOutcomes.filter((_, i) => i !== index));
+  };
+
+  const startOutcomeEdit = (index: number) => {
+    setEditingAgendaIndex(null);
+    setAgendaEditValue('');
+    setAgendaEditError('');
+    setEditingOutcomeIndex(index);
+    setOutcomeEditValue(desiredOutcomes[index]);
+    setOutcomeEditError('');
+  };
+
+  const saveOutcomeEdit = () => {
+    if (editingOutcomeIndex === null) return;
+    const error = validateListItem(outcomeEditValue, desiredOutcomes, editingOutcomeIndex);
+    if (error) {
+      setOutcomeEditError(error);
+      return;
+    }
+    const next = [...desiredOutcomes];
+    next[editingOutcomeIndex] = outcomeEditValue.trim();
+    onDesiredOutcomesChange(next);
+    setEditingOutcomeIndex(null);
+    setOutcomeEditValue('');
+    setOutcomeEditError('');
+  };
+
+  const cancelOutcomeEdit = () => {
+    setEditingOutcomeIndex(null);
+    setOutcomeEditValue('');
+    setOutcomeEditError('');
   };
 
   const handleImproveProblemStatement = async () => {
@@ -149,7 +290,7 @@ export function BasicInfoStep({
       onProblemChange(result.improved_text);
       
       // Update key points
-      setKeyPoints(result.key_points);
+      onKeyPointsChange(result.key_points);
       if (result.key_points.length > 0) {
         setShowKeyPoints(true);
       }
@@ -302,17 +443,22 @@ export function BasicInfoStep({
       {agenda.length > 0 && (
         <ul className={styles.itemList}>
           {agenda.map((item, index) => (
-            <li key={index}>
-              <span>{item}</span>
-              <button 
-                type="button"
-                onClick={() => handleRemoveAgendaItem(index)}
-                className={styles.removeButton}
-                disabled={isLoading}
-              >
-                ✕
-              </button>
-            </li>
+            <EditableListItem
+              key={`${index}-${item}`}
+              item={item}
+              isEditing={editingAgendaIndex === index}
+              editValue={agendaEditValue}
+              editError={agendaEditError}
+              disabled={isLoading}
+              onStartEdit={() => startAgendaEdit(index)}
+              onEditValueChange={(value) => {
+                setAgendaEditValue(value);
+                if (agendaEditError) setAgendaEditError('');
+              }}
+              onSave={saveAgendaEdit}
+              onCancel={cancelAgendaEdit}
+              onRemove={() => handleRemoveAgendaItem(index)}
+            />
           ))}
         </ul>
       )}
@@ -346,17 +492,22 @@ export function BasicInfoStep({
       {desiredOutcomes.length > 0 && (
         <ul className={styles.itemList}>
           {desiredOutcomes.map((item, index) => (
-            <li key={index}>
-              <span>{item}</span>
-              <button 
-                type="button"
-                onClick={() => handleRemoveOutcome(index)}
-                className={styles.removeButton}
-                disabled={isLoading}
-              >
-                ✕
-              </button>
-            </li>
+            <EditableListItem
+              key={`${index}-${item}`}
+              item={item}
+              isEditing={editingOutcomeIndex === index}
+              editValue={outcomeEditValue}
+              editError={outcomeEditError}
+              disabled={isLoading}
+              onStartEdit={() => startOutcomeEdit(index)}
+              onEditValueChange={(value) => {
+                setOutcomeEditValue(value);
+                if (outcomeEditError) setOutcomeEditError('');
+              }}
+              onSave={saveOutcomeEdit}
+              onCancel={cancelOutcomeEdit}
+              onRemove={() => handleRemoveOutcome(index)}
+            />
           ))}
         </ul>
       )}
@@ -408,68 +559,49 @@ export function BasicInfoStep({
       <label>Session Length</label>
       <div className={styles.limitCards}>
         <div 
-          className={`${styles.limitCard} ${meetingType === 'rounds' ? styles.limitCardActive : ''}`}
-          onClick={() => {
-            if (!isLoading) {
-              setMeetingType('rounds');
-              onTimeboxChange(undefined);
-              onMaxRoundsChange(3);
-            }
-          }}
+          className={`${styles.limitCard} ${sessionLengthMode === 'rounds' ? styles.limitCardActive : ''}`}
+          onClick={selectRoundsMode}
         >
           <div className={styles.cardIcon}>🔄</div>
           <div className={styles.cardTitle}>Rounds-Based</div>
           <div className={styles.cardDescription}>
             Each agent speaks once per round
           </div>
-          {meetingType === 'rounds' && (
+          {sessionLengthMode === 'rounds' && (
             <>
             <div className={styles.cardInput}>
               <input
                 type="number"
                 value={maxRounds ?? ''}
-                onChange={(e) => {
-                  e.stopPropagation();
-                  const raw = e.target.value;
-                  if (raw === '') { onMaxRoundsChange(undefined); return; }
-                  let n = parseInt(raw, 10);
-                  if (Number.isNaN(n)) { onMaxRoundsChange(undefined); return; }
-                  // Clamp to [1, 20] so negatives / huge values can't be entered.
-                  n = Math.max(SETUP_LIMITS.ROUNDS_MIN, Math.min(SETUP_LIMITS.ROUNDS_MAX, n));
-                  onMaxRoundsChange(n);
-                }}
-                placeholder="3"
+                onChange={handleRoundsChange}
+                onBlur={handleRoundsBlur}
+                placeholder="1"
                 disabled={isLoading}
                 min={SETUP_LIMITS.ROUNDS_MIN}
                 max={SETUP_LIMITS.ROUNDS_MAX}
                 step="1"
                 onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
               />
               <span>rounds</span>
             </div>
             {roundsError
               ? <span className={styles.fieldError}>{roundsError}</span>
-              : <span className={styles.fieldHint}>{SETUP_LIMITS.ROUNDS_MIN}–{SETUP_LIMITS.ROUNDS_MAX} rounds.</span>}
+              : <span className={styles.fieldHint}>{SETUP_LIMITS.ROUNDS_MIN}–{SETUP_LIMITS.ROUNDS_MAX} rounds</span>}
             </>
           )}
         </div>
 
         <div 
-          className={`${styles.limitCard} ${meetingType === 'time' ? styles.limitCardActive : ''}`}
-          onClick={() => {
-            if (!isLoading) {
-              setMeetingType('time');
-              onMaxRoundsChange(undefined);
-              onTimeboxChange(30);
-            }
-          }}
+          className={`${styles.limitCard} ${sessionLengthMode === 'time' ? styles.limitCardActive : ''}`}
+          onClick={selectTimeMode}
         >
           <div className={styles.cardIcon}>⏱️</div>
           <div className={styles.cardTitle}>Time-Based</div>
           <div className={styles.cardDescription}>
             Unlimited rounds within time limit
           </div>
-          {meetingType === 'time' && (
+          {sessionLengthMode === 'time' && (
             <>
             <div className={styles.cardInput}>
               <input

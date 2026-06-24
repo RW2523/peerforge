@@ -139,7 +139,28 @@ export function validateRounds(rounds: number | undefined): string | null {
   return null;
 }
 
+/** Validate a single agenda/objective list item (add or inline edit). */
+export function validateListItem(
+  value: string,
+  items: string[],
+  editingIndex: number | null
+): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return 'Item cannot be empty.';
+  if (trimmed.length > SETUP_LIMITS.ITEM_MAX) {
+    return `Keep items under ${SETUP_LIMITS.ITEM_MAX} characters.`;
+  }
+  const duplicate = items.some(
+    (item, index) =>
+      index !== editingIndex && item.trim().toLowerCase() === trimmed.toLowerCase()
+  );
+  if (duplicate) return 'This item is already added.';
+  return null;
+}
+
 // ── Step-level navigation gate ───────────────────────────────────────────────
+
+export type SessionLengthMode = 'rounds' | 'time';
 
 export interface SetupState {
   title: string;
@@ -148,6 +169,7 @@ export interface SetupState {
   materials: api.SetupMaterial[];
   timeboxMinutes?: number;
   maxRounds?: number;
+  sessionLengthMode?: SessionLengthMode;
 }
 
 /** Whether the wizard may advance from `step`. */
@@ -155,9 +177,12 @@ export function canAdvance(step: number, s: SetupState): boolean {
   if (step === 1) {
     if (s.title.trim().length < SETUP_LIMITS.TITLE_MIN) return false;
     if (s.problemStatement.trim().length < SETUP_LIMITS.ABSTRACT_MIN) return false;
-    // Validate whichever session-length mode is active.
-    if (s.maxRounds !== undefined && validateRounds(s.maxRounds)) return false;
-    if (s.timeboxMinutes !== undefined && validateTimebox(s.timeboxMinutes)) return false;
+    const sessionMode = s.sessionLengthMode ?? 'time';
+    if (sessionMode === 'rounds') {
+      if (validateRounds(s.maxRounds)) return false;
+    } else if (validateTimebox(s.timeboxMinutes)) {
+      return false;
+    }
     return true;
   }
   if (step === 2) {

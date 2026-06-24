@@ -756,6 +756,23 @@ export async function getMaterialsStatus(debateId: string): Promise<MaterialsSta
   return response.json();
 }
 
+export async function deleteMaterial(
+  debateId: string,
+  materialId: string
+): Promise<{ material_id: string; deleted: boolean }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(
+    `${API_URL}/debates/${debateId}/materials/${materialId}`,
+    { method: 'DELETE', headers }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to remove material: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
 export async function retryMaterial(debateId: string, materialId: string): Promise<any> {
   const headers = await getAuthHeaders();
   const response = await fetch(`${API_URL}/debates/${debateId}/materials/retry`, {
