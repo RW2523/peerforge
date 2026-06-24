@@ -2,7 +2,7 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import * as api from '@/lib/api';
 import { keyStore } from '@/lib/openrouterKeyStore';
-import { validateMaterials, normalizeUrl, SETUP_LIMITS } from '@/lib/setupValidation';
+import { validateMaterials, normalizeUrl, SETUP_LIMITS, getMainResearchFile, MAIN_RESEARCH_FILE_REQUIRED } from '@/lib/setupValidation';
 import styles from './SetupSteps.module.css';
 
 interface MaterialsStepProps {
@@ -209,9 +209,7 @@ export function MaterialsStep({
   };
 
   // ── Derived groupings ─────────────────────────────────────────────────────
-  const mainFile =
-    uploadedFiles.find((f) => f.is_primary) ??
-    uploadedFiles.find((f) => f.material_category === 'main_research');
+  const mainFile = getMainResearchFile(uploadedFiles);
   const researchFiles = uploadedFiles.filter((f) => f.material_category === 'research');
   const supplementaryFiles = uploadedFiles.filter(
     (f) => f.material_category === 'supplementary' || (!f.material_category && !f.is_primary)
@@ -264,10 +262,6 @@ export function MaterialsStep({
   // the Next button uses, so the UI and navigation never disagree.
   const materialIssues = new Map<number, string>();
   validateMaterials(materials).forEach((i) => materialIssues.set(i.index, i.issue));
-
-  // BUG-009: warn (non-blocking) when there is nothing to ground the review on.
-  const hasNoMaterials =
-    uploadedFiles.length === 0 && materials.length === 0;
 
   const disabled = !debateId || uploading !== null;
 
@@ -373,6 +367,9 @@ export function MaterialsStep({
             <span>📌</span> {uploading === 'main_research' ? 'Uploading…' : 'Set Main Research File'}
           </button>
         )}
+        {!mainFile && (
+          <span className={styles.fieldError}>{MAIN_RESEARCH_FILE_REQUIRED}</span>
+        )}
       </div>
 
       {/* ── Section 2: Research & Supplementary ─────────────────────────── */}
@@ -459,13 +456,6 @@ export function MaterialsStep({
             <p className={styles.empty}>No supporting files yet (optional)</p>
           )}
         </div>
-
-        {hasNoMaterials && (
-          <div className={styles.materialWarning}>
-            <span>ℹ️</span>
-            <span>No research materials added — the review will be based only on your title and abstract. Add materials for deeper, grounded feedback.</span>
-          </div>
-        )}
       </div>
 
       {/* ── Section 3: Transcripts & Recordings ─────────────────────────── */}

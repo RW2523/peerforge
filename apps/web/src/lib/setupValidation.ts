@@ -16,6 +16,7 @@ export const SETUP_LIMITS = {
   TIMEBOX_MAX: 120,
   ROUNDS_MIN: 1,
   ROUNDS_MAX: 20,
+  ROUNDS_DEFAULT: 3,
   PANEL_MIN: 2,
   PANEL_MAX: 8,
 } as const;
@@ -119,6 +120,19 @@ export function validateMaterials(materials: api.SetupMaterial[]): MaterialIssue
   return issues;
 }
 
+/** Primary research document uploaded on Step 2 (not text/link placeholders). */
+export function getMainResearchFile(
+  uploadedFiles: api.MaterialStatus[] = []
+): api.MaterialStatus | undefined {
+  return (
+    uploadedFiles.find((f) => f.is_primary) ??
+    uploadedFiles.find((f) => f.material_category === 'main_research')
+  );
+}
+
+export const MAIN_RESEARCH_FILE_REQUIRED =
+  'Main research file is required to continue.';
+
 // ── Step 1 numeric fields ────────────────────────────────────────────────────
 
 export function validateTimebox(minutes: number | undefined): string | null {
@@ -167,6 +181,7 @@ export interface SetupState {
   problemStatement: string;
   participants: api.SetupParticipant[];
   materials: api.SetupMaterial[];
+  uploadedFiles?: api.MaterialStatus[];
   timeboxMinutes?: number;
   maxRounds?: number;
   sessionLengthMode?: SessionLengthMode;
@@ -186,8 +201,8 @@ export function canAdvance(step: number, s: SetupState): boolean {
     return true;
   }
   if (step === 2) {
-    // Materials are optional, but any card present must be valid (no duplicates,
-    // no empty/partial cards). Zero materials is allowed (warning shown in UI).
+    if (!getMainResearchFile(s.uploadedFiles)) return false;
+    // Any text/link card present must be valid (no duplicates, no empty/partial cards).
     return validateMaterials(s.materials).length === 0;
   }
   if (step === 3) return s.participants.length >= SETUP_LIMITS.PANEL_MIN;

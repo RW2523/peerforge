@@ -105,7 +105,7 @@ export function parseStep1Draft(raw: string): Step1Draft | null {
     const sessionLengthMode = data.sessionLengthMode;
     const resolvedMaxRounds =
       sessionLengthMode === 'rounds'
-        ? maxRounds ?? SETUP_LIMITS.ROUNDS_MIN
+        ? maxRounds ?? SETUP_LIMITS.ROUNDS_DEFAULT
         : maxRounds;
     const resolvedTimebox =
       sessionLengthMode === 'time'

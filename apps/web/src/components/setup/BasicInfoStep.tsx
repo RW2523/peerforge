@@ -113,7 +113,7 @@ export function BasicInfoStep({
     if (isLoading || sessionLengthMode === 'rounds') return;
     onSessionLengthModeChange('rounds');
     if (maxRounds === undefined) {
-      onMaxRoundsChange(SETUP_LIMITS.ROUNDS_MIN);
+      onMaxRoundsChange(SETUP_LIMITS.ROUNDS_DEFAULT);
     }
   };
 
@@ -575,7 +575,7 @@ export function BasicInfoStep({
                 value={maxRounds ?? ''}
                 onChange={handleRoundsChange}
                 onBlur={handleRoundsBlur}
-                placeholder="1"
+                placeholder="3"
                 disabled={isLoading}
                 min={SETUP_LIMITS.ROUNDS_MIN}
                 max={SETUP_LIMITS.ROUNDS_MAX}

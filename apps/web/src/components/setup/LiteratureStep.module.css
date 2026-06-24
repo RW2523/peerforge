@@ -6,7 +6,7 @@
   display: flex;
   gap: 4px;
   margin-bottom: 20px;
-  border-bottom: 2px solid var(--border, #e5e7eb);
+  border-bottom: 2px solid var(--border-soft);
   padding-bottom: 0;
 }
 
@@ -21,26 +21,26 @@
   margin-bottom: -2px;
   font-size: 14px;
   font-weight: 500;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-2);
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
   border-radius: 6px 6px 0 0;
 }
 
 .tab:hover {
-  color: var(--accent, #6366f1);
+  color: var(--accent);
 }
 
 .tabActive {
-  color: var(--accent, #6366f1);
-  border-bottom-color: var(--accent, #6366f1);
-  background: rgba(99, 102, 241, 0.05);
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: var(--accent-subtle);
 }
 
 .tabBadge {
   font-size: 10px;
   font-weight: 600;
-  background: #f59e0b;
+  background: var(--warning);
   color: #fff;
   padding: 2px 6px;
   border-radius: 10px;
@@ -55,16 +55,16 @@
   gap: 10px;
   padding: 10px 14px;
   border-radius: 8px;
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: var(--gold-subtle);
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
   font-size: 12.5px;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-2);
   margin-bottom: 16px;
   line-height: 1.55;
 }
 
 .webInfoBanner a {
-  color: #d97706;
+  color: var(--gold);
   text-decoration: underline;
 }
 
@@ -79,7 +79,7 @@
 .savedGroupLabel {
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-2);
   margin: 10px 0 6px 0;
 }
 
@@ -94,16 +94,16 @@
 .sourcesLabel {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-2);
   margin-right: 4px;
 }
 
 .sourceChip {
   padding: 5px 12px;
   border-radius: 20px;
-  border: 1.5px solid var(--border, #e5e7eb);
-  background: var(--surface-1, #f9fafb);
-  color: var(--text-secondary, #6b7280);
+  border: 1.5px solid var(--border-soft);
+  background: var(--surface-2);
+  color: var(--text-2);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -111,13 +111,13 @@
 }
 
 .sourceChip:hover {
-  border-color: var(--accent, #6366f1);
-  color: var(--accent, #6366f1);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .sourceChipActive {
-  background: var(--accent, #6366f1);
-  border-color: var(--accent, #6366f1);
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
 
@@ -130,22 +130,22 @@
 .searchInput {
   flex: 1;
   padding: 10px 14px;
-  border: 1.5px solid var(--border, #e5e7eb);
+  border: 1.5px solid var(--border-soft);
   border-radius: 8px;
   font-size: 14px;
   outline: none;
   transition: border-color 0.15s;
-  background: var(--surface-0, #fff);
-  color: var(--text-primary, #111);
+  background: var(--surface-0);
+  color: var(--text-0);
 }
 
 .searchInput:focus {
-  border-color: var(--accent, #6366f1);
+  border-color: var(--accent);
 }
 
 .searchBtn {
   padding: 10px 22px;
-  background: var(--accent, #6366f1);
+  background: var(--accent);
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -161,9 +161,19 @@
   cursor: not-allowed;
 }
 
+.charCount {
+  font-size: 11px;
+  color: var(--text-3);
+  text-align: right;
+}
+
+.charCountWarn {
+  color: var(--danger);
+}
+
 .infoNote {
   font-size: 13px;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-2);
   margin-bottom: 8px;
 }
 
@@ -185,12 +195,12 @@
 .resultsCount {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-2);
 }
 
 .saveBtn {
   padding: 8px 18px;
-  background: #10b981;
+  background: var(--success);
   color: #fff;
   border: none;
   border-radius: 7px;
@@ -215,85 +225,116 @@
 }
 
 .paperCard {
-  border: 1.5px solid var(--border, #e5e7eb);
+  border: 1.5px solid var(--border-soft);
   border-radius: 10px;
-  padding: 12px 14px;
-  background: var(--surface-0, #fff);
+  padding: var(--space-4);
+  background: var(--surface-0);
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .paperCard:hover {
-  border-color: var(--accent, #6366f1);
+  border-color: var(--accent);
 }
 
 .paperCardSelected {
-  border-color: #10b981;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.12);
-  background: rgba(16, 185, 129, 0.03);
+  border-color: var(--success);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--success) 18%, transparent);
+  background: color-mix(in srgb, var(--success) 6%, var(--surface-0));
 }
 
-.paperCardTop {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 10px;
-  margin-bottom: 6px;
+.paperCardLayout {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  column-gap: var(--space-3);
+  row-gap: var(--space-2);
+  align-items: start;
 }
 
-.paperCheckbox {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  cursor: pointer;
-  flex: 1;
-}
-
-.paperCheckbox input[type='checkbox'] {
-  margin-top: 3px;
+.paperCheckboxInput {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
   flex-shrink: 0;
-  accent-color: #10b981;
+  accent-color: var(--success);
   width: 16px;
   height: 16px;
   cursor: pointer;
 }
 
 .paperTitle {
+  grid-column: 2;
+  grid-row: 1;
   font-size: 14px;
   font-weight: 600;
-  line-height: 1.4;
-  color: var(--text-primary, #111);
+  line-height: 1.45;
+  color: var(--text-0);
+  cursor: pointer;
+  min-width: 0;
 }
 
 .sourceBadge {
+  grid-column: 3;
+  grid-row: 1;
   flex-shrink: 0;
   font-size: 11px;
   padding: 3px 8px;
   border-radius: 12px;
-  background: var(--surface-1, #f3f4f6);
-  color: var(--text-secondary, #6b7280);
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  color: var(--text-2);
   font-weight: 500;
   white-space: nowrap;
+  justify-self: end;
+}
+
+.paperCardDetails {
+  grid-column: 2 / -1;
+  grid-row: 2;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+@media (max-width: 640px) {
+  .paperCardLayout {
+    grid-template-columns: auto 1fr;
+  }
+
+  .sourceBadge {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+    white-space: normal;
+  }
+
+  .paperCardDetails {
+    grid-column: 2 / -1;
+    grid-row: 3;
+  }
 }
 
 .paperMeta {
   font-size: 12px;
-  color: var(--text-secondary, #6b7280);
-  margin-bottom: 6px;
+  color: var(--text-2);
+  line-height: 1.5;
 }
 
 .year,
 .venue,
 .citations {
-  color: var(--text-tertiary, #9ca3af);
+  color: var(--text-3);
 }
 
 .abstractSection {
-  margin-bottom: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .abstract {
   font-size: 12px;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-1);
   line-height: 1.6;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -307,22 +348,31 @@
 }
 
 .toggleAbstractBtn {
-  font-size: 11px;
-  color: var(--accent, #6366f1);
+  align-self: flex-start;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent);
   background: none;
   border: none;
   padding: 0;
   cursor: pointer;
-  margin-top: 2px;
+}
+
+.toggleAbstractBtn:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
 }
 
 .paperLink {
+  align-self: flex-start;
   font-size: 12px;
-  color: var(--accent, #6366f1);
+  font-weight: 500;
+  color: var(--accent);
   text-decoration: none;
 }
 
 .paperLink:hover {
+  color: var(--accent-hover);
   text-decoration: underline;
 }
 
@@ -333,7 +383,7 @@
 
 .noResults {
   font-size: 13px;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-2);
   margin-top: 8px;
 }
 
@@ -343,14 +393,14 @@
   margin-top: 24px;
   padding: 14px 16px;
   border-radius: 10px;
-  background: rgba(16, 185, 129, 0.06);
-  border: 1.5px solid rgba(16, 185, 129, 0.3);
+  background: color-mix(in srgb, var(--success) 8%, var(--surface-0));
+  border: 1.5px solid color-mix(in srgb, var(--success) 30%, transparent);
 }
 
 .savedTitle {
   font-size: 14px;
   font-weight: 600;
-  color: #065f46;
+  color: var(--text-0);
   margin: 0 0 10px 0;
 }
 
@@ -373,12 +423,12 @@
 .savedItemTitle {
   font-size: 13px;
   font-weight: 500;
-  color: var(--text-primary, #111);
+  color: var(--text-0);
   flex: 1;
 }
 
 .savedItemMeta {
   font-size: 11px;
-  color: #059669;
+  color: var(--success);
   flex-shrink: 0;
 }

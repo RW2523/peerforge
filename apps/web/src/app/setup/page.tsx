@@ -309,6 +309,7 @@ export default function SetupPage() {
     problemStatement,
     participants,
     materials,
+    uploadedFiles,
     timeboxMinutes,
     maxRounds,
     sessionLengthMode,

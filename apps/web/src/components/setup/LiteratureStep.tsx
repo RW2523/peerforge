@@ -331,7 +331,7 @@ export function LiteratureStep({
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSearch(); } }}
                 disabled={searching}
               />
-              <span style={{ fontSize: '11px', color: query.length > 450 ? '#e53935' : '#888', textAlign: 'right' }}>
+              <span className={`${literatureStyles.charCount} ${query.length > 450 ? literatureStyles.charCountWarn : ''}`}>
                 {query.length}/500 characters
               </span>
             </div>
@@ -366,47 +366,56 @@ export function LiteratureStep({
               {saveError && <div className={styles.error}>{saveError}</div>}
 
               <div className={literatureStyles.paperList}>
-                {searchResults.map(paper => {
+                {searchResults.map((paper, index) => {
                   const key = getPaperKey(paper);
                   const isSelected = selectedPapers.has(key);
                   const abstractExpanded = expandedAbstracts.has(key);
+                  const checkboxId = `literature-paper-${index}`;
                   return (
                     <div key={key} className={`${literatureStyles.paperCard} ${isSelected ? literatureStyles.paperCardSelected : ''}`}>
-                      <div className={literatureStyles.paperCardTop}>
-                        <label className={literatureStyles.paperCheckbox}>
-                          <input type="checkbox" checked={isSelected} onChange={() => togglePaper(key)} />
-                          <span className={literatureStyles.paperTitle}>{paper.title}</span>
+                      <div className={literatureStyles.paperCardLayout}>
+                        <input
+                          id={checkboxId}
+                          type="checkbox"
+                          className={literatureStyles.paperCheckboxInput}
+                          checked={isSelected}
+                          onChange={() => togglePaper(key)}
+                        />
+                        <label htmlFor={checkboxId} className={literatureStyles.paperTitle}>
+                          {paper.title}
                         </label>
                         <span className={literatureStyles.sourceBadge}>
                           {sourceIcon[paper.source]} {SOURCE_LABELS[paper.source] || paper.source}
                         </span>
-                      </div>
-                      <div className={literatureStyles.paperMeta}>
-                        {paper.authors.slice(0, 3).join(', ')}
-                        {paper.authors.length > 3 && ' et al.'}
-                        {paper.year && <span className={literatureStyles.year}> · {paper.year}</span>}
-                        {paper.venue && <span className={literatureStyles.venue}> · {paper.venue}</span>}
-                        {paper.citation_count > 0 && (
-                          <span className={literatureStyles.citations}> · {paper.citation_count} citations</span>
-                        )}
-                      </div>
-                      {paper.abstract && (
-                        <div className={literatureStyles.abstractSection}>
-                          <p className={`${literatureStyles.abstract} ${abstractExpanded ? literatureStyles.abstractExpanded : ''}`}>
-                            {paper.abstract}
-                          </p>
-                          {paper.abstract.length > 200 && (
-                            <button type="button" className={literatureStyles.toggleAbstractBtn} onClick={() => toggleAbstract(key)}>
-                              {abstractExpanded ? 'Show less' : 'Show more'}
-                            </button>
+                        <div className={literatureStyles.paperCardDetails}>
+                          <div className={literatureStyles.paperMeta}>
+                            {paper.authors.slice(0, 3).join(', ')}
+                            {paper.authors.length > 3 && ' et al.'}
+                            {paper.year && <span className={literatureStyles.year}> · {paper.year}</span>}
+                            {paper.venue && <span className={literatureStyles.venue}> · {paper.venue}</span>}
+                            {paper.citation_count > 0 && (
+                              <span className={literatureStyles.citations}> · {paper.citation_count} citations</span>
+                            )}
+                          </div>
+                          {paper.abstract && (
+                            <div className={literatureStyles.abstractSection}>
+                              <p className={`${literatureStyles.abstract} ${abstractExpanded ? literatureStyles.abstractExpanded : ''}`}>
+                                {paper.abstract}
+                              </p>
+                              {paper.abstract.length > 200 && (
+                                <button type="button" className={literatureStyles.toggleAbstractBtn} onClick={() => toggleAbstract(key)}>
+                                  {abstractExpanded ? 'Show less' : 'Show more'}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {paper.url && (
+                            <a href={paper.url} target="_blank" rel="noopener noreferrer" className={literatureStyles.paperLink}>
+                              View paper →
+                            </a>
                           )}
                         </div>
-                      )}
-                      {paper.url && (
-                        <a href={paper.url} target="_blank" rel="noopener noreferrer" className={literatureStyles.paperLink}>
-                          View paper →
-                        </a>
-                      )}
+                      </div>
                     </div>
                   );
                 })}
@@ -472,7 +481,7 @@ export function LiteratureStep({
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleWebSearch(); } }}
                 disabled={webSearching}
               />
-              <span style={{ fontSize: '11px', color: webQuery.length > 450 ? '#e53935' : '#888', textAlign: 'right' }}>
+              <span className={`${literatureStyles.charCount} ${webQuery.length > 450 ? literatureStyles.charCountWarn : ''}`}>
                 {webQuery.length}/500 characters
               </span>
             </div>
@@ -507,36 +516,45 @@ export function LiteratureStep({
               {webSaveError && <div className={styles.error}>{webSaveError}</div>}
 
               <div className={literatureStyles.paperList}>
-                {webResults.map(result => {
+                {webResults.map((result, index) => {
                   const key = getWebKey(result);
                   const isSelected = selectedWebResults.has(key);
+                  const checkboxId = `literature-web-${index}`;
                   return (
                     <div key={key} className={`${literatureStyles.paperCard} ${isSelected ? literatureStyles.paperCardSelected : ''}`}>
-                      <div className={literatureStyles.paperCardTop}>
-                        <label className={literatureStyles.paperCheckbox}>
-                          <input type="checkbox" checked={isSelected} onChange={() => toggleWebResult(key)} />
-                          <span className={literatureStyles.paperTitle}>{result.title}</span>
+                      <div className={literatureStyles.paperCardLayout}>
+                        <input
+                          id={checkboxId}
+                          type="checkbox"
+                          className={literatureStyles.paperCheckboxInput}
+                          checked={isSelected}
+                          onChange={() => toggleWebResult(key)}
+                        />
+                        <label htmlFor={checkboxId} className={literatureStyles.paperTitle}>
+                          {result.title}
                         </label>
                         <span className={literatureStyles.sourceBadge}>
                           🌐 {result.source_domain || 'web'}
                         </span>
-                      </div>
-                      <div className={literatureStyles.paperMeta}>
-                        <a href={result.url} target="_blank" rel="noopener noreferrer" className={literatureStyles.paperLink}>
-                          {result.url.length > 70 ? result.url.slice(0, 70) + '…' : result.url}
-                        </a>
-                        {result.published_date && (
-                          <span className={literatureStyles.year}> · {result.published_date}</span>
-                        )}
-                        {result.score > 0 && (
-                          <span className={literatureStyles.citations}> · relevance {Math.round(result.score * 100)}%</span>
-                        )}
-                      </div>
-                      {result.content && (
-                        <div className={literatureStyles.abstractSection}>
-                          <p className={literatureStyles.abstract}>{result.content}</p>
+                        <div className={literatureStyles.paperCardDetails}>
+                          <div className={literatureStyles.paperMeta}>
+                            <a href={result.url} target="_blank" rel="noopener noreferrer" className={literatureStyles.paperLink}>
+                              {result.url.length > 70 ? result.url.slice(0, 70) + '…' : result.url}
+                            </a>
+                            {result.published_date && (
+                              <span className={literatureStyles.year}> · {result.published_date}</span>
+                            )}
+                            {result.score > 0 && (
+                              <span className={literatureStyles.citations}> · relevance {Math.round(result.score * 100)}%</span>
+                            )}
+                          </div>
+                          {result.content && (
+                            <div className={literatureStyles.abstractSection}>
+                              <p className={literatureStyles.abstract}>{result.content}</p>
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </div>
                   );
                 })}
