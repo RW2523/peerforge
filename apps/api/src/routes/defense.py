@@ -30,6 +30,7 @@ from ..services.question_generator import generate_questions, get_questions
 from ..services.answer_evaluator import evaluate_answer, get_answers
 from ..services.readiness_reporter import generate_readiness_report, get_readiness_report
 from ..services.persona_suggester import suggest_personas
+from ..services.provenance import get_provenance
 from ..services.reasoning_modes import MODES, mode_from_policy
 
 logger = logging.getLogger(__name__)
@@ -233,6 +234,22 @@ async def list_defense_questions(
 
     questions = get_questions(debate_id, unanswered_only=unanswered_only)
     return {"count": len(questions), "questions": questions}
+
+
+@router.get("/debates/{debate_id}/provenance")
+async def get_debate_provenance(
+    debate_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Glass-Box lineage: every reviewer question with its hard-linked, sha256-
+    verified source chunk — or flagged as an evidence gap when unsupported."""
+    debate = _get_debate_or_404(debate_id)
+    check_workspace_access(current_user, debate["workspace_id"])
+    try:
+        return get_provenance(debate_id)
+    except Exception as exc:
+        logger.exception("Provenance assembly failed for %s", debate_id)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.post("/debates/{debate_id}/answers")

@@ -1847,6 +1847,180 @@ export async function getReadinessReport(debateId: string): Promise<ReadinessRep
 }
 
 // ============================================================================
+// COMMITTEE TWIN (Pillar 2)
+// ============================================================================
+
+export interface TwinPaper {
+  title: string;
+  year: number | null;
+  venue: string;
+  citation_count: number;
+  url: string;
+  doi: string | null;
+  source: string;
+  quote: string;
+}
+
+export interface CommitteeTwin {
+  twin_id: string;
+  name: string;
+  affiliation: string;
+  role: string;
+  corpus_found: boolean;
+  paper_count: number;
+  chunks_ingested: number;
+  papers: TwinPaper[];
+  system_prompt: string;
+  model_id: string;
+  note: string | null;
+}
+
+export interface CommitteeTwinResponse {
+  debate_id: string;
+  twins: CommitteeTwin[];
+  summary: { requested: number; built: number; with_corpus: number; papers_ingested: number };
+}
+
+export async function buildCommitteeTwins(
+  debateId: string,
+  reviewers: { name: string; affiliation?: string; role?: string }[],
+  topicHint = '',
+  maxPapersPerReviewer = 5,
+): Promise<CommitteeTwinResponse> {
+  const response = await fetch(`${API_URL}/debates/${debateId}/committee-twins`, {
+    method: 'POST',
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({
+      reviewers,
+      topic_hint: topicHint,
+      max_papers_per_reviewer: maxPapersPerReviewer,
+      mode: 'light',
+    }),
+  });
+  if (!response.ok) {
+    const b = await response.json().catch(() => null);
+    throw new Error(b?.detail ?? response.statusText);
+  }
+  return response.json();
+}
+
+// ============================================================================
+// READINESS CERTIFICATE (Pillar 3)
+// ============================================================================
+
+export interface CertDimension {
+  key: string;
+  label: string;
+  what: string;
+  first_score: number;
+  latest_score: number;
+  delta: number;
+  band: string;
+  latest_comment: string;
+  points: { at: string | null; trigger: string; score: number; comment: string }[];
+}
+
+export interface CertEvidenceAnswer {
+  answer_id: string;
+  question_id: string | null;
+  question_text: string;
+  category: string | null;
+  persona: string | null;
+  answer_score: number | null;
+  strength: string;
+  weakness: string;
+  answered_at: string | null;
+  source: {
+    chunk_id: string;
+    excerpt: string;
+    sha256: string | null;
+    sha256_verified: boolean;
+    page_num: number | null;
+  } | null;
+}
+
+export interface ReadinessCertificate {
+  certificate_id: string;
+  issued_at: string;
+  session: { debate_id: string; title: string; workspace_id: string; created_at: string | null };
+  overall: {
+    first_score: number | null;
+    latest_score: number | null;
+    delta: number;
+    band: string;
+    assessment_count: number;
+  };
+  dimensions: CertDimension[];
+  evidence: {
+    answers: CertEvidenceAnswer[];
+    panel_events: { count: number; sequence_from: number | null; sequence_to: number | null };
+  };
+  anchor: { algorithm: string; hash: string; certificate_id: string };
+}
+
+export async function getCertificate(debateId: string): Promise<ReadinessCertificate> {
+  const response = await fetch(`${API_URL}/debates/${debateId}/certificate`, {
+    headers: await getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const b = await response.json().catch(() => null);
+    throw new Error(b?.detail ?? response.statusText);
+  }
+  return response.json();
+}
+
+// ============================================================================
+// PROVENANCE / GLASS-BOX
+// ============================================================================
+
+export interface ProvenanceSource {
+  chunk_id: string;
+  material_id: string | null;
+  doc_title: string;
+  page_num: number | null;
+  char_start: number | null;
+  char_end: number | null;
+  sha256: string | null;
+  sha256_verified: boolean;
+  chunk_text: string;
+  highlight: { start: number; end: number } | null;
+}
+
+export interface ProvenanceClaim {
+  claim_id: string;
+  type: string;
+  persona: string;
+  category: string;
+  difficulty: string;
+  text: string;
+  excerpt: string;
+  grounded: boolean;
+  answered: boolean;
+  source: ProvenanceSource | null;
+}
+
+export interface ProvenanceResponse {
+  debate_id: string;
+  materials: { material_id: string; title: string; kind: string; chunk_count: number }[];
+  claims: ProvenanceClaim[];
+  summary: {
+    total_claims: number;
+    grounded: number;
+    gaps: number;
+    sha256_verified: number;
+    grounded_pct: number;
+  };
+}
+
+export async function getProvenance(debateId: string): Promise<ProvenanceResponse> {
+  const response = await fetch(`${API_URL}/debates/${debateId}/provenance`, {
+    headers: await getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error(response.statusText);
+  return response.json();
+}
+
+// ============================================================================
 // AI PANEL SUGGESTION
 // ============================================================================
 

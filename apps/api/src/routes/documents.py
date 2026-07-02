@@ -66,7 +66,40 @@ async def create_document(
             template_sections=template_sections,
             metadata={'template_id': request.template_id}
         )
-        
+
+        # Assign sections so agents/host actually write to them (previously
+        # sections were created unassigned → nothing ever populated them):
+        #   HOST-strategy → the Review Chair (the host lives in policy_config,
+        #                   not as a participant, so it can't be "found")
+        #   otherwise     → round-robin across the panel, by name
+        try:
+            from ..database import get_db_connection, get_cursor
+            doc_id = document['document_id']
+            with get_db_connection() as conn:
+                cur = get_cursor(conn)
+                cur.execute(
+                    "SELECT agent_config, role_name FROM participants WHERE debate_id = %s ORDER BY created_at ASC",
+                    (request.debate_id,),
+                )
+                names = [((p['agent_config'] or {}).get('name') or p['role_name']) for p in cur.fetchall()]
+                names = [n for n in names if n and n != 'Ultimate Host']
+                cur.execute(
+                    "SELECT section_id, assignment_strategy FROM document_sections WHERE document_id = %s ORDER BY section_order",
+                    (doc_id,),
+                )
+                secs = cur.fetchall()
+            auto_idx = 0
+            for s in secs:
+                strat = (s.get('assignment_strategy') or 'auto').lower()
+                if strat == 'host':
+                    service.assign_section(section_id=str(s['section_id']), agent_name='Review Chair')
+                elif names:
+                    service.assign_section(section_id=str(s['section_id']), agent_name=names[auto_idx % len(names)])
+                    auto_idx += 1
+            document = service.get_document(doc_id)
+        except Exception as _assign_exc:
+            print(f"⚠️ Document section auto-assignment failed (non-fatal): {_assign_exc}")
+
         return DocumentResponse(**document)
         
     except ValueError as e:

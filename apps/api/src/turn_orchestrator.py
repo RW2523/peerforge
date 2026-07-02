@@ -1516,16 +1516,27 @@ Your question (15 words max):"""
                 
                 document_id = document['document_id']
                 
-                # Find sections assigned to this agent
+                # Find sections assigned to this agent. Match by BOTH id and name:
+                # sections are assigned by agent_id/agent_name, but this writer is
+                # invoked with the participant_id (which rarely equals agent_id) —
+                # so matching on name is what actually connects turns to sections.
+                # assigned_agent_id is a UUID column; pass NULL for non-UUID ids
+                # (e.g. the 'host' sentinel) so only the name match applies.
+                import uuid as _uuid
+                try:
+                    _uuid.UUID(str(agent_id))
+                    agent_id_param = agent_id
+                except (ValueError, AttributeError, TypeError):
+                    agent_id_param = None
                 cursor.execute("""
                     SELECT section_id, section_key, section_title, section_type,
                            word_limit, word_count, status, content_schema
                     FROM document_sections
                     WHERE document_id = %s
-                      AND assigned_agent_id = %s
-                      AND status IN ('assigned', 'pending', 'in_progress')
+                      AND (assigned_agent_id = %s OR assigned_agent_name = %s)
+                      AND status IN ('assigned', 'pending', 'in_progress', 'not_started')
                     ORDER BY section_order ASC
-                """, (document_id, agent_id))
+                """, (document_id, agent_id_param, agent_name))
                 
                 sections = cursor.fetchall()
                 if not sections:

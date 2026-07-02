@@ -13,6 +13,9 @@ import SummaryReport from '@/components/room/SummaryReport';
 import DocumentPanel from './DocumentPanel';
 import MockDefenseRoom from '@/components/room/MockDefenseRoom';
 import VoiceDefenseRoom from '@/components/room/VoiceDefenseRoom';
+import GlassBoxPanel from '@/components/room/GlassBoxPanel';
+import ReadinessCertificate from '@/components/room/ReadinessCertificate';
+import CommitteeTwinBuilder from '@/components/room/CommitteeTwinBuilder';
 import { useDebateRoom } from '@/hooks/useDebateRoom';
 import { useOpenRouterKey } from '@/hooks/useOpenRouterKey';
 import * as api from '@/lib/api';
@@ -45,7 +48,7 @@ function RoomPageContent() {
   const [participantTurnCounts, setParticipantTurnCounts] = useState<Record<string, number>>({});
   const [debateStartedAt, setDebateStartedAt] = useState<string | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'transcript' | 'document' | 'defense' | 'voice'>('transcript');
+  const [activeTab, setActiveTab] = useState<'transcript' | 'document' | 'defense' | 'evidence' | 'certificate' | 'committee' | 'voice'>('transcript');
 
   const handleDebateLoaded = (id: string, title: string, state: string) => {
     setDebateId(id);
@@ -54,7 +57,7 @@ function RoomPageContent() {
     console.log('🎯 Debate loaded:', { id, title, state: state.toLowerCase() });
     // Auto-switch to requested tab from URL
     const tabParam = searchParams.get('tab');
-    if (tabParam === 'defense' || tabParam === 'voice') {
+    if (tabParam === 'defense' || tabParam === 'voice' || tabParam === 'evidence' || tabParam === 'certificate' || tabParam === 'committee') {
       setActiveTab(tabParam);
     }
   };
@@ -346,6 +349,27 @@ function RoomPageContent() {
                 Practice Q&amp;A
               </button>
               <button
+                className={`${styles.tab} ${activeTab === 'evidence' ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab('evidence')}
+                title="Glass-Box — trace every reviewer question to its verified source line"
+              >
+                🔍 Evidence
+              </button>
+              <button
+                className={`${styles.tab} ${activeTab === 'committee' ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab('committee')}
+                title="Committee Twin — build reviewers from their real publications"
+              >
+                👥 Committee
+              </button>
+              <button
+                className={`${styles.tab} ${activeTab === 'certificate' ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab('certificate')}
+                title="Review-Readiness Certificate — trajectory + tamper-evident anchor"
+              >
+                📜 Certificate
+              </button>
+              <button
                 className={`${styles.tab} ${activeTab === 'voice' ? styles.tabActive : ''}`}
                 onClick={() => setActiveTab('voice')}
                 title="Voice-powered practice — speak your answers aloud"
@@ -396,6 +420,21 @@ function RoomPageContent() {
               {activeTab === 'defense' && (
                 <div style={{ flex: 1, overflowY: 'auto', padding: '16px 0' }}>
                   <MockDefenseRoom debateId={debateId} openrouterKey={openrouterKey || ''} />
+                </div>
+              )}
+              {activeTab === 'evidence' && (
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', padding: '12px 0' }}>
+                  <GlassBoxPanel debateId={debateId} />
+                </div>
+              )}
+              {activeTab === 'committee' && (
+                <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 0' }}>
+                  <CommitteeTwinBuilder debateId={debateId} />
+                </div>
+              )}
+              {activeTab === 'certificate' && (
+                <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 0' }}>
+                  <ReadinessCertificate debateId={debateId} />
                 </div>
               )}
               {activeTab === 'voice' && (

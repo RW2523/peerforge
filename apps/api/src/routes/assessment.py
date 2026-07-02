@@ -17,6 +17,7 @@ from ..services.academic_assessment import (
     get_latest_assessment,
     get_assessment_history,
 )
+from ..services.certificate import build_certificate
 
 router = APIRouter(tags=["assessment"])
 
@@ -76,3 +77,18 @@ async def assessment_history(
 ):
     """Return prior assessments (newest first) for progress tracking."""
     return {"debate_id": debate_id, "assessments": get_assessment_history(debate_id)}
+
+
+@router.get("/debates/{debate_id}/certificate")
+async def readiness_certificate(
+    debate_id: str,
+    _workspace_id: str = Depends(require_auth),
+):
+    """Assemble the tamper-evident Review-Readiness Certificate: per-dimension
+    trajectory, the evidence ledger it rests on, and a sha256 ledger anchor."""
+    try:
+        return build_certificate(debate_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))

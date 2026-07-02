@@ -103,12 +103,13 @@ export function useDebateSetupActions(
       setCreatedDebateId(debate_id);
       setCreatedParticipantIds(participant_ids);
 
-      // 2. Import memory if selected
+      // 2. Import memory if selected — grant to ALL agents (scope defaults to
+      // 'all_agents', which requires participant_ids to be null/omitted).
       if (selectedMemorySources && selectedMemorySources.length > 0) {
         try {
           await api.importMemory(debate_id, {
             source_debate_ids: selectedMemorySources,
-            participant_ids: participant_ids,
+            scope: 'all_agents',
           });
           console.log('Memory imported successfully');
         } catch (memErr: any) {

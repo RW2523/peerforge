@@ -13,8 +13,9 @@ reviewer persona, and includes:
 from __future__ import annotations
 
 import json
+import re
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..database import get_db_connection, get_cursor
 from ..openrouter_client import OpenRouterClient
@@ -50,8 +51,12 @@ You generate rigorous, academically grounded questions.
 Rules:
 - Every question MUST reference specific content from the provided research profile
   or document excerpts.
-- Write "source_excerpt" as a SHORT direct quote (≤40 words) from the excerpts.
-  If no direct quote fits, write: "Based on stated methodology in uploaded materials."
+- Write "source_excerpt" as a SHORT, VERBATIM direct quote (≤40 words) copied
+  word-for-word from ONE of the labelled excerpts. Do not paraphrase the quote.
+- Set "source_ref" to the label (e.g. "S3") of the excerpt you quoted from.
+  If the question is grounded only in the research profile and NOT in any excerpt,
+  set "source_excerpt" to "Based on stated methodology in uploaded materials."
+  and "source_ref" to "".
 - Do NOT invent authors, papers, or results.
 - Distribute questions across all 10 categories.
 - Each persona must ask only questions aligned with their role.
@@ -77,7 +82,8 @@ Each element must have EXACTLY these keys:
   "expected_answer": "<what a strong answer would cover>",
   "follow_up_rule":  "<condition that triggers a follow-up>",
   "follow_up_q":     "<the follow-up question>",
-  "source_excerpt":  "<short quote or 'Based on stated methodology in uploaded materials.'>"
+  "source_excerpt":  "<verbatim quote or 'Based on stated methodology in uploaded materials.'>",
+  "source_ref":      "<label of the quoted excerpt, e.g. 'S3', or '' if none>"
 }}
 """
 
@@ -111,7 +117,8 @@ def generate_questions(
     profile_id = profile["profile_id"]
 
     # ── Fetch chunks for source grounding ─────────────────────────────────
-    excerpts = _fetch_excerpts(debate_id, limit=12)
+    chunks = _fetch_chunks(debate_id, limit=12)
+    excerpts = _format_excerpts(chunks)
 
     if not model_id:
         model_id = get_model("question_generation", mode)
@@ -159,13 +166,22 @@ def generate_questions(
 
         for i, q in enumerate(questions):
             question_id = str(uuid.uuid4())
+            # Resolve a hard provenance link: which ingested chunk does this
+            # question's quote actually come from? source_chunk_id stays NULL
+            # (an "evidence gap") when the quote can't be matched to a chunk.
+            grounding = _resolve_grounding(
+                q.get("source_excerpt", ""), q.get("source_ref", ""), chunks
+            )
+            source_chunk_id = grounding["chunk_id"]
+            source_document_id = grounding["material_id"]
             cur.execute("""
                 INSERT INTO defense_questions (
                     question_id, debate_id, profile_id,
                     question_text, category, difficulty, persona,
                     expected_answer, follow_up_rule, follow_up_q,
-                    source_excerpt, seq_order, created_at
-                ) VALUES (%s,%s,%s, %s,%s,%s,%s, %s,%s,%s, %s,%s,NOW())
+                    source_excerpt, source_chunk_id, source_document_id,
+                    seq_order, created_at
+                ) VALUES (%s,%s,%s, %s,%s,%s,%s, %s,%s,%s, %s,%s,%s, %s,NOW())
             """, (
                 question_id, debate_id, str(profile_id),
                 q.get("question_text", ""),
@@ -176,9 +192,19 @@ def generate_questions(
                 q.get("follow_up_rule", ""),
                 q.get("follow_up_q", ""),
                 q.get("source_excerpt", ""),
+                source_chunk_id,
+                source_document_id,
                 i,
             ))
-            saved.append({**q, "question_id": question_id, "seq_order": i})
+            saved.append({
+                **q,
+                "question_id": question_id,
+                "seq_order": i,
+                "source_chunk_id": source_chunk_id,
+                "source_document_id": source_document_id,
+                "grounded": grounding["grounded"],
+                "match_method": grounding["method"],
+            })
         conn.commit()
 
     return saved
@@ -208,12 +234,17 @@ def get_questions(
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
-def _fetch_excerpts(debate_id: str, limit: int = 12) -> str:
+def _fetch_chunks(debate_id: str, limit: int = 12) -> List[Dict[str, Any]]:
+    """Return the document chunks that ground question generation, each carrying
+    its full provenance metadata (chunk_id, material, page, offsets, sha256)."""
     with get_db_connection() as conn:
         cur = get_cursor(conn)
         cur.execute("""
-            SELECT mc.chunk_text,
-                   COALESCE(mm.title, 'uploaded document') AS doc_title
+            SELECT mc.chunk_id,
+                   mc.chunk_text,
+                   mc.chunk_metadata,
+                   COALESCE(mm.title, 'uploaded document') AS doc_title,
+                   (mc.chunk_metadata->>'material_id')      AS material_id
             FROM   memory_chunks mc
             LEFT JOIN meeting_materials mm
                    ON (mc.chunk_metadata->>'material_id')::uuid = mm.material_id
@@ -230,10 +261,100 @@ def _fetch_excerpts(debate_id: str, limit: int = 12) -> str:
         """, (debate_id, limit))
         rows = cur.fetchall()
 
-    if not rows:
-        return "No document excerpts available."
+    chunks: List[Dict[str, Any]] = []
+    for idx, r in enumerate(rows):
+        meta = r["chunk_metadata"] or {}
+        chunks.append({
+            "label":       f"S{idx + 1}",
+            "chunk_id":    str(r["chunk_id"]),
+            "chunk_text":  r["chunk_text"] or "",
+            "doc_title":   r["doc_title"],
+            "material_id": r["material_id"] or meta.get("material_id"),
+            "page_num":    meta.get("page_num"),
+            "sha256":      meta.get("sha256"),
+        })
+    return chunks
 
-    return "\n\n---\n\n".join(
-        f"[{r['doc_title']}]\n{(r['chunk_text'] or '')[:600]}"
-        for r in rows
-    )
+
+def _format_excerpts(chunks: List[Dict[str, Any]]) -> str:
+    """Render fetched chunks into a labelled block the LLM can cite by label."""
+    if not chunks:
+        return "No document excerpts available."
+    parts = []
+    for c in chunks:
+        page = f" p.{c['page_num']}" if c.get("page_num") else ""
+        parts.append(f"[{c['label']} — {c['doc_title']}{page}]\n{c['chunk_text'][:600]}")
+    return "\n\n---\n\n".join(parts)
+
+
+# Generic fallbacks the model emits when nothing in the corpus fits — these are
+# NOT quotes and must never be treated as grounded provenance.
+_GENERIC_EXCERPTS = {
+    "based on stated methodology in uploaded materials.",
+    "based on stated methodology in uploaded materials",
+    "insufficient evidence in uploaded materials.",
+    "insufficient evidence in uploaded materials",
+    "no document excerpts available.",
+    "",
+}
+
+_WORD_RE = re.compile(r"[a-z0-9]+")
+
+
+def _normalize(text: str) -> str:
+    return " ".join(_WORD_RE.findall((text or "").lower()))
+
+
+def _tokens(text: str) -> List[str]:
+    return _WORD_RE.findall((text or "").lower())
+
+
+def _containment(excerpt: str, chunk_text: str) -> float:
+    """Fraction of the (short) excerpt's tokens that appear in the chunk."""
+    ex = _tokens(excerpt)
+    if not ex:
+        return 0.0
+    chunk_set = set(_tokens(chunk_text))
+    hit = sum(1 for t in ex if t in chunk_set)
+    return hit / len(ex)
+
+
+def _resolve_grounding(
+    excerpt: str, source_ref: str, chunks: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """Deterministically link a question's quote to the chunk it came from.
+
+    Returns {chunk_id, material_id, grounded, method, score}. When the quote is a
+    generic fallback or matches no chunk, chunk_id is None (an *evidence gap*).
+    """
+    empty = {"chunk_id": None, "material_id": None, "grounded": False,
+             "method": "none", "score": 0.0}
+    if not chunks:
+        return empty
+    if _normalize(excerpt) in {_normalize(g) for g in _GENERIC_EXCERPTS}:
+        return empty
+
+    norm_excerpt = _normalize(excerpt)
+    by_label = {c["label"].lower(): c for c in chunks}
+
+    # 1) Exact verbatim substring — the strongest, sha256-verifiable link.
+    for c in chunks:
+        if norm_excerpt and norm_excerpt in _normalize(c["chunk_text"]):
+            return {"chunk_id": c["chunk_id"], "material_id": c["material_id"],
+                    "grounded": True, "method": "exact_substring", "score": 1.0}
+
+    # 2) Token containment — best-matching chunk, biased toward the model's hint.
+    hint = by_label.get((source_ref or "").strip().lower())
+    best, best_score = None, 0.0
+    for c in chunks:
+        score = _containment(excerpt, c["chunk_text"])
+        if c is hint:
+            score += 0.05  # tie-break toward the model's declared source
+        if score > best_score:
+            best, best_score = c, score
+
+    if best and best_score >= 0.6:
+        return {"chunk_id": best["chunk_id"], "material_id": best["material_id"],
+                "grounded": True, "method": "token_overlap", "score": round(best_score, 3)}
+
+    return empty

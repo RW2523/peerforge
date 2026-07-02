@@ -130,7 +130,24 @@ async def conclude_debate_with_host(
     try:
         orchestrator = HostOrchestrator(x_openrouter_key)
         result = orchestrator.trigger_conclusion(debate_id)
-        
+
+        # Populate HOST-assigned document sections (e.g. Executive Summary,
+        # Conclusion) with the chair's conclusion. Best-effort — never fails
+        # the conclusion if the collaborative document isn't set up.
+        try:
+            from src.turn_orchestrator import TurnOrchestrator
+            doc_writer = TurnOrchestrator(x_openrouter_key)
+            doc_writer._write_to_document_sections(
+                debate_id=debate_id,
+                agent_id='host',
+                agent_name='Review Chair',
+                agent_message=result['message'],
+                model_id='openai/gpt-4o-mini',
+                system_prompt='',
+            )
+        except Exception as _doc_exc:
+            print(f"⚠️ Host document section write failed (non-fatal): {_doc_exc}")
+
         # Broadcast host conclusion via WebSocket to all clients in the room
         from src.websocket_service import ws_service
         

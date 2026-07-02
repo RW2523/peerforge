@@ -1,0 +1,393 @@
+/* ReadinessCertificate — Pillar 3 */
+
+.wrap {
+  height: 100%;
+  overflow-y: auto;
+  padding: 4px;
+}
+.state {
+  padding: 32px;
+  color: var(--text-2);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+.printBtn {
+  background: var(--accent);
+  color: var(--bg-0);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 9px 16px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.printBtn:hover {
+  background: var(--accent-hover);
+}
+
+/* ── Certificate body ───────────────────────────────────────────────────── */
+.cert {
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+}
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border-soft);
+  padding-bottom: 18px;
+  margin-bottom: 18px;
+}
+.kicker {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.title {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--text-0);
+  max-width: 560px;
+}
+.overallBadge {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid;
+}
+.overallScore {
+  font-size: 1.9rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.overallOf {
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+.overallBand {
+  margin-left: 8px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  align-self: center;
+}
+.bandStrong {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 40%, transparent);
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+}
+.bandCompetent {
+  color: var(--cyan);
+  border-color: color-mix(in srgb, var(--cyan) 40%, transparent);
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
+}
+.bandDeveloping {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 40%, transparent);
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+}
+.bandUnder {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.summaryRow {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+.summaryStat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.sLbl {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+}
+.sVal {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-0);
+}
+.sValMono {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-0);
+  font-family: var(--font-mono, monospace);
+}
+
+.deltaUp {
+  color: var(--success);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.deltaDown {
+  color: var(--danger);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.deltaFlat {
+  color: var(--text-3);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.sectionTitle {
+  margin: 22px 0 12px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-0);
+}
+
+/* ── Dimensions ─────────────────────────────────────────────────────────── */
+.dims {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dimRow {
+  border-bottom: 1px solid var(--border-soft);
+}
+.dimHead {
+  display: grid;
+  grid-template-columns: 220px 1fr 160px;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 10px 4px;
+  cursor: pointer;
+}
+.dimHead:hover {
+  background: var(--surface-2);
+}
+.dimLabel {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.dimTrack {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bg-1);
+  overflow: hidden;
+}
+.dimFillFirst {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: var(--border-medium);
+  border-radius: 999px;
+}
+.dimFill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  opacity: 0.85;
+}
+.dimScores {
+  font-size: 0.8rem;
+  color: var(--text-2);
+  text-align: right;
+  white-space: nowrap;
+}
+.drill {
+  padding: 4px 8px 16px;
+}
+.dimWhat {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  color: var(--text-3);
+}
+.dimComment {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--text-1);
+}
+.points {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.point {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-1);
+  padding: 6px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg-1);
+}
+.point em {
+  font-size: 0.62rem;
+  font-weight: 500;
+  font-style: normal;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+.evidenceLink {
+  border-left: 3px solid var(--accent);
+  padding: 8px 12px;
+  background: var(--bg-1);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.evQ {
+  font-size: 0.82rem;
+  color: var(--text-1);
+  margin-bottom: 6px;
+}
+.evSrc {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.evSrcQuote {
+  font-size: 0.78rem;
+  color: var(--text-2);
+  font-style: italic;
+}
+.verified {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--success);
+  white-space: nowrap;
+}
+
+/* ── Ledger ─────────────────────────────────────────────────────────────── */
+.ledgerNote {
+  margin: 0 0 12px;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+.ledger {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ledgerRow {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  background: var(--bg-1);
+}
+.ledgerTop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+.ledgerCat {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  font-weight: 700;
+}
+.ledgerScore {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-1);
+}
+.ledgerQ {
+  font-size: 0.82rem;
+  color: var(--text-1);
+  margin-bottom: 4px;
+}
+.ledgerSrc {
+  font-size: 0.75rem;
+  color: var(--text-3);
+  font-style: italic;
+}
+
+/* ── Anchor ─────────────────────────────────────────────────────────────── */
+.anchor {
+  margin-top: 24px;
+  border-top: 1px solid var(--border-soft);
+  padding-top: 16px;
+}
+.anchorTitle {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--success);
+  margin-bottom: 8px;
+}
+.anchorHash {
+  display: block;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  color: var(--text-1);
+  word-break: break-all;
+  background: var(--bg-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+.anchorNote {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: var(--text-3);
+}
+
+/* ── Print ──────────────────────────────────────────────────────────────── */
+@media print {
+  .actions {
+    display: none;
+  }
+  .wrap {
+    overflow: visible;
+  }
+  .cert {
+    border: none;
+    padding: 0;
+    background: #fff;
+    color: #000;
+  }
+  .drill {
+    display: block !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .dimHead {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .dimScores {
+    text-align: left;
+  }
+}
