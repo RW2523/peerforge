@@ -1133,56 +1133,6 @@ export async function updateWorkspaceModels(
   return response.json();
 }
 
-// ============================================================================
-// Presence & Typing (TICKET-14)
-// ============================================================================
-
-// ============================================================================
-// PRESENCE DOMAIN (lines 839-878)
-// TODO: Extract to api/presence.ts
-// ============================================================================
-
-export interface PresenceResponse {
-  event_id: string;
-  debate_id: string;
-  event_type: string;
-  sequence_number: number;
-  created_at: string;
-}
-
-export async function joinPresence(debateId: string, participantId?: string, metadata: any = {}): Promise<PresenceResponse> {
-  const headers = await getAuthHeaders();
-  const response = await fetch(`${API_URL}/debates/${debateId}/presence/join`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ participant_id: participantId, metadata })
-  });
-  if (!response.ok) throw new Error(`Failed to join presence: ${response.statusText}`);
-  return response.json();
-}
-
-export async function leavePresence(debateId: string, participantId?: string): Promise<PresenceResponse> {
-  const headers = await getAuthHeaders();
-  const response = await fetch(`${API_URL}/debates/${debateId}/presence/leave`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ participant_id: participantId })
-  });
-  if (!response.ok) throw new Error(`Failed to leave presence: ${response.statusText}`);
-  return response.json();
-}
-
-export async function signalTyping(debateId: string, participantId?: string, targetParticipantId?: string): Promise<PresenceResponse> {
-  const headers = await getAuthHeaders();
-  const response = await fetch(`${API_URL}/debates/${debateId}/typing`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ participant_id: participantId, target_participant_id: targetParticipantId })
-  });
-  if (!response.ok) throw new Error(`Failed to signal typing: ${response.statusText}`);
-  return response.json();
-}
-
 /**
  * Fetch agent knowledge unit (prep pack) with full content and metadata
  */
@@ -1958,10 +1908,89 @@ export interface ReadinessCertificate {
   anchor: { algorithm: string; hash: string; certificate_id: string };
 }
 
-export async function getCertificate(debateId: string): Promise<ReadinessCertificate> {
+export async function getCertificate(debateId: string): Promise<ReadinessCertificate & { issued?: boolean }> {
   const response = await fetch(`${API_URL}/debates/${debateId}/certificate`, {
     headers: await getAuthHeaders(),
   });
+  if (!response.ok) {
+    const b = await response.json().catch(() => null);
+    throw new Error(b?.detail ?? response.statusText);
+  }
+  return response.json();
+}
+
+export interface IssuedCertificate {
+  certificate_id: string;
+  issued_at: string | null;
+  anchor_hash: string;
+  algorithm: string;
+  key_id: string;
+  verify_path: string;
+}
+
+export async function issueCertificate(debateId: string): Promise<IssuedCertificate> {
+  const response = await fetch(`${API_URL}/debates/${debateId}/certificate/issue`, {
+    method: 'POST',
+    headers: await getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const b = await response.json().catch(() => null);
+    throw new Error(b?.detail ?? response.statusText);
+  }
+  return response.json();
+}
+
+export interface CertificateVerification {
+  certificate_id: string;
+  issued_at: string;
+  algorithm: string;
+  anchor_hash: string;
+  key_id: string;
+  public_key: string;
+  summary: {
+    title: string;
+    overall: { first_score: number | null; latest_score: number | null; delta: number; band: string; assessment_count: number };
+    dimensions: { key: string; label: string; first_score: number; latest_score: number; delta: number; band: string }[];
+    evidence_counts: { answers: number; panel_events: number };
+  };
+  checks: {
+    signature_valid: boolean;
+    hash_matches_payload: boolean;
+    live_check_available: boolean;
+    evidence_unchanged_since_issue: boolean | null;
+  };
+  verdict: 'VALID' | 'INVALID';
+}
+
+export interface ReadinessOverviewSession {
+  debate_id: string;
+  title: string;
+  state: string;
+  created_at: string | null;
+  first_score: number | null;
+  latest_score: number | null;
+  delta: number | null;
+  band: string | null;
+  assessment_count: number;
+  answer_count: number;
+  last_assessed_at: string | null;
+  certificate_id: string | null;
+  certificate_issued_at: string | null;
+}
+
+export async function getReadinessOverview(
+  workspaceId: string,
+): Promise<{ workspace_id: string; sessions: ReadinessOverviewSession[]; total: number }> {
+  const response = await fetch(`${API_URL}/workspaces/${workspaceId}/readiness-overview`, {
+    headers: await getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error(response.statusText);
+  return response.json();
+}
+
+/** PUBLIC — no auth header on purpose; anyone with the link can verify. */
+export async function getCertificateVerification(certificateId: string): Promise<CertificateVerification> {
+  const response = await fetch(`${API_URL}/verify/${encodeURIComponent(certificateId)}`);
   if (!response.ok) {
     const b = await response.json().catch(() => null);
     throw new Error(b?.detail ?? response.statusText);
@@ -2017,6 +2046,34 @@ export async function getProvenance(debateId: string): Promise<ProvenanceRespons
     headers: await getAuthHeaders(),
   });
   if (!response.ok) throw new Error(response.statusText);
+  return response.json();
+}
+
+export interface UngroundedCitationDemo {
+  claim: string;
+  model: string;
+  answer: string;
+  had_document_access: boolean;
+}
+
+/** Trust-comparison demo: what a model says when asked for the manuscript
+ *  source of a critique WITHOUT being given the manuscript. */
+export async function demoUngroundedCitation(
+  debateId: string,
+  claim: string,
+  openrouterKey: string,
+): Promise<UngroundedCitationDemo> {
+  const headers = await getAuthHeaders() as Record<string, string>;
+  headers['X-OpenRouter-Key'] = openrouterKey;
+  const response = await fetch(`${API_URL}/debates/${debateId}/demo/ungrounded-citation`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ claim }),
+  });
+  if (!response.ok) {
+    const b = await response.json().catch(() => null);
+    throw new Error(b?.detail ?? response.statusText);
+  }
   return response.json();
 }
 

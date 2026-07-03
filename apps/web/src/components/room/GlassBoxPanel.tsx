@@ -10,11 +10,73 @@
  * probing something the materials don't actually support.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { getProvenance, ProvenanceResponse, ProvenanceClaim } from '@/lib/api';
+import dynamic from 'next/dynamic';
+import { getProvenance, demoUngroundedCitation, ProvenanceResponse, ProvenanceClaim, UngroundedCitationDemo } from '@/lib/api';
+import { keyStore } from '@/lib/openrouterKeyStore';
 import styles from './GlassBoxPanel.module.css';
+
+// pdfjs touches browser globals at import time — must never run during SSR.
+const PdfSourceViewer = dynamic(() => import('./PdfSourceViewer'), { ssr: false });
 
 interface Props {
   debateId: string;
+}
+
+/** Side-by-side: what a model claims as the source WITHOUT the manuscript vs
+ *  PeerForge's verified line. The left answer is generated live — no staging. */
+function TrustComparison({ debateId, claim }: { debateId: string; claim: ProvenanceClaim }) {
+  const [demo, setDemo] = useState<UngroundedCitationDemo | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Reset when the selected claim changes.
+  useEffect(() => { setDemo(null); setError(null); }, [claim.claim_id]);
+
+  const run = async () => {
+    const key = keyStore.getKey();
+    if (!key) { setError('Add your OpenRouter key in Settings to run the comparison.'); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      setDemo(await demoUngroundedCitation(debateId, claim.text, key));
+    } catch (e: any) {
+      setError(String(e?.message || e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className={styles.compareCard}>
+      {!demo ? (
+        <div className={styles.compareIntro}>
+          <button className={styles.compareBtn} onClick={run} disabled={loading}>
+            {loading ? 'Asking the trust-me AI…' : '⚖️ Compare: ask an AI with NO document for this source'}
+          </button>
+          {error && <span className={styles.compareError}>{error}</span>}
+        </div>
+      ) : (
+        <div className={styles.compareGrid}>
+          <div className={styles.compareSide}>
+            <div className={styles.compareLabelBad}>Trust-me AI — given no manuscript</div>
+            <p className={styles.compareAnswer}>“{demo.answer}”</p>
+            <div className={styles.compareFoot}>
+              {demo.model} · unverifiable — the model never saw your document
+            </div>
+          </div>
+          <div className={styles.compareSide}>
+            <div className={styles.compareLabelGood}>PeerForge — verified against your manuscript</div>
+            <p className={styles.compareAnswer}>“{claim.excerpt}”</p>
+            <div className={styles.compareFoot}>
+              {claim.source?.doc_title}
+              {claim.source?.page_num != null && ` · p.${claim.source.page_num}`}
+              {claim.source?.sha256_verified && ' · 🔒 sha256 verified'}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function HighlightedChunk({ claim }: { claim: ProvenanceClaim }) {
@@ -39,6 +101,7 @@ export default function GlassBoxPanel({ debateId }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pdfOpen, setPdfOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -62,6 +125,10 @@ export default function GlassBoxPanel({ debateId }: Props) {
     () => data?.claims.find((c) => c.claim_id === selectedId) ?? null,
     [data, selectedId]
   );
+
+  // Close the PDF modal when the user switches claims — otherwise it silently
+  // swaps to the new claim's material while open.
+  useEffect(() => { setPdfOpen(false); }, [selectedId]);
 
   if (loading) return <div className={styles.state}>Loading evidence map…</div>;
   if (error) return <div className={styles.state}>Could not load provenance: {error}</div>;
@@ -141,9 +208,17 @@ export default function GlassBoxPanel({ debateId }: Props) {
             <div className={styles.sourceCard}>
               <div className={styles.sourceHead}>
                 <span className={styles.docTitle}>📄 {selected.source.doc_title}</span>
-                {selected.source.page_num != null && (
-                  <span className={styles.pageBadge}>page {selected.source.page_num}</span>
-                )}
+                <span className={styles.sourceHeadActions}>
+                  {selected.source.page_num != null && (
+                    <span className={styles.pageBadge}>page {selected.source.page_num}</span>
+                  )}
+                  {selected.source.material_id &&
+                    data.materials.find(m => m.material_id === selected.source!.material_id)?.kind === 'file' && (
+                    <button className={styles.pdfBtn} onClick={() => setPdfOpen(true)}>
+                      📖 View in PDF
+                    </button>
+                  )}
+                </span>
               </div>
 
               <div
@@ -191,12 +266,27 @@ export default function GlassBoxPanel({ debateId }: Props) {
             </div>
           )}
 
+          {selected?.grounded && selected.source && (
+            <TrustComparison debateId={debateId} claim={selected} />
+          )}
+
           <p className={styles.contrast}>
             Paste this same critique into a raw chatbot and ask “where&apos;s your source?” — it
             invents a page number. PeerForge shows the verified line, or admits the gap.
           </p>
         </section>
       </div>
+
+      {pdfOpen && selected?.source?.material_id && (
+        <PdfSourceViewer
+          debateId={debateId}
+          materialId={selected.source.material_id}
+          docTitle={selected.source.doc_title}
+          page={selected.source.page_num}
+          highlightText={selected.excerpt || selected.source.chunk_text.slice(0, 300)}
+          onClose={() => setPdfOpen(false)}
+        />
+      )}
     </div>
   );
 }

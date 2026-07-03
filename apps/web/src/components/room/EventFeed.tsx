@@ -262,6 +262,75 @@ export default function EventFeed({ events: wsEvents, connectionStatus, onPresen
   );
 }
 
+interface TurnCitation {
+  chunk_id: string;
+  doc_title: string;
+  material_id?: string | null;
+  page_num?: number | null;
+  sha256?: string | null;
+  sha256_verified: boolean;
+  method: string;
+  score: number;
+  claim: string;
+  chunk_excerpt: string;
+  highlight?: { start: number; end: number } | null;
+}
+
+/** Glass-Box chips under a live panel message: each verified claim links to its
+ *  source line; a message with zero grounded claims is flagged honestly. */
+function CitationChips({ citations }: { citations: TurnCitation[] }) {
+  const [openIdx, setOpenIdx] = useState<number | null>(null);
+
+  if (citations.length === 0) {
+    return (
+      <div className={styles.citationRow}>
+        <span className={styles.citationChipGap} title="No claim in this message could be matched to your uploaded materials">
+          ⚠ no verified source
+        </span>
+      </div>
+    );
+  }
+
+  const open = openIdx !== null ? citations[openIdx] : null;
+  return (
+    <div className={styles.citationBlock}>
+      <div className={styles.citationRow}>
+        {citations.map((c, i) => (
+          <button
+            key={c.chunk_id + i}
+            className={`${styles.citationChip} ${openIdx === i ? styles.citationChipActive : ''}`}
+            onClick={() => setOpenIdx(openIdx === i ? null : i)}
+            title={c.sha256_verified ? 'Source verified — click to see the exact line' : 'Source linked — click to view'}
+          >
+            {c.sha256_verified ? '🔒' : '📄'} {c.doc_title}
+            {c.page_num != null && ` · p.${c.page_num}`}
+          </button>
+        ))}
+      </div>
+      {open && (
+        <div className={styles.citationSource}>
+          <div className={styles.citationVerify}>
+            {open.sha256_verified ? '🔒 GROUNDED — sha256 verified' : '📄 Source linked'}
+            {open.sha256 && <code className={styles.citationHash}>{open.sha256.slice(0, 16)}…</code>}
+          </div>
+          <p className={styles.citationExcerpt}>
+            {open.highlight && open.highlight.start < open.highlight.end ? (
+              <>
+                {open.chunk_excerpt.slice(0, open.highlight.start)}
+                <mark>{open.chunk_excerpt.slice(open.highlight.start, open.highlight.end)}</mark>
+                {open.chunk_excerpt.slice(open.highlight.end)}
+              </>
+            ) : (
+              open.chunk_excerpt
+            )}
+          </p>
+          <div className={styles.citationClaim}>Claim: “{open.claim}”</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EventCard({ event, showTurnSeparator, turnNumber }: { event: WSEventEnvelope; showTurnSeparator?: boolean; turnNumber?: number }) {
   // Thinking collapsed by default to avoid spam
   const hasThinking = (event as any).thinkingEvents?.length > 0;
@@ -416,7 +485,12 @@ function EventCard({ event, showTurnSeparator, turnNumber }: { event: WSEventEnv
             <div className={styles.message}>
               {parseMarkdown(getMessage()!)}
             </div>
-            
+
+            {/* Glass-Box: verified source chips for this turn */}
+            {event.type === 'agent_message' && Array.isArray(event.payload?.citations) && (
+              <CitationChips citations={event.payload.citations} />
+            )}
+
             {/* Show thinking process if available */}
             {(event as any).thinkingEvents && (event as any).thinkingEvents.length > 0 && (
               <div className={styles.thinkingSection}>

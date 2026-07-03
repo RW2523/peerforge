@@ -9,20 +9,40 @@
  * at you. You rehearse the specific review, not a generic one.
  */
 import { useState } from 'react';
-import { buildCommitteeTwins, CommitteeTwin, CommitteeTwinResponse } from '@/lib/api';
+import { addParticipantsToDebate, buildCommitteeTwins, CommitteeTwin, CommitteeTwinResponse } from '@/lib/api';
 import styles from './CommitteeTwinBuilder.module.css';
 
 interface Props {
   debateId: string;
 }
 
+type PanelState = 'idle' | 'adding' | 'added' | 'failed';
+
 interface Row {
   name: string;
   affiliation: string;
 }
 
-function TwinCard({ twin }: { twin: CommitteeTwin }) {
+function TwinCard({ twin, debateId }: { twin: CommitteeTwin; debateId: string }) {
   const [showPrompt, setShowPrompt] = useState(false);
+  const [panelState, setPanelState] = useState<PanelState>('idle');
+
+  const addToPanel = async () => {
+    setPanelState('adding');
+    try {
+      await addParticipantsToDebate(debateId, [{
+        name: twin.name,
+        role_description: `${twin.role} — committee twin grounded in ${twin.name}'s own publications`,
+        system_prompt: twin.system_prompt,
+        model_id: twin.model_id,
+        model_config: { temperature: 0.5, max_tokens: 500 },
+      }]);
+      setPanelState('added');
+    } catch {
+      setPanelState('failed');
+    }
+  };
+
   return (
     <div className={styles.twin}>
       <div className={styles.twinHead}>
@@ -31,13 +51,25 @@ function TwinCard({ twin }: { twin: CommitteeTwin }) {
           {twin.affiliation && <span className={styles.twinAff}> · {twin.affiliation}</span>}
           <div className={styles.twinRole}>{twin.role}</div>
         </div>
-        {twin.corpus_found ? (
-          <span className={styles.corpusOk}>
-            ✓ {twin.paper_count} paper(s) · {twin.chunks_ingested} chunks
-          </span>
-        ) : (
-          <span className={styles.corpusNone}>no indexed corpus</span>
-        )}
+        <div className={styles.twinHeadRight}>
+          {twin.corpus_found ? (
+            <span className={styles.corpusOk}>
+              ✓ {twin.paper_count} paper(s) · {twin.chunks_ingested} chunks
+            </span>
+          ) : (
+            <span className={styles.corpusNone}>no indexed corpus</span>
+          )}
+          <button
+            className={styles.addPanelBtn}
+            onClick={addToPanel}
+            disabled={panelState === 'adding' || panelState === 'added'}
+            title="Add this twin as a live review-panel member — it will question you in the room, citing its own papers"
+          >
+            {panelState === 'added' ? '✓ On the panel' :
+             panelState === 'adding' ? 'Adding…' :
+             panelState === 'failed' ? 'Retry add' : '➕ Add to panel'}
+          </button>
+        </div>
       </div>
 
       {twin.corpus_found ? (
@@ -163,7 +195,7 @@ export default function CommitteeTwinBuilder({ debateId }: Props) {
             {result.summary.papers_ingested} papers ingested.
           </div>
           {result.twins.map((t) => (
-            <TwinCard key={t.twin_id} twin={t} />
+            <TwinCard key={t.twin_id} twin={t} debateId={debateId} />
           ))}
         </div>
       )}

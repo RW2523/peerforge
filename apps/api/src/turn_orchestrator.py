@@ -975,13 +975,24 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
             # Calculate round number (complete rounds where ALL participants have spoken)
             round_number = (current_turn_index // len(participants)) + 1
             
+            # Glass-Box: ground this turn's claims against the session materials
+            # (pure string matching — no LLM call). Citations ride in the event
+            # content (→ live payload + history) and in citation_refs (audit).
+            turn_citations = []
+            try:
+                from .services.provenance import ground_message
+                grounding = ground_message(debate_id, agent_message)
+                turn_citations = grounding.get('citations', [])
+            except Exception as _ground_exc:
+                print(f"⚠️ Turn grounding failed (non-fatal): {_ground_exc}")
+
             # Persist event
             event_id = str(uuid.uuid4())
             cursor.execute("""
                 INSERT INTO events (
                     event_id, debate_id, event_type, sender_type, sender_id,
-                    sequence_number, content, created_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    sequence_number, content, citation_refs, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 event_id,
                 debate_id,
@@ -994,8 +1005,10 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
                     'text': agent_message,
                     'model': response.get('model', model_id),
                     'turn': round_number,  # Complete round number (1, 2, 3...)
-                    'turn_index': current_turn_index  # Sequential turn index (0, 1, 2, 3...)
+                    'turn_index': current_turn_index,  # Sequential turn index (0, 1, 2, 3...)
+                    'citations': turn_citations
                 }),
+                psycopg2.extras.Json(turn_citations),
                 datetime.now(timezone.utc)
             ))
             
@@ -1048,7 +1061,8 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
                 'model': response.get('model', model_id),
                 'turn_number': total_turns + 1,    # sequential (1, 2, 3…)
                 'round_number': round_number,       # complete round (1, 2…) — matches DB 'turn' field
-                'sequence_number': next_seq
+                'sequence_number': next_seq,
+                'citations': turn_citations
             }
             
             # 📄 Document Integration: Write to assigned sections (async, non-blocking)

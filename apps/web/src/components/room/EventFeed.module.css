@@ -564,3 +564,82 @@
   border-color: #3a3a3a;
   color: var(--text-1);
 }
+
+/* ── Glass-Box citation chips ───────────────────────────────────────────── */
+
+.citationBlock {
+  margin-top: 8px;
+}
+.citationRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.citationChip,
+.citationChipGap {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  border: 1px solid;
+}
+.citationChip {
+  color: var(--success, #22c55e);
+  background: color-mix(in srgb, var(--success, #22c55e) 12%, transparent);
+  border-color: color-mix(in srgb, var(--success, #22c55e) 35%, transparent);
+}
+.citationChip:hover,
+.citationChipActive {
+  background: color-mix(in srgb, var(--success, #22c55e) 22%, transparent);
+}
+.citationChipGap {
+  color: var(--warning, #f59e0b);
+  background: color-mix(in srgb, var(--warning, #f59e0b) 12%, transparent);
+  border-color: color-mix(in srgb, var(--warning, #f59e0b) 35%, transparent);
+  cursor: default;
+}
+.citationSource {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft, #333);
+  border-radius: 8px;
+  background: var(--bg-1, rgba(0,0,0,0.15));
+}
+.citationVerify {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--success, #22c55e);
+  margin-bottom: 6px;
+}
+.citationHash {
+  font-family: monospace;
+  font-size: 0.66rem;
+  font-weight: 500;
+  opacity: 0.8;
+  color: var(--text-2, #999);
+}
+.citationExcerpt {
+  margin: 0 0 6px;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--text-1, #ddd);
+  white-space: pre-wrap;
+}
+.citationExcerpt mark {
+  background: color-mix(in srgb, var(--gold, #f5c518) 45%, transparent);
+  color: var(--text-0, #fff);
+  padding: 1px 2px;
+  border-radius: 3px;
+}
+.citationClaim {
+  font-size: 0.72rem;
+  font-style: italic;
+  color: var(--text-3, #888);
+}

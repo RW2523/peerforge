@@ -332,6 +332,50 @@ async def upload_materials(
         conn.close()
 
 
+@router.get("/debates/{debate_id}/materials/{material_id}/file")
+async def get_material_file(
+    debate_id: str,
+    material_id: str,
+    _workspace_id: str = Depends(require_auth)
+):
+    """Stream the original uploaded file (e.g. the PDF) for source viewing.
+
+    Powers the Glass-Box "view in PDF" experience: the browser renders the
+    actual manuscript and highlights the verified passage."""
+    conn = psycopg2.connect(settings.database_url)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT mm.file_key, mm.file_mime_type, mm.title, d.workspace_id
+            FROM meeting_materials mm
+            JOIN debates d ON d.debate_id = mm.debate_id
+            WHERE mm.material_id = %s AND mm.debate_id = %s
+        """, (material_id, debate_id))
+        row = cursor.fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Material not found")
+    file_key, mime_type, title, ws_id = row
+    if str(ws_id) != _workspace_id:
+        raise HTTPException(status_code=403, detail="Access denied to this debate")
+    if not file_key:
+        raise HTTPException(status_code=404, detail="This material has no stored file (inline text/link)")
+
+    try:
+        data = get_storage_client().download_file(file_key)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"File retrieval failed: {exc}")
+
+    from fastapi.responses import Response
+    return Response(
+        content=data,
+        media_type=mime_type or "application/octet-stream",
+        headers={"Content-Disposition": f'inline; filename="{(title or "document")[:80]}"'},
+    )
+
+
 @router.get("/debates/{debate_id}/materials/status", response_model=MaterialsStatusResponse)
 async def get_materials_status(
     debate_id: str,

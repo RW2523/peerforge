@@ -173,15 +173,52 @@ def _evidence_ledger(debate_id: str) -> Dict[str, Any]:
     }
 
 
+def canonicalize(payload: Dict[str, Any]) -> str:
+    """Deterministic serialization — the exact bytes that are hashed and signed."""
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+
+
 def _compute_anchor(payload: Dict[str, Any]) -> Dict[str, str]:
     """Deterministic sha256 over the canonical certificate payload."""
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
-    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(canonicalize(payload).encode("utf-8")).hexdigest()
     return {
         "algorithm": "sha256",
         "hash": digest,
         "certificate_id": f"PF-{digest[:12].upper()}",
     }
+
+
+def _anchor_payload(debate_id: str, trajectory: List[Dict[str, Any]],
+                    ledger: Dict[str, Any]) -> Dict[str, Any]:
+    """The evidence-binding payload: scores + ordered evidence + event span.
+    Shared by issuance and live re-verification so both hash identically."""
+    return {
+        "debate_id": debate_id,
+        "assessments": [
+            {"id": a["assessment_id"], "overall": a["overall_score"],
+             "dims": [(d.get("key"), d.get("score")) for d in a["dimensions"] if isinstance(d, dict)]}
+            for a in trajectory
+        ],
+        "evidence_answers": [
+            {"id": a["answer_id"], "q": a["question_id"], "score": a["answer_score"],
+             "src": (a["source"] or {}).get("sha256")}
+            for a in ledger["answers"]
+        ],
+        "panel_events": ledger["panel_events"],
+    }
+
+
+def compute_live_anchor(debate_id: str) -> Optional[Dict[str, Any]]:
+    """Recompute the anchor from the CURRENT database state — the public
+    verification page compares this against the anchor recorded at issuance.
+    Returns None when the session has no assessments (nothing to anchor)."""
+    trajectory = get_trajectory(debate_id)
+    if not trajectory:
+        return None
+    ledger = _evidence_ledger(debate_id)
+    payload = _anchor_payload(debate_id, trajectory, ledger)
+    return {"payload": payload, "canonical": canonicalize(payload),
+            "anchor": _compute_anchor(payload)}
 
 
 def build_certificate(debate_id: str) -> Dict[str, Any]:
@@ -210,20 +247,7 @@ def build_certificate(debate_id: str) -> Dict[str, Any]:
 
     # The anchor binds scores to the exact evidence + append-only event span, so
     # altering any of them invalidates the hash. Timestamp is stamped by caller.
-    anchor_payload = {
-        "debate_id": debate_id,
-        "assessments": [
-            {"id": a["assessment_id"], "overall": a["overall_score"],
-             "dims": [(d.get("key"), d.get("score")) for d in a["dimensions"] if isinstance(d, dict)]}
-            for a in trajectory
-        ],
-        "evidence_answers": [
-            {"id": a["answer_id"], "q": a["question_id"], "score": a["answer_score"],
-             "src": (a["source"] or {}).get("sha256")}
-            for a in ledger["answers"]
-        ],
-        "panel_events": ledger["panel_events"],
-    }
+    anchor_payload = _anchor_payload(debate_id, trajectory, ledger)
     anchor = _compute_anchor(anchor_payload)
 
     issued_at = datetime.now(timezone.utc).isoformat()
@@ -247,4 +271,7 @@ def build_certificate(debate_id: str) -> Dict[str, Any]:
         "dimensions": dim_traj,
         "evidence": ledger,
         "anchor": anchor,
+        # Internal: the exact payload the anchor hashes — used by the issue
+        # route to sign the same bytes. API routes pop this before responding.
+        "_anchor_payload": anchor_payload,
     }

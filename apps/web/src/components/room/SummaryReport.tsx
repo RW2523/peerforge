@@ -66,7 +66,7 @@ export default function SummaryReport({ debateId, agendaData, onStartPractice }:
     return (
       <div className={styles.generateWrap}>
         <PracticeJourneyCard debateId={debateId} onStartPractice={onStartPractice} />
-        <AcademicAssessmentCard debateId={debateId} triggerSource="panel_discussion" />
+        <AcademicAssessmentCard key={debateId} debateId={debateId} triggerSource="panel_discussion" autoGenerate />
         <div className={styles.generatePanel}>
         <div className={styles.icon} />
         <h3>Generate Feedback Report</h3>
@@ -124,7 +124,7 @@ export default function SummaryReport({ debateId, agendaData, onStartPractice }:
       <PracticeJourneyCard debateId={debateId} onStartPractice={onStartPractice} />
 
       {/* Ten-dimension academic assessment */}
-      <AcademicAssessmentCard debateId={debateId} triggerSource="panel_discussion" />
+      <AcademicAssessmentCard key={debateId} debateId={debateId} triggerSource="panel_discussion" autoGenerate />
 
       {/* Agenda & Outcome Review */}
       {(agendaData.items.length > 0 || agendaData.outcome.desired) && (

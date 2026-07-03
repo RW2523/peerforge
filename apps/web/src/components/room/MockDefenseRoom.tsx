@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import styles from './MockDefenseRoom.module.css';
 import { displayPersona } from '@/lib/persona';
 import AcademicAssessmentCard from './AcademicAssessmentCard';
+import { useSpeechSynthesis, roleToVoiceId } from '@/hooks/useSpeechSynthesis';
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import {
   analyzeResearch,
   generateDefenseQuestions,
@@ -66,12 +68,20 @@ const MODE_OPTIONS: ModeOption[] = [
 interface Props {
   debateId: string;
   openrouterKey: string;
+  /** Start with voice mode on (e.g. from the History "Voice" shortcut). */
+  initialVoice?: boolean;
 }
 
-export default function MockDefenseRoom({ debateId, openrouterKey }: Props) {
+export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice = false }: Props) {
   const [mode, setMode]       = useState<ReasoningMode>('medium');
   const [phase, setPhase]     = useState<Phase>('setup');
   const [error, setError]     = useState('');
+
+  // Voice mode — TTS reads questions/feedback, STT dictates into the answer box.
+  const tts = useSpeechSynthesis();
+  const stt = useSpeechRecognition();
+  const [voiceOn, setVoiceOn] = useState(initialVoice);
+  const capturingRef = useRef(false);
 
   const [profile, setProfile]         = useState<ResearchProfile | null>(null);
   const [personas, setPersonas]       = useState<SuggestedPersona[]>([]);
@@ -198,6 +208,69 @@ export default function MockDefenseRoom({ debateId, openrouterKey }: Props) {
   const currentQuestion = questions[qIndex] ?? null;
   const answeredCount   = answeredIds.size;
   const modeInfo        = MODE_OPTIONS.find(m => m.id === mode)!;
+
+  // ── Voice behaviours ───────────────────────────────────────────────────────
+
+  const speakCurrentQuestion = useCallback(() => {
+    if (!voiceOn || !tts.isSupported || !currentQuestion) return;
+    tts.speak(
+      `${displayPersona(currentQuestion.persona)} asks: ${currentQuestion.question_text}`,
+      roleToVoiceId(currentQuestion.persona),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceOn, currentQuestion, tts.isSupported]);
+
+  // Read the question aloud when it appears; read brief feedback after evaluation.
+  useEffect(() => {
+    if (phase === 'defense') speakCurrentQuestion();
+    else if (phase === 'evaluated' && voiceOn && tts.isSupported && evaluation?.strength) {
+      tts.speak(`Here is your feedback. ${evaluation.strength}`, 'advisor');
+    }
+    return () => { tts.cancel(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tts is a new object each render; the booleans/values it reads are listed
+  }, [phase, qIndex, voiceOn, evaluation, tts.isSupported, speakCurrentQuestion]);
+
+  const appendTranscript = useCallback(() => {
+    const text = `${stt.finalTranscript} ${stt.interimTranscript}`.trim();
+    if (text) setAnswerText(prev => (prev ? `${prev.trimEnd()} ` : '') + text);
+    stt.resetTranscript();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stt.finalTranscript, stt.interimTranscript]);
+
+  const handleMicClick = useCallback(() => {
+    if (stt.isListening) {
+      capturingRef.current = false;
+      stt.stopListening();
+      appendTranscript();
+    } else {
+      tts.cancel();
+      capturingRef.current = true;
+      stt.resetTranscript();
+      stt.startListening();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stt.isListening, appendTranscript]);
+
+  // Recognition can end on its own (silence) — capture whatever was said.
+  useEffect(() => {
+    if (capturingRef.current && !stt.isListening && stt.finalTranscript.trim()) {
+      capturingRef.current = false;
+      appendTranscript();
+    }
+  }, [stt.isListening, stt.finalTranscript, appendTranscript]);
+
+  const voiceToggle = (
+    <button
+      className={`${styles.toggleBtn} ${voiceOn ? styles.voiceOn : ''}`}
+      onClick={() => {
+        if (voiceOn) { tts.cancel(); if (stt.isListening) stt.stopListening(); }
+        setVoiceOn(v => !v);
+      }}
+      title="Voice mode — questions are read aloud and you can dictate answers"
+    >
+      {voiceOn ? '🎤 Voice on' : '🎤 Voice off'}
+    </button>
+  );
 
   // ── Setup ──────────────────────────────────────────────────────────────────
 
@@ -334,6 +407,7 @@ export default function MockDefenseRoom({ debateId, openrouterKey }: Props) {
       <div className={styles.container}>
         <div className={styles.modeBadgeRow}>
           <span className={styles.modeBadge}>{modeInfo.label}</span>
+          {voiceToggle}
           {answeredCount > 0 && (
             <span className={styles.progressBadge}>
               {answeredCount} / {questions.length} answered
@@ -445,6 +519,12 @@ export default function MockDefenseRoom({ debateId, openrouterKey }: Props) {
       <div className={styles.container}>
         <div className={styles.modeBadgeRow}>
           <span className={styles.modeBadge}>{modeInfo.label}</span>
+          {voiceToggle}
+          {voiceOn && tts.isSupported && (
+            <button className={styles.toggleBtn} onClick={speakCurrentQuestion} title="Read the question again">
+              🔊 Replay
+            </button>
+          )}
           <span className={styles.qCounter}>
             Question {qIndex + 1} of {questions.length}
           </span>
@@ -478,15 +558,38 @@ export default function MockDefenseRoom({ debateId, openrouterKey }: Props) {
         </div>
 
         <div className={styles.answerSection}>
-          <label className={styles.answerLabel}>Your Answer</label>
+          <div className={styles.answerLabelRow}>
+            <label className={styles.answerLabel}>Your Answer</label>
+            {voiceOn && (
+              stt.isSupported ? (
+                <button
+                  className={`${styles.micBtn} ${stt.isListening ? styles.micActive : ''}`}
+                  onClick={handleMicClick}
+                  disabled={submitting}
+                >
+                  {stt.isListening ? '⏹ Stop dictating' : '🎙 Dictate answer'}
+                </button>
+              ) : (
+                <span className={styles.voiceHint}>Speech input needs Chrome or Edge — type instead.</span>
+              )
+            )}
+          </div>
           <textarea
             className={styles.answerTextarea}
             value={answerText}
             onChange={e => setAnswerText(e.target.value)}
-            placeholder="Type your answer here. Reference your methodology, evidence, and document sources where applicable."
+            placeholder={voiceOn
+              ? 'Dictate with the microphone or type. You can edit the transcript before submitting.'
+              : 'Type your answer here. Reference your methodology, evidence, and document sources where applicable.'}
             rows={7}
             disabled={submitting}
           />
+          {voiceOn && stt.isListening && (
+            <div className={styles.liveTranscript}>
+              {`${stt.finalTranscript} ${stt.interimTranscript}`.trim() || 'Listening… speak your answer'}
+            </div>
+          )}
+          {voiceOn && stt.error && <div className={styles.inlineError}>{stt.error}</div>}
           <div className={styles.wordCount}>
             {answerText.trim().split(/\s+/).filter(Boolean).length} words
           </div>
@@ -679,7 +782,7 @@ export default function MockDefenseRoom({ debateId, openrouterKey }: Props) {
           </div>
         )}
 
-        <AcademicAssessmentCard debateId={debateId} triggerSource="practice_qa" />
+        <AcademicAssessmentCard key={debateId} debateId={debateId} triggerSource="practice_qa" autoGenerate />
 
         <div className={styles.actionRow}>
           <button className={styles.secondaryBtn} onClick={() => setPhase('questions')}>

@@ -1,0 +1,114 @@
+/* PdfSourceViewer — real-manuscript highlight modal */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+}
+
+.modal {
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg, 12px);
+  width: min(840px, 96vw);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-0);
+}
+.subtitle {
+  font-size: 0.76rem;
+  color: var(--text-2);
+  margin-top: 2px;
+}
+.closeBtn {
+  background: none;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  color: var(--text-2);
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.closeBtn:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+  background: var(--bg-1);
+}
+
+.loading,
+.error {
+  padding: 60px 20px;
+  color: var(--text-2);
+  font-size: 0.9rem;
+}
+.error {
+  color: var(--danger);
+}
+
+/* The pdf.js text layer ships with low opacity — lift it so highlight marks
+   paint at full strength over the canvas (span text stays transparent). */
+.body :global(.react-pdf__Page__textContent) {
+  opacity: 1 !important;
+}
+.pdfMark {
+  background: rgba(245, 197, 24, 0.5);
+  border-radius: 2px;
+  color: transparent; /* text layer is invisible; the mark paints over the canvas */
+  box-shadow: 0 0 0 2px rgba(245, 197, 24, 0.5);
+}
+
+.foot {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+.navBtn {
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  color: var(--text-1);
+  cursor: pointer;
+}
+.navBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.pageInfo {
+  font-size: 0.8rem;
+  color: var(--text-2);
+}

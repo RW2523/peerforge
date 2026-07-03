@@ -289,3 +289,96 @@
     grid-template-columns: 1fr;
   }
 }
+
+.sourceHeadActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pdfBtn {
+  background: var(--accent);
+  color: var(--bg-0);
+  border: none;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pdfBtn:hover {
+  background: var(--accent-hover);
+}
+
+/* ── Trust comparison ───────────────────────────────────────────────────── */
+.compareCard {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  background: var(--surface-1);
+}
+.compareIntro {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.compareBtn {
+  background: var(--surface-2);
+  border: 1px solid var(--border-medium);
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-1);
+  cursor: pointer;
+}
+.compareBtn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.compareError {
+  font-size: 0.75rem;
+  color: var(--danger);
+}
+.compareGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.compareSide {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  background: var(--bg-1);
+}
+.compareLabelBad {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--danger);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.compareLabelGood {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--success);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.compareAnswer {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--text-1);
+  font-style: italic;
+}
+.compareFoot {
+  font-size: 0.68rem;
+  color: var(--text-3);
+}
+@media (max-width: 720px) {
+  .compareGrid { grid-template-columns: 1fr; }
+}

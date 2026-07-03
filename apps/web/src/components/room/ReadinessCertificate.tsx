@@ -9,7 +9,8 @@
  * evident content-hash anchor. Exportable via the browser print dialog (→ PDF).
  */
 import { useEffect, useState } from 'react';
-import { getCertificate, ReadinessCertificate as Cert } from '@/lib/api';
+import { QRCodeSVG } from 'qrcode.react';
+import { getCertificate, issueCertificate, ReadinessCertificate as Cert } from '@/lib/api';
 import styles from './ReadinessCertificate.module.css';
 
 interface Props {
@@ -30,23 +31,50 @@ function DeltaTag({ delta }: { delta: number }) {
 }
 
 export default function ReadinessCertificate({ debateId }: Props) {
-  const [cert, setCert] = useState<Cert | null>(null);
+  const [cert, setCert] = useState<(Cert & { issued?: boolean }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openDim, setOpenDim] = useState<string | null>(null);
+  const [issued, setIssued] = useState(false);
+  const [issuing, setIssuing] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
     setError(null);
     getCertificate(debateId)
-      .then((c) => alive && setCert(c))
+      .then((c) => { if (alive) { setCert(c); setIssued(!!c.issued); } })
       .catch((e) => alive && setError(String(e?.message || e)))
       .finally(() => alive && setLoading(false));
     return () => {
       alive = false;
     };
   }, [debateId]);
+
+  const handleIssue = async () => {
+    setIssuing(true);
+    try {
+      await issueCertificate(debateId);
+      setIssued(true);
+    } catch (e: any) {
+      setError(String(e?.message || e));
+    } finally {
+      setIssuing(false);
+    }
+  };
+
+  const verifyUrl = cert
+    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/verify/${cert.anchor.certificate_id}`
+    : '';
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(verifyUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard unavailable — the URL is visible to select */ }
+  };
 
   if (loading) return <div className={styles.state}>Assembling certificate…</div>;
   if (error) {
@@ -67,6 +95,19 @@ export default function ReadinessCertificate({ debateId }: Props) {
     <div className={styles.wrap}>
       {/* Actions (hidden when printing) */}
       <div className={styles.actions}>
+        {!issued ? (
+          <button className={styles.issueBtn} onClick={handleIssue} disabled={issuing}>
+            {issuing ? 'Signing…' : '🔏 Issue signed certificate'}
+          </button>
+        ) : (
+          <div className={styles.shareRow}>
+            <span className={styles.issuedBadge}>🔏 Signed &amp; issued</span>
+            <code className={styles.shareUrl}>{verifyUrl}</code>
+            <button className={styles.copyBtn} onClick={copyLink}>
+              {copied ? '✓ Copied' : 'Copy verify link'}
+            </button>
+          </div>
+        )}
         <button className={styles.printBtn} onClick={() => window.print()}>
           ⧉ Export / Print certificate
         </button>
@@ -186,19 +227,29 @@ export default function ReadinessCertificate({ debateId }: Props) {
           ))}
         </div>
 
-        {/* Tamper-evident anchor */}
+        {/* Tamper-evident anchor + public verification QR */}
         <footer className={styles.anchor}>
-          <div className={styles.anchorTitle}>🔒 Tamper-evident anchor</div>
-          <div className={styles.anchorBody}>
-            <code className={styles.anchorHash}>
-              {cert.anchor.algorithm}: {cert.anchor.hash}
-            </code>
-            <p className={styles.anchorNote}>
-              This hash is computed over the scores, the ordered evidence entries, their source-chunk
-              hashes and the session&apos;s append-only event span. Re-hashing the stored data
-              reproduces it — altering any underlying evidence would not. Issued{' '}
-              {new Date(cert.issued_at).toLocaleString()}.
-            </p>
+          <div className={styles.anchorGrid}>
+            <div>
+              <div className={styles.anchorTitle}>🔒 Tamper-evident anchor</div>
+              <code className={styles.anchorHash}>
+                {cert.anchor.algorithm}: {cert.anchor.hash}
+              </code>
+              <p className={styles.anchorNote}>
+                This hash is computed over the scores, the ordered evidence entries, their source-chunk
+                hashes and the session&apos;s append-only event span. Re-hashing the stored data
+                reproduces it — altering any underlying evidence would not.
+                {issued && ' The Ed25519-signed record can be independently verified at the link below.'}
+                {' '}Issued {new Date(cert.issued_at).toLocaleString()}.
+              </p>
+              {issued && <div className={styles.verifyUrlPrint}>Verify at: {verifyUrl}</div>}
+            </div>
+            {issued && (
+              <div className={styles.qrBlock}>
+                <QRCodeSVG value={verifyUrl} size={92} marginSize={1} />
+                <span className={styles.qrLabel}>Scan to verify</span>
+              </div>
+            )}
           </div>
         </footer>
       </article>

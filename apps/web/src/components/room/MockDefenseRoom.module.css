@@ -1003,3 +1003,57 @@
   color: #d64545;
   border: 1px solid rgba(255, 107, 107, 0.4);
 }
+
+/* ── Voice mode ─────────────────────────────────────────────────────────── */
+
+.voiceOn {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.answerLabelRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.micBtn {
+  background: var(--surface-2);
+  border: 1px solid var(--border-medium);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-1);
+  cursor: pointer;
+}
+.micBtn:hover {
+  border-color: var(--accent);
+}
+.micActive {
+  border-color: var(--danger);
+  color: var(--danger);
+  animation: micPulse 1.2s ease-in-out infinite;
+}
+@keyframes micPulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger) 35%, transparent); }
+  50% { box-shadow: 0 0 0 6px transparent; }
+}
+
+.liveTranscript {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border-medium);
+  border-radius: var(--radius-md, 8px);
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--text-2);
+  background: var(--bg-1);
+}
+
+.voiceHint {
+  font-size: 0.75rem;
+  color: var(--warning);
+}

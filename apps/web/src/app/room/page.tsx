@@ -12,7 +12,6 @@ import InterveneComposer from '@/components/room/InterveneComposer';
 import SummaryReport from '@/components/room/SummaryReport';
 import DocumentPanel from './DocumentPanel';
 import MockDefenseRoom from '@/components/room/MockDefenseRoom';
-import VoiceDefenseRoom from '@/components/room/VoiceDefenseRoom';
 import GlassBoxPanel from '@/components/room/GlassBoxPanel';
 import ReadinessCertificate from '@/components/room/ReadinessCertificate';
 import CommitteeTwinBuilder from '@/components/room/CommitteeTwinBuilder';
@@ -48,16 +47,21 @@ function RoomPageContent() {
   const [participantTurnCounts, setParticipantTurnCounts] = useState<Record<string, number>>({});
   const [debateStartedAt, setDebateStartedAt] = useState<string | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'transcript' | 'document' | 'defense' | 'evidence' | 'certificate' | 'committee' | 'voice'>('transcript');
+  const [activeTab, setActiveTab] = useState<'transcript' | 'document' | 'defense' | 'evidence' | 'certificate' | 'committee'>('transcript');
+  const [practiceVoice, setPracticeVoice] = useState(false);
 
   const handleDebateLoaded = (id: string, title: string, state: string) => {
     setDebateId(id);
     setDebateTitle(title);
     setDebateState(state.toLowerCase());
     console.log('🎯 Debate loaded:', { id, title, state: state.toLowerCase() });
-    // Auto-switch to requested tab from URL
+    // Auto-switch to requested tab from URL. 'voice' is the legacy tab name —
+    // it now opens Practice with voice mode pre-enabled.
     const tabParam = searchParams.get('tab');
-    if (tabParam === 'defense' || tabParam === 'voice' || tabParam === 'evidence' || tabParam === 'certificate' || tabParam === 'committee') {
+    if (tabParam === 'voice' || searchParams.get('voice') === '1') {
+      setPracticeVoice(true);
+      setActiveTab('defense');
+    } else if (tabParam === 'defense' || tabParam === 'evidence' || tabParam === 'certificate' || tabParam === 'committee') {
       setActiveTab(tabParam);
     }
   };
@@ -369,13 +373,6 @@ function RoomPageContent() {
               >
                 📜 Certificate
               </button>
-              <button
-                className={`${styles.tab} ${activeTab === 'voice' ? styles.tabActive : ''}`}
-                onClick={() => setActiveTab('voice')}
-                title="Voice-powered practice — speak your answers aloud"
-              >
-                🎤 Voice Practice
-              </button>
             </div>
 
             {/* Tab Content */}
@@ -419,7 +416,7 @@ function RoomPageContent() {
               )}
               {activeTab === 'defense' && (
                 <div style={{ flex: 1, overflowY: 'auto', padding: '16px 0' }}>
-                  <MockDefenseRoom debateId={debateId} openrouterKey={openrouterKey || ''} />
+                  <MockDefenseRoom debateId={debateId} openrouterKey={openrouterKey || ''} initialVoice={practiceVoice} />
                 </div>
               )}
               {activeTab === 'evidence' && (
@@ -435,11 +432,6 @@ function RoomPageContent() {
               {activeTab === 'certificate' && (
                 <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 0' }}>
                   <ReadinessCertificate debateId={debateId} />
-                </div>
-              )}
-              {activeTab === 'voice' && (
-                <div style={{ flex: 1, overflowY: 'auto', padding: '16px 0' }}>
-                  <VoiceDefenseRoom debateId={debateId} openrouterKey={openrouterKey || ''} />
                 </div>
               )}
             </div>

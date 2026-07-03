@@ -59,7 +59,8 @@ async def trigger_next_turn(
             "participant_name": result['participant_name'],
             "message": result['message'],
             "turn_number": result['turn_number'],
-            "sequence_number": result['sequence_number']
+            "sequence_number": result['sequence_number'],
+            "citations": result.get('citations', [])
         }
     
     except ValueError as e:
