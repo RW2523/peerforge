@@ -52,9 +52,30 @@ class HostOrchestrator:
             if not policy_config.get('enable_host'):
                 raise ValueError("Host is not enabled for this debate")
             
-            # Check if already concluded
+            # Idempotent: if the chair already concluded, return the existing
+            # conclusion instead of erroring — the user's intent (wrap up) is
+            # already satisfied, and re-clicking Conclude shouldn't fail.
             if policy_config.get('host_concluded'):
-                raise ValueError("Host has already provided conclusion")
+                cursor.execute("""
+                    SELECT event_id, sequence_number, content
+                    FROM events
+                    WHERE debate_id = %s AND event_type = 'agent_message'
+                      AND content->>'is_host_conclusion' = 'true'
+                    ORDER BY sequence_number DESC
+                    LIMIT 1
+                """, (debate_id,))
+                existing = cursor.fetchone()
+                if existing:
+                    content = existing['content'] or {}
+                    return {
+                        'event_id': str(existing['event_id']),
+                        'message': content.get('text', ''),
+                        'participant_name': 'Review Chair',
+                        'sequence_number': existing['sequence_number'],
+                        'is_conclusion': True,
+                        'already_concluded': True,
+                    }
+                # Flag set but no stored conclusion — fall through and regenerate.
             
             # Get host model
             host_model_id = policy_config.get('host_model_id', 'openai/gpt-4o-mini')

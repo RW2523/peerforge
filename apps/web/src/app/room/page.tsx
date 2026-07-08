@@ -12,7 +12,9 @@ import InterveneComposer from '@/components/room/InterveneComposer';
 import SummaryReport from '@/components/room/SummaryReport';
 import DocumentPanel from './DocumentPanel';
 import MockDefenseRoom from '@/components/room/MockDefenseRoom';
-import VoiceDefenseRoom from '@/components/room/VoiceDefenseRoom';
+import GlassBoxPanel from '@/components/room/GlassBoxPanel';
+import ReadinessCertificate from '@/components/room/ReadinessCertificate';
+import CommitteeTwinBuilder from '@/components/room/CommitteeTwinBuilder';
 import { useDebateRoom } from '@/hooks/useDebateRoom';
 import { useOpenRouterKey } from '@/hooks/useOpenRouterKey';
 import * as api from '@/lib/api';
@@ -45,16 +47,21 @@ function RoomPageContent() {
   const [participantTurnCounts, setParticipantTurnCounts] = useState<Record<string, number>>({});
   const [debateStartedAt, setDebateStartedAt] = useState<string | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'transcript' | 'document' | 'defense' | 'voice'>('transcript');
+  const [activeTab, setActiveTab] = useState<'transcript' | 'document' | 'defense' | 'evidence' | 'certificate' | 'committee'>('transcript');
+  const [practiceVoice, setPracticeVoice] = useState(false);
 
   const handleDebateLoaded = (id: string, title: string, state: string) => {
     setDebateId(id);
     setDebateTitle(title);
     setDebateState(state.toLowerCase());
     console.log('🎯 Debate loaded:', { id, title, state: state.toLowerCase() });
-    // Auto-switch to requested tab from URL
+    // Auto-switch to requested tab from URL. 'voice' is the legacy tab name —
+    // it now opens Practice with voice mode pre-enabled.
     const tabParam = searchParams.get('tab');
-    if (tabParam === 'defense' || tabParam === 'voice') {
+    if (tabParam === 'voice' || searchParams.get('voice') === '1') {
+      setPracticeVoice(true);
+      setActiveTab('defense');
+    } else if (tabParam === 'defense' || tabParam === 'evidence' || tabParam === 'certificate' || tabParam === 'committee') {
       setActiveTab(tabParam);
     }
   };
@@ -346,11 +353,25 @@ function RoomPageContent() {
                 Practice Q&amp;A
               </button>
               <button
-                className={`${styles.tab} ${activeTab === 'voice' ? styles.tabActive : ''}`}
-                onClick={() => setActiveTab('voice')}
-                title="Voice-powered practice — speak your answers aloud"
+                className={`${styles.tab} ${activeTab === 'evidence' ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab('evidence')}
+                title="Glass-Box — trace every reviewer question to its verified source line"
               >
-                🎤 Voice Practice
+                🔍 Evidence
+              </button>
+              <button
+                className={`${styles.tab} ${activeTab === 'committee' ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab('committee')}
+                title="Committee Twin — build reviewers from their real publications"
+              >
+                👥 Committee
+              </button>
+              <button
+                className={`${styles.tab} ${activeTab === 'certificate' ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab('certificate')}
+                title="Review-Readiness Certificate — trajectory + tamper-evident anchor"
+              >
+                📜 Certificate
               </button>
             </div>
 
@@ -395,12 +416,22 @@ function RoomPageContent() {
               )}
               {activeTab === 'defense' && (
                 <div style={{ flex: 1, overflowY: 'auto', padding: '16px 0' }}>
-                  <MockDefenseRoom debateId={debateId} openrouterKey={openrouterKey || ''} />
+                  <MockDefenseRoom debateId={debateId} openrouterKey={openrouterKey || ''} initialVoice={practiceVoice} />
                 </div>
               )}
-              {activeTab === 'voice' && (
-                <div style={{ flex: 1, overflowY: 'auto', padding: '16px 0' }}>
-                  <VoiceDefenseRoom debateId={debateId} openrouterKey={openrouterKey || ''} />
+              {activeTab === 'evidence' && (
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', padding: '12px 0' }}>
+                  <GlassBoxPanel debateId={debateId} />
+                </div>
+              )}
+              {activeTab === 'committee' && (
+                <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 0' }}>
+                  <CommitteeTwinBuilder debateId={debateId} />
+                </div>
+              )}
+              {activeTab === 'certificate' && (
+                <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 0' }}>
+                  <ReadinessCertificate debateId={debateId} />
                 </div>
               )}
             </div>

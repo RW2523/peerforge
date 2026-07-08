@@ -17,6 +17,7 @@ interface UseDebateSetupActionsOptions {
   desiredOutcomes?: string[];
   timeboxMinutes?: number;
   maxRounds?: number;
+  sessionLengthMode?: 'rounds' | 'time';
   enableHost?: boolean;
   hostModelId?: string;
   yoloMode?: boolean;
@@ -56,6 +57,7 @@ export function useDebateSetupActions(
       desiredOutcomes,
       timeboxMinutes,
       maxRounds,
+      sessionLengthMode,
       enableHost,
       hostModelId,
       yoloMode,
@@ -89,7 +91,7 @@ export function useDebateSetupActions(
         agenda: agenda && agenda.length > 0 ? agenda : undefined,
         desired_outcomes: desiredOutcomes && desiredOutcomes.length > 0 ? desiredOutcomes : undefined,
         timebox_minutes: timeboxMinutes || 30,
-        max_rounds: maxRounds,
+        max_rounds: sessionLengthMode === 'rounds' ? maxRounds : undefined,
         enable_host: enableHost || false,
         host_model_id: enableHost ? (hostModelId || 'openai/gpt-4o-mini') : undefined,
         participants: participants,
@@ -101,12 +103,13 @@ export function useDebateSetupActions(
       setCreatedDebateId(debate_id);
       setCreatedParticipantIds(participant_ids);
 
-      // 2. Import memory if selected
+      // 2. Import memory if selected — grant to ALL agents (scope defaults to
+      // 'all_agents', which requires participant_ids to be null/omitted).
       if (selectedMemorySources && selectedMemorySources.length > 0) {
         try {
           await api.importMemory(debate_id, {
             source_debate_ids: selectedMemorySources,
-            participant_ids: participant_ids,
+            scope: 'all_agents',
           });
           console.log('Memory imported successfully');
         } catch (memErr: any) {

@@ -30,6 +30,7 @@ from ..services.question_generator import generate_questions, get_questions
 from ..services.answer_evaluator import evaluate_answer, get_answers
 from ..services.readiness_reporter import generate_readiness_report, get_readiness_report
 from ..services.persona_suggester import suggest_personas
+from ..services.provenance import get_provenance
 from ..services.reasoning_modes import MODES, mode_from_policy
 
 logger = logging.getLogger(__name__)
@@ -233,6 +234,75 @@ async def list_defense_questions(
 
     questions = get_questions(debate_id, unanswered_only=unanswered_only)
     return {"count": len(questions), "questions": questions}
+
+
+class UngroundedCitationRequest(BaseModel):
+    claim: str = Field(..., min_length=10, max_length=1000)
+
+
+@router.post("/debates/{debate_id}/demo/ungrounded-citation")
+async def demo_ungrounded_citation(
+    debate_id: str,
+    body: UngroundedCitationRequest,
+    x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Trust-comparison demo: ask a model to cite the manuscript source for a
+    critique WITHOUT giving it the manuscript — exactly what happens when you
+    ask a generic chatbot "where's your source?". The model's answer (usually
+    a confidently fabricated page/quote, sometimes an admission) is shown
+    side-by-side with PeerForge's hash-verified line."""
+    key = _require_key(x_openrouter_key)
+    debate = _get_debate_or_404(debate_id)
+    check_workspace_access(current_user, debate["workspace_id"])
+
+    from ..openrouter_client import OpenRouterClient
+    try:
+        client = OpenRouterClient(api_key=key)
+        response = client.chat_completion(
+            model="openai/gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": (
+                    "You are an academic reviewer assistant. Answer directly and "
+                    "confidently in at most 60 words."
+                )},
+                {"role": "user", "content": (
+                    f"A reviewer critiqued the author's manuscript as follows: \"{body.claim}\"\n"
+                    "State the page number and quote the exact sentence from the "
+                    "manuscript that supports this critique."
+                )},
+            ],
+            temperature=0.7,
+            max_tokens=160,
+            _debate_id=debate_id,
+            _stage="demo_ungrounded_citation",
+        )
+        answer = (response.get("content") or "").strip()
+        return {
+            "claim": body.claim,
+            "model": response.get("model", "openai/gpt-4o-mini"),
+            "answer": answer,
+            "had_document_access": False,
+        }
+    except Exception as exc:
+        logger.exception("Ungrounded-citation demo failed for %s", debate_id)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/debates/{debate_id}/provenance")
+async def get_debate_provenance(
+    debate_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Glass-Box lineage: every reviewer question with its hard-linked, sha256-
+    verified source chunk — or flagged as an evidence gap when unsupported."""
+    debate = _get_debate_or_404(debate_id)
+    check_workspace_access(current_user, debate["workspace_id"])
+    try:
+        return get_provenance(debate_id)
+    except Exception as exc:
+        logger.exception("Provenance assembly failed for %s", debate_id)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.post("/debates/{debate_id}/answers")

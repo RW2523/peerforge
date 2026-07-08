@@ -1,7 +1,8 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import * as api from '@/lib/api';
 import { keyStore } from '@/lib/openrouterKeyStore';
-import { validateMaterials, normalizeUrl, SETUP_LIMITS } from '@/lib/setupValidation';
+import { validateMaterials, normalizeUrl, SETUP_LIMITS, getMainResearchFile, MAIN_RESEARCH_FILE_REQUIRED } from '@/lib/setupValidation';
 import styles from './SetupSteps.module.css';
 
 interface MaterialsStepProps {
@@ -52,6 +53,10 @@ export function MaterialsStep({
   const [actionItems, setActionItems] = useState<Record<string, api.TranscriptActionItem[]>>({});
   const [extracting, setExtracting] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [removingMain, setRemovingMain] = useState(false);
+  const [showDeleteMainModal, setShowDeleteMainModal] = useState(false);
+  const [deleteMainError, setDeleteMainError] = useState<string | null>(null);
+  const deleteCancelRef = useRef<HTMLButtonElement>(null);
 
   // ── Status polling ──────────────────────────────────────────────────────
   const refreshStatus = useCallback(async () => {
@@ -204,21 +209,59 @@ export function MaterialsStep({
   };
 
   // ── Derived groupings ─────────────────────────────────────────────────────
-  const mainFile = uploadedFiles.find((f) => f.is_primary || f.material_category === 'main_research');
+  const mainFile = getMainResearchFile(uploadedFiles);
   const researchFiles = uploadedFiles.filter((f) => f.material_category === 'research');
   const supplementaryFiles = uploadedFiles.filter(
     (f) => f.material_category === 'supplementary' || (!f.material_category && !f.is_primary)
   );
   const transcriptFiles = uploadedFiles.filter((f) => f.material_category === 'transcript');
 
+  const handleOpenDeleteMainModal = () => {
+    if (!mainFile || !debateId) return;
+    setDeleteMainError(null);
+    setShowDeleteMainModal(true);
+  };
+
+  const handleCloseDeleteMainModal = useCallback(() => {
+    if (removingMain) return;
+    setShowDeleteMainModal(false);
+    setDeleteMainError(null);
+  }, [removingMain]);
+
+  const handleConfirmDeleteMainFile = async () => {
+    if (!mainFile || !debateId) return;
+
+    setRemovingMain(true);
+    setDeleteMainError(null);
+    try {
+      await api.deleteMaterial(debateId, mainFile.material_id);
+      embedTriggeredRef.current = false;
+      await refreshStatus();
+      setShowDeleteMainModal(false);
+    } catch (error) {
+      setDeleteMainError(
+        error instanceof Error ? error.message : 'Failed to remove main research file'
+      );
+    } finally {
+      setRemovingMain(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!showDeleteMainModal) return;
+
+    deleteCancelRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') handleCloseDeleteMainModal();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [showDeleteMainModal, handleCloseDeleteMainModal]);
+
   // Per-card validation issues (empty/partial/duplicate) — same source of truth
   // the Next button uses, so the UI and navigation never disagree.
   const materialIssues = new Map<number, string>();
   validateMaterials(materials).forEach((i) => materialIssues.set(i.index, i.issue));
-
-  // BUG-009: warn (non-blocking) when there is nothing to ground the review on.
-  const hasNoMaterials =
-    uploadedFiles.length === 0 && materials.length === 0;
 
   const disabled = !debateId || uploading !== null;
 
@@ -277,13 +320,41 @@ export function MaterialsStep({
           renderFileCard(mainFile, (
             <div className={styles.lockRow}>
               <span className={styles.lockBadge}>🔒 Always in knowledge base</span>
-              <button
-                className={styles.btnSecondary}
-                onClick={() => mainInputRef.current?.click()}
-                disabled={disabled}
-              >
-                Replace
-              </button>
+              <div className={styles.mainFileActions}>
+                <button
+                  type="button"
+                  className={styles.btnSecondary}
+                  onClick={() => mainInputRef.current?.click()}
+                  disabled={disabled}
+                >
+                  Replace
+                </button>
+                <button
+                  type="button"
+                  className={styles.btnRemoveIcon}
+                  onClick={handleOpenDeleteMainModal}
+                  disabled={disabled || removingMain}
+                  title="Remove main research file"
+                  aria-label="Remove main research file"
+                >
+                  <svg
+                    className={styles.btnRemoveIconSvg}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6l-1 14H6L5 6" />
+                    <path d="M10 11v6" />
+                    <path d="M14 11v6" />
+                    <path d="M9 6V4h6v2" />
+                  </svg>
+                </button>
+              </div>
             </div>
           ))
         ) : (
@@ -295,6 +366,9 @@ export function MaterialsStep({
           >
             <span>📌</span> {uploading === 'main_research' ? 'Uploading…' : 'Set Main Research File'}
           </button>
+        )}
+        {!mainFile && (
+          <span className={styles.fieldError}>{MAIN_RESEARCH_FILE_REQUIRED}</span>
         )}
       </div>
 
@@ -342,35 +416,37 @@ export function MaterialsStep({
                 <span className={styles.badge}>{material.kind}</span>
                 <button onClick={() => onRemove(idx)} className={styles.btnRemove}>×</button>
               </div>
-              <input
-                type="text"
-                value={material.title || ''}
-                onChange={(e) => onUpdate(idx, { title: e.target.value })}
-                placeholder={material.kind === 'text' ? 'Title (optional)' : 'Title'}
-              />
-              {material.kind === 'text' && (
-                <textarea
-                  value={material.body_text || ''}
-                  onChange={(e) => onUpdate(idx, { body_text: e.target.value })}
-                  placeholder={`Paste text content here (at least ${SETUP_LIMITS.TEXT_BODY_MIN} characters)`}
-                  rows={3}
-                  aria-invalid={!!issue}
-                />
-              )}
-              {(material.kind === 'link' || material.kind === 'file_placeholder') && (
+              <div className={styles.materialCardFields}>
                 <input
                   type="text"
-                  value={material.url || ''}
-                  onChange={(e) => onUpdate(idx, { url: e.target.value })}
-                  onBlur={(e) => {
-                    // Auto-normalize (prepend https://, lowercase host) on blur.
-                    const n = normalizeUrl(e.target.value);
-                    if (n && n !== material.url) onUpdate(idx, { url: n });
-                  }}
-                  placeholder="https://example.com"
-                  aria-invalid={!!issue}
+                  value={material.title || ''}
+                  onChange={(e) => onUpdate(idx, { title: e.target.value })}
+                  placeholder={material.kind === 'text' ? 'Title (optional)' : 'Title'}
                 />
-              )}
+                {material.kind === 'text' && (
+                  <textarea
+                    value={material.body_text || ''}
+                    onChange={(e) => onUpdate(idx, { body_text: e.target.value })}
+                    placeholder={`Paste text content here (at least ${SETUP_LIMITS.TEXT_BODY_MIN} characters)`}
+                    rows={3}
+                    aria-invalid={!!issue}
+                  />
+                )}
+                {(material.kind === 'link' || material.kind === 'file_placeholder') && (
+                  <input
+                    type="text"
+                    value={material.url || ''}
+                    onChange={(e) => onUpdate(idx, { url: e.target.value })}
+                    onBlur={(e) => {
+                      // Auto-normalize (prepend https://, lowercase host) on blur.
+                      const n = normalizeUrl(e.target.value);
+                      if (n && n !== material.url) onUpdate(idx, { url: n });
+                    }}
+                    placeholder="https://example.com"
+                    aria-invalid={!!issue}
+                  />
+                )}
+              </div>
               {issue && <span className={styles.materialCardError}>{issue}</span>}
             </div>
             );
@@ -380,13 +456,6 @@ export function MaterialsStep({
             <p className={styles.empty}>No supporting files yet (optional)</p>
           )}
         </div>
-
-        {hasNoMaterials && (
-          <div className={styles.materialWarning}>
-            <span>ℹ️</span>
-            <span>No research materials added — the review will be based only on your title and abstract. Add materials for deeper, grounded feedback.</span>
-          </div>
-        )}
       </div>
 
       {/* ── Section 3: Transcripts & Recordings ─────────────────────────── */}
@@ -486,6 +555,55 @@ export function MaterialsStep({
           )}
         </div>
       </div>
+
+      {showDeleteMainModal && typeof document !== 'undefined' && createPortal(
+        <div
+          className={styles.deleteModalOverlay}
+          onClick={handleCloseDeleteMainModal}
+          role="presentation"
+        >
+          <div
+            className={styles.deleteConfirmModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-main-file-title"
+            aria-describedby="delete-main-file-desc"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="delete-main-file-title" className={styles.deleteConfirmTitle}>
+              Delete document?
+            </h3>
+            <p id="delete-main-file-desc" className={styles.modalBody}>
+              Are you sure you want to remove this document from the review session?
+            </p>
+            {deleteMainError && (
+              <p className={styles.modalError} role="alert">
+                {deleteMainError}
+              </p>
+            )}
+            <div className={styles.modalActions}>
+              <button
+                ref={deleteCancelRef}
+                type="button"
+                className={styles.modalBtnCancel}
+                onClick={handleCloseDeleteMainModal}
+                disabled={removingMain}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={styles.modalBtnDelete}
+                onClick={handleConfirmDeleteMainFile}
+                disabled={removingMain}
+              >
+                {removingMain ? 'Deleting…' : 'Delete document'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

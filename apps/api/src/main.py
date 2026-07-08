@@ -4,8 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .routes import (
     health, agents, debates, turns, setup, summary, events, openrouter,
-    personas, materials, memory, preflight, artifacts, embeddings,
-    workspace_settings, presence, websocket, knowledge, analytics, ai_assist,
+    personas, materials, memory, preflight, embeddings,
+    workspace_settings, presence, websocket, knowledge, ai_assist,
     participants, autonomous, documents, action_items
 )
 from .routes.literature import router as literature_router
@@ -41,13 +41,11 @@ app.include_router(personas.router, tags=["personas"])
 app.include_router(materials.router, tags=["materials"])
 app.include_router(memory.router, tags=["memory"])
 app.include_router(preflight.router, tags=["preflight"])
-app.include_router(artifacts.router, tags=["artifacts"])
 app.include_router(embeddings.router, tags=["embeddings"])
 app.include_router(workspace_settings.router, tags=["workspace-settings"])
 app.include_router(presence.router, tags=["presence"])
 app.include_router(websocket.router, tags=["websocket"])
 app.include_router(knowledge.router, tags=["knowledge"])
-app.include_router(analytics.router, tags=["analytics"])
 app.include_router(ai_assist.router, tags=["ai-assist"])
 app.include_router(participants.router, tags=["participants"])
 app.include_router(autonomous.router, tags=["autonomous"])

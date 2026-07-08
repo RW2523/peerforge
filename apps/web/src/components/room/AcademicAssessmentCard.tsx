@@ -12,7 +12,7 @@
  * session) to see progress.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   generateAcademicAssessment,
   getAcademicAssessment,
@@ -25,6 +25,9 @@ interface Props {
   debateId: string;
   /** Where the regeneration was initiated from (analytics/history context). */
   triggerSource?: string;
+  /** Generate a first assessment automatically when none exists yet, so the
+   *  readiness trajectory accumulates without a manual click. */
+  autoGenerate?: boolean;
 }
 
 function bandClass(score: number): string {
@@ -41,19 +44,12 @@ function bandLabel(score: number): string {
   return 'Under-prepared';
 }
 
-export default function AcademicAssessmentCard({ debateId, triggerSource = 'manual' }: Props) {
+export default function AcademicAssessmentCard({ debateId, triggerSource = 'manual', autoGenerate = false }: Props) {
   const [assessment, setAssessment] = useState<AcademicAssessment | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    getAcademicAssessment(debateId)
-      .then(a => { if (!cancelled) setAssessment(a); })
-      .catch(() => { /* none yet — show the generate state */ });
-    return () => { cancelled = true; };
-  }, [debateId]);
+  const autoGenRanRef = useRef(false);
 
   const handleGenerate = useCallback(async () => {
     const key = keyStore.getKey();
@@ -72,6 +68,21 @@ export default function AcademicAssessmentCard({ debateId, triggerSource = 'manu
       setLoading(false);
     }
   }, [debateId, triggerSource]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getAcademicAssessment(debateId)
+      .then(a => { if (!cancelled) setAssessment(a); })
+      .catch(() => {
+        // None yet — kick off a first assessment when auto-generation is on,
+        // otherwise show the manual generate state.
+        if (!cancelled && autoGenerate && !autoGenRanRef.current && keyStore.getKey()) {
+          autoGenRanRef.current = true;
+          handleGenerate();
+        }
+      });
+    return () => { cancelled = true; };
+  }, [debateId, autoGenerate, handleGenerate]);
 
   const basisText = assessment?.basis
     ? [

@@ -1,0 +1,384 @@
+/* GlassBoxPanel — split evidence view (Pillar 1) */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  gap: 16px;
+  padding: 8px 4px 0;
+}
+
+.state {
+  padding: 32px;
+  color: var(--text-2);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.title {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-0);
+}
+.subtitle {
+  margin: 0;
+  max-width: 520px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+.scoreboard {
+  display: flex;
+  gap: 10px;
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 68px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  background: var(--surface-1);
+}
+.statNum {
+  font-size: 1.4rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text-0);
+}
+.statLbl {
+  margin-top: 3px;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+}
+.statGap .statNum {
+  color: var(--warning);
+}
+.statVerified {
+  border-color: color-mix(in srgb, var(--success) 40%, transparent);
+}
+.statVerified .statNum {
+  color: var(--success);
+}
+
+/* ── Split ──────────────────────────────────────────────────────────────── */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+.left,
+.right {
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.left {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── Claim card ─────────────────────────────────────────────────────────── */
+.claim {
+  text-align: left;
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.claim:hover {
+  border-color: var(--border-medium);
+}
+.claimActive {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+.claimHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.persona {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.category {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+}
+.claimText {
+  margin: 0 0 10px;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--text-1);
+}
+.chip {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+.chipOk {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
+}
+.chipGap {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+}
+
+/* ── Source panel ───────────────────────────────────────────────────────── */
+.right {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sourceCard,
+.gapCard {
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+}
+.sourceHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.docTitle {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-0);
+}
+.pageBadge {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  border: 1px solid var(--border-soft);
+}
+.verifyBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+}
+.verifyOk {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
+}
+.verifyWarn {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+}
+.hash {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.7rem;
+  font-weight: 500;
+  opacity: 0.85;
+}
+.sourceBody {
+  background: var(--bg-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.chunkText {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.65;
+  color: var(--text-1);
+  white-space: pre-wrap;
+}
+.mark {
+  background: color-mix(in srgb, var(--gold, #f5c518) 45%, transparent);
+  color: var(--text-0);
+  padding: 1px 2px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+.sourceMeta {
+  display: flex;
+  gap: 14px;
+  margin-top: 10px;
+  font-size: 0.7rem;
+  color: var(--text-3);
+  font-family: var(--font-mono, monospace);
+}
+
+/* ── Gap card ───────────────────────────────────────────────────────────── */
+.gapCard {
+  border-color: color-mix(in srgb, var(--warning) 35%, transparent);
+}
+.gapIcon {
+  font-size: 1.6rem;
+}
+.gapTitle {
+  margin: 6px 0;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--warning);
+}
+.gapBody {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text-1);
+}
+.gapExcerpt {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-2);
+  padding: 8px 10px;
+  border-left: 3px solid var(--border-medium);
+  background: var(--bg-1);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.contrast {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--text-3);
+  font-style: italic;
+  padding: 10px 12px;
+  border: 1px dashed var(--border-soft);
+  border-radius: var(--radius-md);
+}
+
+@media (max-width: 860px) {
+  .split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sourceHeadActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pdfBtn {
+  background: var(--accent);
+  color: var(--bg-0);
+  border: none;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pdfBtn:hover {
+  background: var(--accent-hover);
+}
+
+/* ── Trust comparison ───────────────────────────────────────────────────── */
+.compareCard {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  background: var(--surface-1);
+}
+.compareIntro {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.compareBtn {
+  background: var(--surface-2);
+  border: 1px solid var(--border-medium);
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-1);
+  cursor: pointer;
+}
+.compareBtn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.compareError {
+  font-size: 0.75rem;
+  color: var(--danger);
+}
+.compareGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.compareSide {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  background: var(--bg-1);
+}
+.compareLabelBad {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--danger);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.compareLabelGood {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--success);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.compareAnswer {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--text-1);
+  font-style: italic;
+}
+.compareFoot {
+  font-size: 0.68rem;
+  color: var(--text-3);
+}
+@media (max-width: 720px) {
+  .compareGrid { grid-template-columns: 1fr; }
+}

@@ -140,6 +140,7 @@ class WebSocketCommandHandlers:
                     'turn': result['round_number'],         # round number (1, 2, 3…)
                     'model': result.get('model', ''),
                     'turn_number': result['turn_number'],   # sequential turn index (back-compat)
+                    'citations': result.get('citations', []),  # Glass-Box grounding chips
                 },
                 sequence_number=result['sequence_number'],
                 event_id=result['event_id'],

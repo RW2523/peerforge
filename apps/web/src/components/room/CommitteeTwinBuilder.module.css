@@ -1,0 +1,263 @@
+/* CommitteeTwinBuilder — Pillar 2 */
+
+.wrap {
+  height: 100%;
+  overflow-y: auto;
+  padding: 8px 4px;
+}
+.header {
+  margin-bottom: 16px;
+}
+.title {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-0);
+}
+.subtitle {
+  margin: 0;
+  max-width: 620px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+/* ── Form ───────────────────────────────────────────────────────────────── */
+.form {
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 18px;
+}
+.row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.input,
+.hintInput {
+  flex: 1;
+  background: var(--bg-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  padding: 9px 12px;
+  font-size: 0.85rem;
+  color: var(--text-0);
+}
+.input:focus,
+.hintInput:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.removeBtn {
+  background: none;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  color: var(--text-3);
+  width: 36px;
+  cursor: pointer;
+}
+.removeBtn:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.addBtn {
+  background: none;
+  border: 1px dashed var(--border-medium);
+  border-radius: var(--radius-md);
+  color: var(--text-2);
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.addBtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.hintInput {
+  min-width: 200px;
+}
+.buildBtn {
+  background: var(--accent);
+  color: var(--bg-0);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 9px 18px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.buildBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.buildBtn:not(:disabled):hover {
+  background: var(--accent-hover);
+}
+
+.error {
+  color: var(--danger);
+  font-size: 0.85rem;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  border-radius: var(--radius-md);
+  margin-bottom: 14px;
+}
+
+/* ── Results ────────────────────────────────────────────────────────────── */
+.summary {
+  font-size: 0.85rem;
+  color: var(--text-1);
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+}
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.twin {
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+}
+.twinHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.twinName {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--text-0);
+}
+.twinAff {
+  font-size: 0.82rem;
+  color: var(--text-2);
+}
+.twinRole {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  font-weight: 700;
+  margin-top: 3px;
+}
+.corpusOk {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+.corpusNone {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+.papers {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.paper {
+  border-left: 3px solid var(--border-medium);
+  padding: 4px 10px;
+}
+.paperTitle {
+  display: block;
+  font-size: 0.84rem;
+  color: var(--text-1);
+  font-weight: 600;
+}
+.paperTitle a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.paperTitle a:hover {
+  text-decoration: underline;
+}
+.paperMeta {
+  font-size: 0.72rem;
+  color: var(--text-3);
+}
+.promptToggle {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.prompt {
+  margin: 8px 0 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  line-height: 1.55;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  background: var(--bg-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.note {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-2);
+  font-style: italic;
+}
+
+.twinHeadRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.addPanelBtn {
+  background: var(--accent);
+  color: var(--bg-0);
+  border: none;
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.addPanelBtn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.addPanelBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

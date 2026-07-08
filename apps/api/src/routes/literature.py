@@ -25,6 +25,7 @@ from src.services.literature_search import (
     paper_to_chunk_text,
     Paper,
 )
+from src.services.committee_twin import build_committee_twins
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -63,6 +64,19 @@ class LiteratureSearchResponse(BaseModel):
 class SavePapersRequest(BaseModel):
     papers: List[PaperResult]
     label: Optional[str] = Field(default=None, description="Optional label for this batch of saved papers")
+
+
+class ReviewerInput(BaseModel):
+    name: str = Field(..., min_length=2, max_length=200)
+    affiliation: Optional[str] = Field(default="", max_length=200)
+    role: Optional[str] = Field(default=None)
+
+
+class CommitteeTwinRequest(BaseModel):
+    reviewers: List[ReviewerInput] = Field(..., min_items=1, max_items=6)
+    topic_hint: Optional[str] = Field(default="", max_length=400)
+    max_papers_per_reviewer: int = Field(default=5, ge=1, le=10)
+    mode: str = Field(default="medium")
 
 
 class SavedPaper(BaseModel):
@@ -251,6 +265,34 @@ async def save_papers_to_context(
         )
 
     return SavePapersResponse(saved=len(material_ids), material_ids=material_ids)
+
+
+@router.post("/debates/{debate_id}/committee-twins")
+async def create_committee_twins(
+    debate_id: str,
+    body: CommitteeTwinRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Pillar 2 — build corpus-grounded twins of named real reviewers.
+
+    Pulls each reviewer's actual publications, ingests them as retrievable
+    corpus, and returns a twin persona specialised on that person's work."""
+    service = DebateService()
+    debate = service.get_debate(debate_id)
+    if not debate:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+    try:
+        return await build_committee_twins(
+            debate_id=debate_id,
+            reviewers=[r.dict() for r in body.reviewers],
+            max_papers_per_reviewer=body.max_papers_per_reviewer,
+            topic_hint=body.topic_hint or "",
+            mode=body.mode,  # type: ignore[arg-type]
+        )
+    except Exception as exc:
+        logger.exception("Committee twin build failed for %s", debate_id)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get(

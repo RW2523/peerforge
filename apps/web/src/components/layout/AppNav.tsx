@@ -52,6 +52,12 @@ export default function AppNav() {
             >
               History
             </Link>
+            <Link
+              href="/progress"
+              className={`${styles.link} ${isActive('/progress') ? styles.active : ''}`}
+            >
+              Progress
+            </Link>
           </div>
 
           <ThemeToggle />

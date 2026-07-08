@@ -358,10 +358,10 @@ export default function HistoryPage() {
                         >
                           Practice Q&A
                         </button>
-                        <button 
-                          onClick={() => router.push(`/room?debate_id=${debate.debate_id}&tab=voice`)}
+                        <button
+                          onClick={() => router.push(`/room?debate_id=${debate.debate_id}&tab=defense&voice=1`)}
                           className={styles.btnVoice}
-                          title="Open Voice Practice room"
+                          title="Open Practice Q&A with voice mode on"
                         >
                           🎤 Voice
                         </button>

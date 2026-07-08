@@ -16,6 +16,7 @@ export const SETUP_LIMITS = {
   TIMEBOX_MAX: 120,
   ROUNDS_MIN: 1,
   ROUNDS_MAX: 20,
+  ROUNDS_DEFAULT: 3,
   PANEL_MIN: 2,
   PANEL_MAX: 8,
 } as const;
@@ -119,6 +120,19 @@ export function validateMaterials(materials: api.SetupMaterial[]): MaterialIssue
   return issues;
 }
 
+/** Primary research document uploaded on Step 2 (not text/link placeholders). */
+export function getMainResearchFile(
+  uploadedFiles: api.MaterialStatus[] = []
+): api.MaterialStatus | undefined {
+  return (
+    uploadedFiles.find((f) => f.is_primary) ??
+    uploadedFiles.find((f) => f.material_category === 'main_research')
+  );
+}
+
+export const MAIN_RESEARCH_FILE_REQUIRED =
+  'Main research file is required to continue.';
+
 // ── Step 1 numeric fields ────────────────────────────────────────────────────
 
 export function validateTimebox(minutes: number | undefined): string | null {
@@ -139,15 +153,38 @@ export function validateRounds(rounds: number | undefined): string | null {
   return null;
 }
 
+/** Validate a single agenda/objective list item (add or inline edit). */
+export function validateListItem(
+  value: string,
+  items: string[],
+  editingIndex: number | null
+): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return 'Item cannot be empty.';
+  if (trimmed.length > SETUP_LIMITS.ITEM_MAX) {
+    return `Keep items under ${SETUP_LIMITS.ITEM_MAX} characters.`;
+  }
+  const duplicate = items.some(
+    (item, index) =>
+      index !== editingIndex && item.trim().toLowerCase() === trimmed.toLowerCase()
+  );
+  if (duplicate) return 'This item is already added.';
+  return null;
+}
+
 // ── Step-level navigation gate ───────────────────────────────────────────────
+
+export type SessionLengthMode = 'rounds' | 'time';
 
 export interface SetupState {
   title: string;
   problemStatement: string;
   participants: api.SetupParticipant[];
   materials: api.SetupMaterial[];
+  uploadedFiles?: api.MaterialStatus[];
   timeboxMinutes?: number;
   maxRounds?: number;
+  sessionLengthMode?: SessionLengthMode;
 }
 
 /** Whether the wizard may advance from `step`. */
@@ -155,14 +192,17 @@ export function canAdvance(step: number, s: SetupState): boolean {
   if (step === 1) {
     if (s.title.trim().length < SETUP_LIMITS.TITLE_MIN) return false;
     if (s.problemStatement.trim().length < SETUP_LIMITS.ABSTRACT_MIN) return false;
-    // Validate whichever session-length mode is active.
-    if (s.maxRounds !== undefined && validateRounds(s.maxRounds)) return false;
-    if (s.timeboxMinutes !== undefined && validateTimebox(s.timeboxMinutes)) return false;
+    const sessionMode = s.sessionLengthMode ?? 'time';
+    if (sessionMode === 'rounds') {
+      if (validateRounds(s.maxRounds)) return false;
+    } else if (validateTimebox(s.timeboxMinutes)) {
+      return false;
+    }
     return true;
   }
   if (step === 2) {
-    // Materials are optional, but any card present must be valid (no duplicates,
-    // no empty/partial cards). Zero materials is allowed (warning shown in UI).
+    if (!getMainResearchFile(s.uploadedFiles)) return false;
+    // Any text/link card present must be valid (no duplicates, no empty/partial cards).
     return validateMaterials(s.materials).length === 0;
   }
   if (step === 3) return s.participants.length >= SETUP_LIMITS.PANEL_MIN;

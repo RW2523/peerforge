@@ -1,0 +1,118 @@
+/* Progress — cohort readiness dashboard */
+
+.page {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 28px 20px 60px;
+}
+.header {
+  margin-bottom: 20px;
+}
+.title {
+  margin: 0 0 6px;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--text-0);
+}
+.subtitle {
+  margin: 0;
+  max-width: 640px;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+.state {
+  padding: 40px 12px;
+  color: var(--text-2);
+  font-size: 0.9rem;
+}
+
+.tableWrap {
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+.table th {
+  text-align: left;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+  color: var(--text-1);
+}
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.cellTitle { max-width: 320px; }
+.sessionTitle {
+  font-weight: 600;
+  color: var(--text-0);
+  line-height: 1.35;
+}
+.sessionMeta {
+  font-size: 0.7rem;
+  color: var(--text-3);
+  margin-top: 3px;
+}
+
+.band {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+.bandStrong { color: var(--success); border-color: color-mix(in srgb, var(--success) 40%, transparent); background: color-mix(in srgb, var(--success) 10%, transparent); }
+.bandCompetent { color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 40%, transparent); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
+.bandDeveloping { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 40%, transparent); background: color-mix(in srgb, var(--warning) 10%, transparent); }
+.bandUnder { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+
+.cellTraj { white-space: nowrap; }
+.up { color: var(--success); font-weight: 700; font-size: 0.78rem; }
+.down { color: var(--danger); font-weight: 700; font-size: 0.78rem; }
+.cellEvidence { white-space: nowrap; color: var(--text-2); }
+
+.certLink {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--success);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.certLink:hover { text-decoration: underline; }
+.noCert {
+  font-size: 0.74rem;
+  color: var(--text-3);
+}
+
+.openBtn {
+  background: var(--surface-2);
+  border: 1px solid var(--border-medium);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-1);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.openBtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
