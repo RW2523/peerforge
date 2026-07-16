@@ -1,460 +1,257 @@
-# Arinar V2 - AI-Powered Debate Platform 🎯
+<div align="center">
 
-**Intelligent multi-agent debates with real-time thinking, Constitutional AI, and 100+ specialized personas**
+# 🎓 PeerForge
 
-Arinar is an AI debate platform where multiple specialized AI agents engage in structured, thoughtful discussions. Watch agents think in real-time, collaborate on documents, and synthesize insights from diverse perspectives.
+### The auditable review-rehearsal platform for researchers
 
----
+**Upload your manuscript → get interrogated by an AI review panel grounded in *your own* materials → rehearse your answers → walk away with a signed, publicly verifiable readiness record.**
 
-## ✨ Key Features
+Every other tool says *"trust me."* PeerForge shows the receipts — the verified source line behind every critique, or an honest admission that the materials don't back it up.
 
-- **100+ Specialized Agent Personas**: Tax experts, startup evaluators, engineers, designers, medical specialists, iconic voices (Elon Musk, Steve Jobs, etc.)
-- **Constitutional AI Pipeline**: 3-stage reasoning (Reasoning → Response → Validation) for higher quality agent outputs
-- **Live Chain-of-Thought**: See agents think in real-time as they process and debate
-- **Multi-Agent Debates**: 2-6 agents debating complex topics with authentic perspectives
-- **Real-time WebSocket Updates**: Live debate feed with typing indicators and presence
-- **Autonomous Behaviors**: Agents form coalitions, challenge each other, and adapt strategies
-- **Document Collaboration**: Agents can contribute to shared documents during debates
-- **Memory System**: Agents remember past debates and learn over time
+`Next.js` · `FastAPI` · `PostgreSQL` · `Redis` · `MinIO` · `Celery` · `OpenRouter` · `Ed25519`
+
+</div>
 
 ---
 
-## 🚀 Quick Start
+## What is PeerForge?
 
-### Prerequisites
+PeerForge is an **AI academic peer-review rehearsal platform**. A PhD student, researcher, or author uploads their paper, thesis, or manuscript; PeerForge builds a panel of AI reviewers that critique it **grounded in the uploaded document itself**, lets the researcher practice answering the panel's questions (by text or voice), tracks their readiness across ten academic dimensions over time, and issues a **tamper-evident certificate** anyone can verify.
 
-1. **Docker Desktop** - [Download here](https://www.docker.com/products/docker-desktop)
-2. **Node.js 18+** - [Download here](https://nodejs.org/)
-3. **Python 3.11** - [Download here](https://www.python.org/downloads/)
-4. **OpenRouter API Key** - [Get one free](https://openrouter.ai/)
+It is **not** a writing checker, a paraphraser, or a from-scratch article generator. It is a *rehearsal* tool — the researcher is the one under examination.
 
-### Installation Steps
+### The problem it solves
 
-#### 1. Clone the Repository
-```bash
-git clone https://github.com/vprasanna7/arinar-2026.git
-cd arinar-2026/arinar-v2
-```
+Researchers walk into thesis defenses and journal reviews under-prepared because realistic practice is scarce and expensive. Generic chatbots will happily critique a paper — but they hallucinate citations, can't prove their critiques come from the actual document, forget everything between sessions, and produce nothing an institution can trust. PeerForge closes that gap with **verifiable grounding** at every step.
 
-#### 1A. Run the Application Using the Startup Script
+### The USP: verifiability
 
-The easiest way to run the full application locally is to use the provided startup script.
+The market is full of AI-review tools and even a few mock-viva tools. What no one else does — and what PeerForge is architected around — is **proving** the AI's critique against the researcher's own document:
 
-From the `arinar-v2` folder, run:
-
-```bash
-chmod +x run_app.sh
-./run_app.sh
-```
-
-This script will automatically:
-
-* Start the required Docker services: PostgreSQL, Redis, and MinIO
-* Create the backend `.env.local` file
-* Create the frontend `.env.local` file
-* Set up the Python virtual environment if needed
-* Install backend dependencies if needed
-* Run database migrations
-* Install frontend dependencies if needed
-* Start the FastAPI backend
-* Start the Next.js frontend
-
-After the script starts successfully, open the frontend at:
-
-```bash
-http://localhost:3001
-```
-
-If running on a remote VM, use the network URL shown in the terminal, for example:
-
-```bash
-http://<VM-IP>:3001
-```
-
-The backend API runs at:
-
-```bash
-http://localhost:8000
-```
-
-API documentation is available at:
-
-```bash
-http://localhost:8000/docs
-```
-
-To stop the application, press:
-
-```bash
-Ctrl + C
-```
-
-in the terminal where `./run_app.sh` is running.
-
-> Note: The script uses the local Docker setup in `infra/docker/docker-compose.yml` and runs the frontend on port `3001`.
-
-
-#### 2. Start PostgreSQL Database
-```bash
-# Start Docker Desktop first, then:
-cd infra/docker
-docker-compose up -d db
-
-# Verify it's running:
-docker ps | grep postgres
-# You should see "arinar-db" running on port 5432
-```
-
-#### 3. Set Up Backend (FastAPI)
-```bash
-cd apps/api
-
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Copy environment template
-cp .env.example .env.local
-
-# Edit .env.local with your settings (use your favorite editor)
-# - DATABASE_URL should work as-is (points to Docker PostgreSQL)
-# - Add your SUPABASE credentials if you have them (optional for local dev)
-
-# Run database migrations
-python -m alembic upgrade head
-
-# Start the API server
-python -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-The API will be running at: **http://localhost:8000**
-
-Test it: `curl http://localhost:8000/health` (should return `{"status":"healthy"}`)
-
-#### 4. Set Up Frontend (Next.js)
-```bash
-# Open a new terminal
-cd apps/web
-
-# Install dependencies
-npm install
-
-# Copy environment template
-cp .env.example .env.local
-
-# Edit .env.local
-# - NEXT_PUBLIC_API_URL=http://localhost:8000
-# - Add your SUPABASE_URL and keys if you have them
-
-# Start the development server
-npm run dev
-```
-
-The frontend will be running at: **http://localhost:3000**
-
-#### 5. Configure Your API Key
-
-1. Open **http://localhost:3000** in your browser
-2. Go to **Settings** (gear icon in nav bar)
-3. Enter your **OpenRouter API Key**
-4. Click **Save & Verify**
+- Every reviewer claim hard-links to the exact source chunk it quotes, with the chunk's **SHA-256 re-verified live**.
+- When the AI *can't* ground a claim, it's flagged as an **evidence gap in the researcher's own writing** — turning the AI's weakness into an honest signal.
+- The final readiness certificate is **Ed25519-signed** and anchored to an append-only evidence ledger, so a grad school or journal can verify it without logging in.
 
 ---
 
-## 🎮 Usage Guide
+## The Three Pillars
 
-### Creating Your First Debate
-
-1. **Home Page** → Click **"Create New Debate"**
-
-2. **Step 1: Basic Info**
-   - Enter debate title (e.g., "Should we use TypeScript?")
-   - Add problem statement (what you want to discuss)
-   - Set time limit (optional) or max rounds (optional)
-
-3. **Step 2: Materials** (Optional)
-   - Upload documents, paste links, or add context
-   - Agents will reference these materials during debate
-
-4. **Step 3: Participants**
-   - Click **"Add from Template"**
-   - Browse 100+ agent personas by category:
-     - **Product**: PMs, growth experts
-     - **Engineering**: Architects, pragmatic engineers
-     - **Design**: UX researchers, designers
-     - **Business**: CFOs, legal counsel
-     - **Tax & Accounting**: CPAs, tax strategists, crypto specialists
-     - **Marketing**: Brand strategists, growth marketers
-     - **Startup Evaluators**: YC partners, VCs, tech diligence
-     - **Iconic Voices**: Elon Musk, Steve Jobs, Jeff Bezos, etc.
-   - Select 2-6 agents with diverse perspectives
-
-5. **Step 4: Preflight** (Optional)
-   - AI analyzes your setup and suggests improvements
-   - Review "Prep Pack" with debate preview
-
-6. **Step 5: Review & Launch**
-   - Verify everything looks good
-   - Click **"Enter Room"**
-
-### Running a Debate
-
-Once in the debate room:
-
-- **Next Turn**: Click to have the next agent speak
-- **Intervene**: Type a message to guide the debate
-- **Watch Thinking**: Expand "View reasoning" to see agent's chain-of-thought
-- **Agent Behaviors**: See autonomous actions (coalitions, challenges, strategic moves)
-- **Documents**: Collaborate on shared documents (if enabled)
-- **Extend Debate**: Add more rounds or time if needed
-
-### Understanding Agent Thinking
-
-Each agent uses a **Constitutional AI pipeline**:
-
-1. **🤔 Stage 1: Reasoning**
-   - Reviews past messages
-   - Analyzes the debate state
-   - Forms a stance and confidence level
-   - Identifies who to respond to
-
-2. **✍️ Stage 2: Response**
-   - Generates message based on reasoning
-   - Uses authentic character voice
-   - Addresses other agents directly
-
-3. **✅ Stage 3: Validation**
-   - Checks for hallucinations (citing non-existent participants)
-   - Verifies consistency with previous statements
-   - Ensures debate rules are followed
-   - Regenerates if issues found
+| Pillar | What it does | Where |
+|---|---|---|
+| 🔍 **Glass-Box Provenance** | Every reviewer question & live panel turn hard-links to the source chunk it quotes; SHA-256 re-verified on view; unsupported claims flagged as evidence gaps; click through to the **actual PDF** with the passage highlighted. | *Evidence* tab |
+| 👥 **Committee Twin** | Name the real people who'll sit on your panel → PeerForge pulls their **actual publications** (Crossref author search), ingests them as grounded corpus, and builds a reviewer twin that questions you citing *their own papers*. Twins can join the live panel. | *Committee* tab |
+| 📜 **Readiness Certificate** | A per-dimension readiness **trajectory** across sessions, drill-down from every score to the answer → question → verified source line, and an **Ed25519-signed, publicly verifiable** export with a QR code. | *Certificate* tab |
 
 ---
 
-## 📁 Project Structure
+## Features
+
+### Session setup
+- **6-step wizard** — research topic, materials, review panel, prior-session memory import, literature discovery, preflight & launch
+- **AI panel suggestion** — ranks reviewer templates from your title + abstract
+- **Draft autosave** to localStorage, session-length modes (time or rounds), autonomous "YOLO" mode
+- **Reasoning modes** (light / medium / heavy) that route between cheap and frontier models per task
+
+### Materials & RAG
+- Upload PDF / DOCX / TXT / audio (transcribed) or paste text & links
+- Async **Celery** pipeline: text extraction (+ scanned-PDF OCR detection) → semantic chunking with SHA-256, page numbers & char offsets → OpenRouter embeddings
+- **Grant-based memory retrieval** with a full audit log; cross-session memory import
+- **Literature search** across arXiv, Semantic Scholar, PubMed, Crossref & OpenAlex
+
+### The review panel (multi-agent engine)
+- **6 specialized reviewer lanes** — Advisor, Methodology Professor, Domain Expert, Skeptical Reviewer, Friendly Professor, Independent Examiner
+- **3-stage constitutional pipeline** per turn — reason → respond → validate, with citation enforcement and no hallucinated references
+- **Live provenance chips** on every panel message (Pillar 1)
+- **@mention routing**, a host/chair that synthesizes a peer-review verdict, real-time WebSocket streaming, and a moderator intervene composer
+
+### Practice, voice & assessment
+- **Practice Q&A** with a 6-axis narrative evaluation (scores kept internal; only qualitative feedback shown — no marks/grades in the UI)
+- **Voice practice** — the persona speaks questions (TTS), you dictate answers (STT) via the browser's Web Speech API
+- **10-dimension academic assessment** that regenerates automatically as you work, building the readiness trajectory
+
+### Verifiable outputs
+- **Public `/verify/{id}` page** — recomputes signature validity, hash integrity, and live-evidence match with no login
+- **QR code + share link** on the printable certificate
+- **Progress dashboard** — a cohort view of every session's readiness band, trajectory, and issued certificates
+
+### Trust demo
+- **Side-by-side comparison**: ask a raw model (no document) for a critique's source — it fabricates one — next to PeerForge's SHA-256-verified line.
+
+---
+
+## Architecture
+
+```
+                          ┌──────────────────────────────┐
+   Browser  ───────────►  │  Next.js 15 frontend (:3000) │
+                          │  Room · Evidence · Committee  │
+                          │  Certificate · Progress       │
+                          └──────────────┬───────────────┘
+                                         │  REST + WebSocket
+                          ┌──────────────▼───────────────┐
+                          │   FastAPI backend (:8000)     │
+                          │   ~30 routers · auth · BYOK   │
+                          └───┬───────────┬──────────┬────┘
+                              │           │          │
+              ┌───────────────▼──┐   ┌────▼─────┐  ┌─▼──────────────┐
+              │  PostgreSQL      │   │  Redis   │  │  MinIO          │
+              │  (:5433)         │   │  (:6379) │  │  (:9000)        │
+              │  sessions,       │   │  Celery  │  │  uploaded files │
+              │  chunks, events, │   │  broker  │  └────────────────┘
+              │  certificates    │   └────┬─────┘
+              └──────────────────┘        │
+                                    ┌─────▼──────────┐
+                                    │  Celery worker │
+                                    │  materials ·   │
+                                    │  preflight     │
+                                    └────────────────┘
+
+   LLM calls (BYOK) ─────────────►  OpenRouter  (embeddings + chat, all providers)
+```
+
+**Stack:** Next.js 15 (App Router, TypeScript) · FastAPI (Python 3.11) · PostgreSQL · Redis · MinIO/S3 · Celery · OpenRouter (only LLM provider, bring-your-own-key) · Supabase auth · Ed25519 signing (`cryptography`).
+
+See [`docs/`](docs/) and the architecture ADRs in [`docs/architecture/`](docs/architecture/) for deeper detail.
+
+---
+
+## Repository structure
 
 ```
 arinar-v2/
 ├── apps/
-│   ├── api/                    # FastAPI backend (Python)
-│   │   ├── src/
-│   │   │   ├── routes/        # API endpoints
-│   │   │   ├── agent_*.py     # Agent AI logic
-│   │   │   ├── turn_orchestrator.py  # Debate control
-│   │   │   └── websocket_*.py # Real-time updates
-│   │   └── requirements.txt
-│   │
-│   └── web/                   # Next.js frontend (TypeScript/React)
-│       ├── src/
-│       │   ├── app/          # Pages (home, room, setup, settings)
-│       │   ├── components/   # UI components
-│       │   ├── hooks/        # React hooks
-│       │   └── lib/          # API client, WebSocket client
-│       └── package.json
-│
-├── infra/
-│   └── docker/               # PostgreSQL, Redis, etc.
-│       └── docker-compose.yml
-│
-├── docs/                     # Architecture docs
-└── reports/                  # Feature reports
+│   ├── api/                    # FastAPI backend
+│   │   ├── src/routes/         # ~30 API routers (defense, assessment, materials, …)
+│   │   ├── src/services/       # provenance, certificate, cert_signing, committee_twin, …
+│   │   ├── src/tasks/          # Celery tasks (material processing, preflight)
+│   │   └── migrations/         # numbered SQL migrations
+│   └── web/                    # Next.js frontend
+│       └── src/
+│           ├── app/            # routes: room, history, progress, verify/[id], setup, …
+│           ├── components/room # GlassBoxPanel, CommitteeTwinBuilder, ReadinessCertificate, …
+│           └── lib/api.ts      # typed API client
+├── infra/docker/               # docker-compose (db, redis, minio)
+├── docs/                       # architecture, product, runbooks (+ archive/)
+├── run_app.sh                  # one-command local startup
+└── Makefile                    # install / lint / typecheck / test / db-* targets
 ```
 
 ---
 
-## 🔧 Configuration
+## Quick start
 
-### Environment Variables
+### Prerequisites
+- **Docker Desktop**, **Node.js 20+**, **Python 3.11**
+- An **[OpenRouter API key](https://openrouter.ai/)** (bring your own; used for all LLM + embedding calls)
 
-**Backend (`.env.local` in `apps/api/`):**
+### 1 · Infrastructure (Postgres, Redis, MinIO)
 ```bash
-# Database (works with Docker PostgreSQL)
-DATABASE_URL=postgresql://postgres:your-super-secret-postgres-password@127.0.0.1:5432/postgres
-
-# Supabase (optional for local dev)
-SUPABASE_URL=your-supabase-url
-SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_JWT_SECRET=your-jwt-secret
-
-# Auth (set to false for local demo)
-REQUIRE_AUTH=false
+cd arinar-v2
+docker compose -f infra/docker/docker-compose.yml up -d db redis minio
 ```
 
-**Frontend (`.env.local` in `apps/web/`):**
+### 2 · Backend (FastAPI + Celery)
 ```bash
-# Backend API
-NEXT_PUBLIC_API_URL=http://localhost:8000
-
-# Supabase (optional for local dev)
-NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-```
-
-### OpenRouter Models
-
-Default model: `openai/gpt-4o-mini` (cost-optimized, fast)
-
-You can change models in:
-- **Settings page** (global defaults)
-- **Setup flow** (per-debate)
-- **Agent templates** (per-agent defaults)
-
----
-
-## 🐛 Troubleshooting
-
-### Database Connection Issues
-```bash
-# Check if PostgreSQL is running
-docker ps | grep postgres
-
-# If not running, start it
-cd infra/docker
-docker-compose up -d db
-
-# Check logs
-docker logs arinar-db
-```
-
-### Backend Not Starting
-```bash
-# Check Python version (needs 3.11+)
-python --version
-
-# Reinstall dependencies
 cd apps/api
-pip install -r requirements.txt --force-reinstall
+cp .env.example .env                     # then fill in values
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 
-# Check for port conflicts
-lsof -i :8000
-# If port is in use, kill the process or use a different port
+# apply migrations (see migrations/ for the ordered SQL files)
+uvicorn src.main:app --reload --host 0.0.0.0 --port 8000 &
+
+# Celery worker (or set CELERY_TASK_ALWAYS_EAGER=true to run tasks inline)
+celery -A src.celery_app worker --queues=celery,materials,preflight --loglevel=info &
 ```
 
-### Frontend Not Starting
+### 3 · Frontend (Next.js)
 ```bash
-# Clear cache and reinstall
 cd apps/web
-rm -rf .next node_modules
+cp .env.example .env.local                # NEXT_PUBLIC_API_URL=http://localhost:8000
 npm install
-npm run dev
+npm run dev                               # http://localhost:3000
 ```
 
-### "Failed to load templates/agents" Error
-```bash
-# Make sure:
-# 1. Docker PostgreSQL is running (docker ps)
-# 2. Backend API is running (curl http://localhost:8000/health)
-# 3. Frontend is pointing to correct API URL (check .env.local)
+> **Shortcut:** `./run_app.sh` from `arinar-v2/` brings the whole stack up in one command.
 
-# Test the endpoint directly
-curl http://localhost:8000/agent-templates
-# Should return JSON array of 101 agent templates
-```
+Open **http://localhost:3000**, add your OpenRouter key in **Settings**, and start a session from **New Session**.
 
-### Debates Not Showing Thinking
-- Make sure you're using the **latest code** (pulled from main branch)
-- Thinking feature requires **WebSocket connection** (check browser console for errors)
-- Try refreshing the page after clicking "Next Turn"
+### Local defaults
+| Service | URL / Port |
+|---|---|
+| Frontend | http://localhost:3000 |
+| API | http://localhost:8000 ( `/docs` for OpenAPI ) |
+| PostgreSQL | localhost:5433 |
+| Redis | localhost:6379 |
+| MinIO | localhost:9000 (console :9001) |
+
+For local development you can run without auth by setting `REQUIRE_AUTH=false` in the API `.env`.
 
 ---
 
-## 🎨 Agent Categories
+## Environment variables
 
-Browse our **101 specialized agents**:
+Full templates live in [`apps/api/.env.example`](apps/api/.env.example) and [`apps/web/.env.example`](apps/web/.env.example). Highlights:
 
-### Core Categories
-- **Facilitator**: Ultimate Host (neutral moderator)
-- **Product**: PMs with various styles (visionary, pragmatic, growth-focused)
-- **Engineering**: Architects, pragmatic engineers, ship-it mentality
-- **Design**: UX researchers, design-led thinkers
-- **Business**: CFOs, legal counsel, strategy experts
-
-### Specialized Categories
-- **Tax & Accounting** (12 agents): CPAs, tax strategists, enrolled agents, real estate specialists, crypto experts, retirement planners
-- **Immigration** (3 agents): Policy experts, rights advocates, corporate consultants
-- **Marketing** (3 agents): Brand strategists, growth marketers, content experts
-- **Startup Evaluators** (3 agents): YC-style partners, VC analysts, tech due diligence
-- **Subject Matter Experts** (3 agents): Industry specialists, academics, practitioners
-
-### Thinking Styles
-- **Analysts**: Rational thinkers, domain experts, data-driven
-- **Critics**: Devil's advocates, quality-focused
-- **Empathizers**: Heart-centered, human impact focused
-- **Coaches**: Behavioral psychologists, change facilitators
-
-### Tech & Industry
-- **Tech Specialists**: Apple, Windows, GPU, AI/ML experts
-- **Medical Specialists**: Surgeons, cardiologists, neurologists, psychiatrists
-- **Legal Professionals**: Immigration attorneys, corporate lawyers
-- **Real Estate**: Property tax experts, investment advisors
-
-### Iconic Voices
-- Elon Musk (first principles, Mars-focused)
-- Steve Jobs (simplicity obsessed, design-driven)
-- Jeff Bezos (customer-obsessed, long-term)
-- Tim Cook (operational excellence)
-- Yuval Noah Harari (big history, philosophical)
-- Naval Ravikant (wealth & wisdom)
-- Paul Graham (startup philosophy)
-- Peter Thiel (contrarian, zero-to-one)
-- Ray Dalio (principles-based)
-- Warren Buffett (value investing)
-- Bill Gates (technologist & philanthropist)
-
-### Wildcards
-- Visionaries, tech nerds, first principles thinkers, customer champions
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | Postgres connection (default `postgresql://postgres:postgres@localhost:5433/peerforge_local`) |
+| `REDIS_URL` / `CELERY_*` | Redis broker & Celery config; `CELERY_TASK_ALWAYS_EAGER=true` runs tasks inline (free-tier friendly) |
+| `STORAGE_BACKEND` + `MINIO_*` / `S3_*` | Object storage for uploaded files |
+| `OPENROUTER_API_KEY` | Server-side fallback key (users normally bring their own via header) |
+| `KEY_ENCRYPTION_SECRET` | Fernet key encrypting stored account OpenRouter keys |
+| `CERT_SIGNING_KEY_PEM` | **Ed25519 key** signing readiness certificates (Pillar 3); auto-generated in dev |
+| `REQUIRE_AUTH`, `SUPABASE_*` | Auth mode & Supabase JWT settings |
+| `TAVILY_API_KEY`, `SEMANTIC_SCHOLAR_API_KEY` | Optional literature/web-search integrations |
 
 ---
 
-## 📊 Tech Stack
+## Key API endpoints
 
-**Frontend:**
-- Next.js 15 (React framework)
-- TypeScript
-- WebSocket client (real-time updates)
-- CSS Modules (styling)
+| Method & path | What it does |
+|---|---|
+| `POST /debates/setup` | Create a review session |
+| `POST /debates/{id}/materials/upload` | Upload a manuscript (async processing) |
+| `GET  /debates/{id}/materials/{mid}/file` | Stream the original PDF (for highlighting) |
+| `POST /debates/{id}/analyze-research` | Build the structured research profile |
+| `POST /debates/{id}/defense-questions/generate` | Generate grounded panel questions |
+| `GET  /debates/{id}/provenance` | Glass-Box lineage (claims → verified sources) |
+| `POST /debates/{id}/turn/next` | Advance the live panel one turn (with citations) |
+| `POST /debates/{id}/committee-twins` | Build reviewer twins from real publications |
+| `POST /debates/{id}/answers` | Submit a practice answer for evaluation |
+| `POST /debates/{id}/assessment/generate` | 10-dimension academic assessment |
+| `GET  /debates/{id}/certificate` | Assemble the readiness certificate |
+| `POST /debates/{id}/certificate/issue` | Ed25519-sign & persist the certificate |
+| `GET  /verify/{certificate_id}` | **Public** — verify signature, hash & live evidence |
+| `GET  /workspaces/{id}/readiness-overview` | Cohort readiness dashboard data |
 
-**Backend:**
-- FastAPI (Python web framework)
-- PostgreSQL (database)
-- WebSockets (real-time)
-- OpenRouter (LLM API gateway)
-
-**Infrastructure:**
-- Docker (PostgreSQL, Redis)
-- Supabase (auth & cloud DB, optional)
-
----
-
-## 🤝 Contributing
-
-This is a demo/prototype project. Feel free to:
-- Experiment with new agent personas
-- Modify debate rules and prompts
-- Add new features
-- Share feedback
+Interactive OpenAPI docs at **http://localhost:8000/docs**.
 
 ---
 
-## 📝 License
+## Deployment
 
-[Your License Here]
+Designed to run on free/low-cost tiers: **Vercel** (frontend) → **Railway** (FastAPI + Celery) → **Supabase** (Postgres + auth), with object storage on MinIO/S3/R2. See [`DEPLOYMENT.md`](DEPLOYMENT.md) and [`RUNBOOK.md`](RUNBOOK.md).
 
----
-
-## 📧 Support
-
-Questions? Issues? Reach out to:
-- GitHub Issues: https://github.com/vprasanna7/arinar-2026/issues
-- [Your Contact Info]
+Production notes:
+- Apply the numbered migrations in `apps/api/migrations/` (including `012_issued_certificates.sql`).
+- Set `CERT_SIGNING_KEY_PEM` to a managed Ed25519 key so certificate signatures come from a stable, secret-managed key.
+- `.env` / `.env.local` are gitignored — never commit real keys.
 
 ---
 
-## 🎯 What Makes Arinar Special?
+## Roadmap
 
-1. **Constitutional AI**: Every agent response goes through reasoning → generation → validation for higher quality
-2. **Live Thinking**: See exactly how agents think and decide in real-time
-3. **Authentic Personas**: 101 deeply characterized agents with distinct voices and perspectives
-4. **Real Debates**: Agents genuinely disagree, form coalitions, and challenge each other
-5. **Production-Ready**: Built with scalability, WebSockets, and modern best practices
+Phases 0–3 are implemented. Next: institutional pilots (department cohort licensing), academic validation of grounding quality against human reviewers, a pluggable retriever abstraction, and richer research-profile visualizations. See [`docs/product/`](docs/product/).
 
-Start debating with AI! 🚀
+---
+
+## License
+
+**Proprietary — © 2026 PeerForge. All rights reserved.** This repository is source-available for review; it is not licensed for redistribution or commercial reuse. Replace this section if you choose a different license.
+
+---
+
+<div align="center">
+<em>Rehearse the review you'll actually face — and prove every word of it.</em>
+</div>
