@@ -177,14 +177,14 @@ def get_provenance(debate_id: str) -> Dict[str, Any]:
         # Materials that back this session.
         cur.execute(
             """
-            SELECT mm.material_id, mm.title, mm.kind,
+            SELECT mm.material_id, mm.title, mm.kind, mm.file_mime_type,
                    COUNT(mc.chunk_id) AS chunk_count
             FROM   meeting_materials mm
             LEFT JOIN memory_chunks mc
                    ON (mc.chunk_metadata->>'material_id')::uuid = mm.material_id
                   AND mc.source_debate_id = mm.debate_id
             WHERE  mm.debate_id = %s
-            GROUP BY mm.material_id, mm.title, mm.kind
+            GROUP BY mm.material_id, mm.title, mm.kind, mm.file_mime_type
             ORDER BY mm.created_at
             """,
             (debate_id,),
@@ -194,6 +194,7 @@ def get_provenance(debate_id: str) -> Dict[str, Any]:
                 "material_id": str(r["material_id"]),
                 "title": r["title"],
                 "kind": r["kind"],
+                "file_mime_type": r.get("file_mime_type"),
                 "chunk_count": int(r["chunk_count"] or 0),
             }
             for r in cur.fetchall()

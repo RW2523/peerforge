@@ -1,17 +1,27 @@
 'use client';
 
 /**
- * Advisor — multi-student readiness console (Phase 3 / M7).
+ * Advisor — multi-student readiness console (Phase 3 / M7 / B2).
  *
  * The view a supervisor or program coordinator uses: every student in the
  * department, their average readiness band, an at-risk flag for who needs
  * attention, the cohort's most common weak areas, and a drill-down into each
  * student's individual sessions (each links to its signed certificate).
+ * Departments partition the cohort; invites bring members in with a role.
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppNav from '@/components/layout/AppNav';
-import { getStudentsOverview, StudentsOverview } from '@/lib/api';
+import {
+  createDepartment,
+  createInvite,
+  Department,
+  getStudentsOverview,
+  InviteResult,
+  listDepartments,
+  setDebateDepartment,
+  StudentsOverview,
+} from '@/lib/api';
 import styles from './advisor.module.css';
 
 const WORKSPACE_ID = '00000000-0000-0000-0000-000000000101';
@@ -26,12 +36,61 @@ export default function AdvisorPage() {
   const [data, setData] = useState<StudentsOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [deptFilter, setDeptFilter] = useState<string>('');
+  const [newDept, setNewDept] = useState('');
+  const [inviteRole, setInviteRole] = useState<'student' | 'advisor'>('student');
+  const [invite, setInvite] = useState<InviteResult | null>(null);
+  const [toolError, setToolError] = useState<string | null>(null);
 
-  useEffect(() => {
-    getStudentsOverview(WORKSPACE_ID)
+  const load = useCallback(() => {
+    getStudentsOverview(WORKSPACE_ID, deptFilter || undefined)
       .then(setData)
       .catch((e) => setError(String(e?.message || e)));
+  }, [deptFilter]);
+
+  const loadDepartments = useCallback(() => {
+    listDepartments(WORKSPACE_ID)
+      .then((r) => setDepartments(r.departments))
+      .catch(() => setDepartments([]));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadDepartments(); }, [loadDepartments]);
+
+  const handleCreateDept = async () => {
+    const name = newDept.trim();
+    if (!name) return;
+    setToolError(null);
+    try {
+      await createDepartment(WORKSPACE_ID, name);
+      setNewDept('');
+      loadDepartments();
+    } catch (e) {
+      setToolError(String((e as Error)?.message || e));
+    }
+  };
+
+  const handleInvite = async () => {
+    setToolError(null);
+    setInvite(null);
+    try {
+      setInvite(await createInvite(WORKSPACE_ID, inviteRole));
+    } catch (e) {
+      setToolError(String((e as Error)?.message || e));
+    }
+  };
+
+  const handleAssignDept = async (debateId: string, departmentId: string) => {
+    setToolError(null);
+    try {
+      await setDebateDepartment(debateId, departmentId || null);
+      load();
+      loadDepartments();
+    } catch (e) {
+      setToolError(String((e as Error)?.message || e));
+    }
+  };
 
   return (
     <>
@@ -47,13 +106,71 @@ export default function AdvisorPage() {
           </div>
         </header>
 
+        <div className={styles.toolbar}>
+          <label className={styles.toolItem}>
+            Department
+            <select
+              className={styles.toolSelect}
+              value={deptFilter}
+              onChange={(e) => setDeptFilter(e.target.value)}
+            >
+              <option value="">All departments</option>
+              {departments.map((d) => (
+                <option key={d.department_id} value={d.department_id}>
+                  {d.name} ({d.session_count})
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className={styles.toolItem}>
+            <input
+              className={styles.toolInput}
+              placeholder="New department…"
+              value={newDept}
+              onChange={(e) => setNewDept(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleCreateDept(); }}
+            />
+            <button className={styles.toolBtn} onClick={handleCreateDept} disabled={!newDept.trim()}>
+              Add
+            </button>
+          </div>
+          <div className={styles.toolItem}>
+            <select
+              className={styles.toolSelect}
+              value={inviteRole}
+              onChange={(e) => setInviteRole(e.target.value as 'student' | 'advisor')}
+            >
+              <option value="student">Invite a student</option>
+              <option value="advisor">Invite an advisor</option>
+            </select>
+            <button className={styles.toolBtn} onClick={handleInvite}>Create invite</button>
+          </div>
+        </div>
+        {toolError && <div className={styles.toolError}>{toolError}</div>}
+        {invite && (
+          <div className={styles.inviteBox}>
+            <span className={styles.inviteLabel}>
+              {invite.role} invite — expires {new Date(invite.expires_at).toLocaleDateString()}. Share this token; it is
+              redeemed once via <code>POST /invites/&#123;token&#125;/accept</code>:
+            </span>
+            <input
+              className={styles.inviteToken}
+              readOnly
+              value={invite.invite_token}
+              onFocus={(e) => e.target.select()}
+            />
+          </div>
+        )}
+
         {error ? (
           <div className={styles.state}>Could not load: {error}</div>
         ) : !data ? (
           <div className={styles.state}>Loading cohort…</div>
         ) : data.student_count === 0 ? (
           <div className={styles.state}>
-            No assessed students yet. Tag sessions with a student name and run an assessment to populate this view.
+            {deptFilter
+              ? 'No assessed sessions in this department yet. Assign sessions to it from a student drill-down.'
+              : 'No assessed students yet. Tag sessions with a student name and run an assessment to populate this view.'}
           </div>
         ) : (
           <>
@@ -95,6 +212,17 @@ export default function AdvisorPage() {
                         <div key={ses.debate_id} className={styles.sessionRow}>
                           <span className={styles.sessionTitle}>{ses.title}</span>
                           <span className={styles.sessionRight}>
+                            <select
+                              className={styles.deptSelect}
+                              value={ses.department_id ?? ''}
+                              onChange={(e) => handleAssignDept(ses.debate_id, e.target.value)}
+                              title="Department"
+                            >
+                              <option value="">No department</option>
+                              {departments.map((d) => (
+                                <option key={d.department_id} value={d.department_id}>{d.name}</option>
+                              ))}
+                            </select>
                             {ses.band && <span className={`${styles.bandMini} ${styles[BAND_CLASS[ses.band] || 'bandDeveloping']}`}>{ses.band}</span>}
                             <span className={styles.sessionAnswers}>{ses.answer_count} ans</span>
                             <button className={styles.openBtn} onClick={() => router.push(`/room?debate_id=${ses.debate_id}&tab=certificate`)}>Open</button>

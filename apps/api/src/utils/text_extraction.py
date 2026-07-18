@@ -18,6 +18,7 @@ class TextExtractor:
     ALLOWED_TYPES = {
         'application/pdf': '.pdf',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
         'text/plain': '.txt',
         'text/markdown': '.md',
     }
@@ -231,7 +232,94 @@ class TextExtractor:
             return TextExtractor.extract_from_pdf(file_data)
         elif mime_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
             return TextExtractor.extract_from_docx(file_data)
+        elif mime_type == 'application/vnd.openxmlformats-officedocument.presentationml.presentation':
+            return TextExtractor.extract_from_pptx(file_data)
         elif mime_type in ['text/plain', 'text/markdown']:
             return TextExtractor.extract_from_text(file_data)
         else:
             raise Exception(f'Unsupported MIME type: {mime_type}')
+
+    @staticmethod
+    def extract_from_pptx(file_data: bytes) -> Dict:
+        """
+        Extract text from a PowerPoint deck with per-slide provenance.
+
+        Emits per-slide entries in the same shape as PDF `pages` (page_num =
+        slide number) so downstream chunking attaches a slide number to every
+        chunk without any changes — provenance badges, Glass-Box links and
+        certificates all key off the same field. Speaker notes are included
+        inline, labelled, because they carry the presenter's actual narrative.
+
+        Returns:
+            {
+                'text': str,
+                'pages': List[{'page_num', 'text', 'char_start', 'char_end', 'word_count'}],
+                'slides': List[{'slide_num', 'title', 'body_words', 'notes_words', 'bullet_count'}],
+                'page_count': int, 'word_count': int, 'is_scanned': False, 'sha256': str,
+                'extraction_method': 'python-pptx'
+            }
+        """
+        from pptx import Presentation
+
+        prs = Presentation(io.BytesIO(file_data))
+        pages: List[Dict] = []
+        slides_meta: List[Dict] = []
+        parts: List[str] = []
+        offset = 0
+
+        for slide_num, slide in enumerate(prs.slides, start=1):
+            texts: List[str] = []
+            bullet_count = 0
+            title_shape = slide.shapes.title
+            title = (title_shape.text or '').strip() if title_shape is not None else ''
+            for shape in slide.shapes:
+                if shape is title_shape or not getattr(shape, 'has_text_frame', False):
+                    continue
+                for para in shape.text_frame.paragraphs:
+                    line = ''.join(run.text for run in para.runs).strip()
+                    if not line:
+                        continue
+                    texts.append(line)
+                    bullet_count += 1
+            if not title and texts:
+                title = texts[0]
+
+            notes = ''
+            if slide.has_notes_slide and slide.notes_slide.notes_text_frame is not None:
+                notes = (slide.notes_slide.notes_text_frame.text or '').strip()
+
+            body = '\n'.join(texts)
+            slide_text = f"[Slide {slide_num}] {title}\n{body}"
+            if notes:
+                slide_text += f"\n[Speaker notes] {notes}"
+
+            char_start = offset
+            char_end = offset + len(slide_text)
+            pages.append({
+                'page_num': slide_num,
+                'text': slide_text,
+                'char_start': char_start,
+                'char_end': char_end,
+                'word_count': len(slide_text.split()),
+            })
+            slides_meta.append({
+                'slide_num': slide_num,
+                'title': title[:120],
+                'body_words': len(body.split()),
+                'notes_words': len(notes.split()),
+                'bullet_count': bullet_count,
+            })
+            parts.append(slide_text)
+            offset = char_end + 2  # account for the joining "\n\n"
+
+        full_text = '\n\n'.join(parts)
+        return {
+            'text': full_text,
+            'pages': pages,
+            'slides': slides_meta,
+            'page_count': len(pages),
+            'word_count': len(full_text.split()),
+            'is_scanned': False,
+            'sha256': hashlib.sha256(file_data).hexdigest(),
+            'extraction_method': 'python-pptx',
+        }

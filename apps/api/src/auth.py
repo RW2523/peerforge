@@ -259,11 +259,66 @@ def require_auth(authorization: str = Header(None)) -> str:
     """
     user = get_current_user(authorization)
     workspace_id = user.get('workspace_id')
-    
+
     if not workspace_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User not associated with any workspace"
         )
-    
+
     return workspace_id
+
+
+# ── Role-based access control (B1) ─────────────────────────────────────────
+
+def get_role_for_user(user_id: str, workspace_id: str) -> Optional[str]:
+    """The user's role in a workspace, from user_workspaces. None when no
+    membership row exists (callers treat that as least privilege)."""
+    try:
+        from .database import get_db_connection, get_cursor
+        with get_db_connection() as conn:
+            cur = get_cursor(conn)
+            cur.execute(
+                "SELECT role FROM user_workspaces WHERE user_id = %s AND workspace_id = %s",
+                (user_id, workspace_id),
+            )
+            row = cur.fetchone()
+            return row["role"] if row else None
+    except Exception:
+        return None
+
+
+def require_role(*allowed_roles: str):
+    """Dependency factory: the caller must hold one of *allowed_roles* in their
+    workspace. 'owner' always passes (a workspace owner outranks every role).
+
+    Dev mode (REQUIRE_AUTH=false) resolves the test user's role from the DB the
+    same way, defaulting to 'owner' if no membership row exists — so local dev
+    keeps full access while the enforcement path stays real.
+    """
+    # 'owner' outranks every role; legacy 'admin' rows are owner-equivalent.
+    allowed = set(allowed_roles) | {"owner", "admin"}
+
+    def _dep(authorization: str = Header(None)) -> Dict[str, Any]:
+        user = get_current_user(authorization)
+        workspace_id = user.get("workspace_id")
+        if not workspace_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                detail="User not associated with any workspace")
+        # user_workspaces is the authority on workspace roles. The JWT's own
+        # 'role' claim is Supabase's postgres role ('authenticated') — never
+        # an app role, so it must not short-circuit the DB lookup.
+        role = get_role_for_user(user.get("user_id", ""), workspace_id)
+        if role is None and not settings.require_auth:
+            # No membership row for the dev test user — keep dev unblocked.
+            # A real membership row (even 'student') is always honored.
+            role = "owner"
+        role = role or "student"
+        if role not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Requires one of roles {sorted(allowed)}; you have '{role}'",
+            )
+        return {**user, "role": role}
+
+    return _dep

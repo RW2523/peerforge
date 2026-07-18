@@ -67,3 +67,38 @@
   padding: 4px 12px; font-size: 0.74rem; font-weight: 700; color: var(--text-1); cursor: pointer;
 }
 .openBtn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Departments & invites toolbar (B2) ── */
+.toolbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 0 0 14px; }
+.toolItem { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: var(--text-2); }
+.toolSelect, .toolInput {
+  background: var(--surface-1); color: var(--text-1);
+  border: 1px solid var(--border-medium); border-radius: 8px;
+  padding: 7px 10px; font-size: 0.82rem;
+}
+.toolInput { width: 170px; }
+.toolBtn {
+  background: var(--surface-2); color: var(--text-1);
+  border: 1px solid var(--border-medium); border-radius: 8px;
+  padding: 7px 14px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+}
+.toolBtn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.toolBtn:disabled { opacity: 0.5; cursor: default; }
+.toolError { color: var(--danger); font-size: 0.8rem; margin: -6px 0 12px; }
+.inviteBox {
+  border: 1px solid var(--border-soft); border-radius: 10px;
+  background: var(--surface-1); padding: 12px 14px; margin-bottom: 14px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.inviteLabel { font-size: 0.78rem; color: var(--text-2); }
+.inviteLabel code { font-size: 0.72rem; color: var(--text-1); }
+.inviteToken {
+  font-family: var(--font-mono, monospace); font-size: 0.8rem;
+  background: var(--surface-2); color: var(--text-0);
+  border: 1px solid var(--border-medium); border-radius: 8px; padding: 8px 10px;
+}
+.deptSelect {
+  background: var(--surface-2); color: var(--text-2);
+  border: 1px solid var(--border-soft); border-radius: 6px;
+  padding: 3px 6px; font-size: 0.72rem; max-width: 150px;
+}

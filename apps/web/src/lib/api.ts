@@ -1826,6 +1826,68 @@ export async function getReadinessReport(debateId: string): Promise<ReadinessRep
 }
 
 // ============================================================================
+// PRESENTATION COACH (concept 7.6)
+// ============================================================================
+
+export interface DeckSlide {
+  slide_num: number;
+  title: string;
+  body_words: number;
+  notes_words: number;
+  bullet_count: number;
+  text: string;
+  flags: string[];
+}
+
+export interface DeckData {
+  material_id: string;
+  deck_title: string;
+  slide_count: number;
+  estimated_minutes: number;
+  deck_flags: string[];
+  slides: DeckSlide[];
+}
+
+export interface DeckCoach {
+  overall_impression: string;
+  structure_feedback: string;
+  clarity_feedback: string;
+  slide_suggestions: { slide_num: number; suggestion: string }[];
+  strongest_slide?: { slide_num: number; why: string };
+  likely_audience_questions: string[];
+}
+
+export async function getPresentationDeck(debateId: string): Promise<DeckData> {
+  const response = await fetch(`${API_URL}/debates/${debateId}/presentation/deck`, {
+    headers: await getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const b = await response.json().catch(() => null);
+    throw new Error(b?.detail ?? response.statusText);
+  }
+  return response.json();
+}
+
+export async function coachPresentation(
+  debateId: string,
+  openrouterKey: string,
+  mode: ReasoningMode = 'light',
+): Promise<DeckData & { coach: DeckCoach }> {
+  const headers = await getAuthHeaders() as Record<string, string>;
+  headers['X-OpenRouter-Key'] = openrouterKey;
+  const response = await fetch(`${API_URL}/debates/${debateId}/presentation/coach`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ mode }),
+  });
+  if (!response.ok) {
+    const b = await response.json().catch(() => null);
+    throw new Error(b?.detail ?? response.statusText);
+  }
+  return response.json();
+}
+
+// ============================================================================
 // COMMITTEE TWIN (Pillar 2)
 // ============================================================================
 
@@ -2023,6 +2085,7 @@ export interface StudentSession {
   latest_score: number | null;
   band: string | null;
   answer_count: number;
+  department_id: string | null;
 }
 export interface StudentOverview {
   student: string;
@@ -2040,11 +2103,82 @@ export interface StudentsOverview {
   common_weak_areas: { area: string; count: number }[];
 }
 
-export async function getStudentsOverview(workspaceId: string): Promise<StudentsOverview> {
-  const response = await fetch(`${API_URL}/workspaces/${workspaceId}/students-overview`, {
+export async function getStudentsOverview(
+  workspaceId: string,
+  departmentId?: string
+): Promise<StudentsOverview> {
+  const qs = departmentId ? `?department_id=${encodeURIComponent(departmentId)}` : '';
+  const response = await fetch(`${API_URL}/workspaces/${workspaceId}/students-overview${qs}`, {
     headers: await getAuthHeaders(),
   });
   if (!response.ok) throw new Error(response.statusText);
+  return response.json();
+}
+
+// ── Departments & invites (institutional layer) ─────────────────────────────
+
+export interface Department {
+  department_id: string;
+  name: string;
+  session_count: number;
+}
+
+export async function listDepartments(workspaceId: string): Promise<{ departments: Department[] }> {
+  const response = await fetch(`${API_URL}/workspaces/${workspaceId}/departments`, {
+    headers: await getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error(response.statusText);
+  return response.json();
+}
+
+export async function createDepartment(
+  workspaceId: string,
+  name: string
+): Promise<{ department_id: string; name: string }> {
+  const response = await fetch(`${API_URL}/workspaces/${workspaceId}/departments`, {
+    method: 'POST',
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ name }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail || response.statusText);
+  }
+  return response.json();
+}
+
+export async function setDebateDepartment(
+  debateId: string,
+  departmentId: string | null
+): Promise<void> {
+  const response = await fetch(`${API_URL}/debates/${debateId}/department`, {
+    method: 'POST',
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ department_id: departmentId }),
+  });
+  if (!response.ok) throw new Error(response.statusText);
+}
+
+export interface InviteResult {
+  invite_token: string;
+  role: string;
+  expires_at: string;
+  accept_path: string;
+}
+
+export async function createInvite(
+  workspaceId: string,
+  role: 'advisor' | 'student'
+): Promise<InviteResult> {
+  const response = await fetch(`${API_URL}/workspaces/${workspaceId}/invites`, {
+    method: 'POST',
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ role }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail || response.statusText);
+  }
   return response.json();
 }
 
@@ -2099,7 +2233,7 @@ export interface ProvenanceClaim {
 
 export interface ProvenanceResponse {
   debate_id: string;
-  materials: { material_id: string; title: string; kind: string; chunk_count: number }[];
+  materials: { material_id: string; title: string; kind: string; file_mime_type?: string | null; chunk_count: number }[];
   claims: ProvenanceClaim[];
   summary: {
     total_claims: number;

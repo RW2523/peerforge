@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from typing import Literal
 
-from ..auth import require_auth
+from ..auth import require_auth, require_role
 from ..services.academic_assessment import (
     generate_assessment,
     get_latest_assessment,
@@ -180,12 +180,13 @@ async def issue_certificate(
 @router.get("/workspaces/{workspace_id}/readiness-overview")
 async def readiness_overview(
     workspace_id: str,
-    _workspace_id: str = Depends(require_auth),
+    _adv: Dict[str, Any] = Depends(require_role("advisor")),
 ):
     """Cohort view (Phase 3): every session with an assessment trajectory —
     first/latest overall score, band, evidence counts, and the issued
     certificate (if any) so an advisor or program can scan readiness at a
     glance and jump to verification."""
+    _workspace_id = _adv["workspace_id"]
     if workspace_id != _workspace_id:
         raise HTTPException(status_code=403, detail="Access denied to this workspace")
 
@@ -261,9 +262,10 @@ async def readiness_overview(
 async def set_student_label(
     debate_id: str,
     body: dict,
-    _workspace_id: str = Depends(require_auth),
+    _adv: Dict[str, Any] = Depends(require_role("advisor")),
 ):
     """Tag a session with a student identifier (advisor console grouping)."""
+    _workspace_id = _adv["workspace_id"]
     from ..database import get_db_connection, get_cursor
     label = (body or {}).get("student_label")
     with get_db_connection() as conn:
@@ -285,11 +287,20 @@ async def set_student_label(
 @router.get("/workspaces/{workspace_id}/students-overview")
 async def students_overview(
     workspace_id: str,
-    _workspace_id: str = Depends(require_auth),
+    department_id: Optional[str] = None,
+    _adv: Dict[str, Any] = Depends(require_role("advisor")),
 ):
     """Advisor console (Phase 3 / M7): group a workspace's assessed sessions by
     student, with per-student readiness roll-up, an at-risk flag, and the
     cohort's most common weak areas."""
+    _workspace_id = _adv["workspace_id"]
+    department_id = department_id or None  # '' must behave like absent
+    if department_id:
+        import uuid as _uuid
+        try:
+            _uuid.UUID(department_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="department_id is not a valid UUID")
     if workspace_id != _workspace_id:
         raise HTTPException(status_code=403, detail="Access denied to this workspace")
 
@@ -305,15 +316,16 @@ async def students_overview(
                 FROM academic_assessments WHERE workspace_id = %s
             )
             SELECT COALESCE(d.student_label, 'Unassigned') AS student,
-                   d.debate_id, d.title, l.overall_score,
+                   d.debate_id, d.title, l.overall_score, d.department_id,
                    (SELECT COUNT(*) FROM session_answers sa WHERE sa.debate_id = d.debate_id) AS answers,
                    p.weak_areas
             FROM debates d
             JOIN latest l ON l.debate_id = d.debate_id AND l.rn = 1
             LEFT JOIN research_profiles p ON p.debate_id = d.debate_id
             WHERE d.workspace_id = %s
+              AND (%s::uuid IS NULL OR d.department_id = %s::uuid)
             """,
-            (workspace_id, workspace_id),
+            (workspace_id, workspace_id, department_id, department_id),
         )
         rows = cur.fetchall()
 
@@ -334,6 +346,7 @@ async def students_overview(
         s["sessions"].append({
             "debate_id": str(r["debate_id"]), "title": r["title"],
             "latest_score": score, "band": band(score), "answer_count": int(r["answers"] or 0),
+            "department_id": str(r["department_id"]) if r.get("department_id") else None,
         })
         if score is not None:
             s["scores"].append(score)

@@ -28,7 +28,14 @@ export interface UseSpeechRecognitionReturn {
   error:             string | null;
 }
 
-export function useSpeechRecognition(): UseSpeechRecognitionReturn {
+export interface UseSpeechRecognitionOptions {
+  /** Long-form dictation mode (rehearsals): never auto-stop on silence, and
+   *  restart recognition if the browser ends the session, preserving the
+   *  accumulated transcript. Only stopListening() ends the capture. */
+  keepAlive?: boolean;
+}
+
+export function useSpeechRecognition(options?: UseSpeechRecognitionOptions): UseSpeechRecognitionReturn {
   const [finalTranscript,   setFinalTranscript]   = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
   const [isListening,       setIsListening]       = useState(false);
@@ -39,6 +46,9 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
   const recognitionRef   = useRef<SpeechRecognitionType>(null);
   const silenceTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const accumulatedRef   = useRef('');
+  const keepAliveRef     = useRef(!!options?.keepAlive);
+  keepAliveRef.current   = !!options?.keepAlive;
+  const manualStopRef    = useRef(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -55,10 +65,12 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
 
   const resetSilenceTimer = useCallback((stopFn: () => void) => {
     clearSilenceTimer();
+    if (keepAliveRef.current) return; // keep-alive mode: only stopListening() ends capture
     silenceTimerRef.current = setTimeout(stopFn, SILENCE_MS);
   }, []);
 
   const stopListening = useCallback(() => {
+    manualStopRef.current = true;
     clearSilenceTimer();
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch {}
@@ -74,76 +86,87 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     if (!SR) return;
 
     setError(null);
+    manualStopRef.current = false;
     accumulatedRef.current = '';
     setFinalTranscript('');
     setInterimTranscript('');
     setConfidence(0);
 
-    const recognition: SpeechRecognitionType = new SR();
-    recognition.continuous    = true;
-    recognition.interimResults = true;
-    recognition.lang           = 'en-US';
-    recognition.maxAlternatives = 1;
+    // Builds + starts a recognition instance. keepAlive mode re-invokes this
+    // from onend (browsers cap continuous sessions), keeping accumulatedRef.
+    const launch = () => {
+      const recognition: SpeechRecognitionType = new SR();
+      recognition.continuous    = true;
+      recognition.interimResults = true;
+      recognition.lang           = 'en-US';
+      recognition.maxAlternatives = 1;
 
-    recognition.onstart = () => {
-      setIsListening(true);
-      resetSilenceTimer(stopListening);
-    };
-
-    recognition.onresult = (event: any) => {
-      resetSilenceTimer(stopListening);
-
-      let interim = '';
-      let finalChunk = '';
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          finalChunk += result[0].transcript;
-          setConfidence(result[0].confidence ?? 0);
-        } else {
-          interim += result[0].transcript;
-        }
-      }
-
-      if (finalChunk) {
-        accumulatedRef.current += (accumulatedRef.current ? ' ' : '') + finalChunk.trim();
-        setFinalTranscript(accumulatedRef.current);
-      }
-      setInterimTranscript(interim);
-    };
-
-    recognition.onspeechend = () => {
-      resetSilenceTimer(stopListening);
-    };
-
-    recognition.onerror = (event: any) => {
-      if (event.error === 'no-speech') {
-        // Benign — just restart silence timer
+      recognition.onstart = () => {
+        setIsListening(true);
         resetSilenceTimer(stopListening);
-        return;
-      }
-      if (event.error === 'aborted') return; // manual stop
-
-      const messages: Record<string, string> = {
-        'not-allowed':        'Microphone permission denied. Please allow mic access.',
-        'service-not-allowed': 'Speech service not allowed. Try Chrome or Edge.',
-        'network':            'Network error. Check your internet connection.',
-        'audio-capture':      'No microphone found. Please connect a mic.',
       };
-      setError(messages[event.error] ?? `Speech error: ${event.error}`);
-      setIsListening(false);
-      clearSilenceTimer();
+
+      recognition.onresult = (event: any) => {
+        resetSilenceTimer(stopListening);
+
+        let interim = '';
+        let finalChunk = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (result.isFinal) {
+            finalChunk += result[0].transcript;
+            setConfidence(result[0].confidence ?? 0);
+          } else {
+            interim += result[0].transcript;
+          }
+        }
+
+        if (finalChunk) {
+          accumulatedRef.current += (accumulatedRef.current ? ' ' : '') + finalChunk.trim();
+          setFinalTranscript(accumulatedRef.current);
+        }
+        setInterimTranscript(interim);
+      };
+
+      recognition.onspeechend = () => {
+        resetSilenceTimer(stopListening);
+      };
+
+      recognition.onerror = (event: any) => {
+        if (event.error === 'no-speech') {
+          // Benign — just restart silence timer
+          resetSilenceTimer(stopListening);
+          return;
+        }
+        if (event.error === 'aborted') return; // manual stop
+
+        const messages: Record<string, string> = {
+          'not-allowed':        'Microphone permission denied. Please allow mic access.',
+          'service-not-allowed': 'Speech service not allowed. Try Chrome or Edge.',
+          'network':            'Network error. Check your internet connection.',
+          'audio-capture':      'No microphone found. Please connect a mic.',
+        };
+        setError(messages[event.error] ?? `Speech error: ${event.error}`);
+        manualStopRef.current = true; // terminal — don't keep-alive restart
+        setIsListening(false);
+        clearSilenceTimer();
+      };
+
+      recognition.onend = () => {
+        clearSilenceTimer();
+        if (keepAliveRef.current && !manualStopRef.current) {
+          try { launch(); return; } catch {}
+        }
+        setIsListening(false);
+        setInterimTranscript('');
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
     };
 
-    recognition.onend = () => {
-      setIsListening(false);
-      setInterimTranscript('');
-      clearSilenceTimer();
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
+    launch();
   }, [stopListening, resetSilenceTimer]);
 
   const resetTranscript = useCallback(() => {

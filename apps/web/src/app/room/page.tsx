@@ -13,6 +13,7 @@ import SummaryReport from '@/components/room/SummaryReport';
 import DocumentPanel from './DocumentPanel';
 import MockDefenseRoom from '@/components/room/MockDefenseRoom';
 import GlassBoxPanel from '@/components/room/GlassBoxPanel';
+import PresentationCoach from '@/components/room/PresentationCoach';
 import ReadinessCertificate from '@/components/room/ReadinessCertificate';
 import CommitteeTwinBuilder from '@/components/room/CommitteeTwinBuilder';
 import { useDebateRoom } from '@/hooks/useDebateRoom';
@@ -47,7 +48,7 @@ function RoomPageContent() {
   const [participantTurnCounts, setParticipantTurnCounts] = useState<Record<string, number>>({});
   const [debateStartedAt, setDebateStartedAt] = useState<string | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'transcript' | 'document' | 'defense' | 'evidence' | 'certificate' | 'committee'>('transcript');
+  const [activeTab, setActiveTab] = useState<'transcript' | 'document' | 'defense' | 'present' | 'evidence' | 'certificate' | 'committee'>('transcript');
   const [practiceVoice, setPracticeVoice] = useState(false);
 
   const handleDebateLoaded = (id: string, title: string, state: string) => {
@@ -61,7 +62,7 @@ function RoomPageContent() {
     if (tabParam === 'voice' || searchParams.get('voice') === '1') {
       setPracticeVoice(true);
       setActiveTab('defense');
-    } else if (tabParam === 'defense' || tabParam === 'evidence' || tabParam === 'certificate' || tabParam === 'committee') {
+    } else if (tabParam === 'defense' || tabParam === 'present' || tabParam === 'evidence' || tabParam === 'certificate' || tabParam === 'committee') {
       setActiveTab(tabParam);
     }
   };
@@ -353,6 +354,13 @@ function RoomPageContent() {
                 Practice Q&amp;A
               </button>
               <button
+                className={`${styles.tab} ${activeTab === 'present' ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab('present')}
+                title="Presentation coach — analyze your deck and rehearse it against the clock"
+              >
+                🎤 Present
+              </button>
+              <button
                 className={`${styles.tab} ${activeTab === 'evidence' ? styles.tabActive : ''}`}
                 onClick={() => setActiveTab('evidence')}
                 title="Glass-Box — trace every reviewer question to its verified source line"
@@ -417,6 +425,11 @@ function RoomPageContent() {
               {activeTab === 'defense' && (
                 <div style={{ flex: 1, overflowY: 'auto', padding: '16px 0' }}>
                   <MockDefenseRoom debateId={debateId} openrouterKey={openrouterKey || ''} initialVoice={practiceVoice} />
+                </div>
+              )}
+              {activeTab === 'present' && (
+                <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 0' }}>
+                  <PresentationCoach debateId={debateId} openrouterKey={openrouterKey || ''} />
                 </div>
               )}
               {activeTab === 'evidence' && (

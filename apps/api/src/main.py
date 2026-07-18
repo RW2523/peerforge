@@ -9,6 +9,7 @@ from .routes import (
     participants, autonomous, documents, action_items
 )
 from .routes.literature import router as literature_router
+from .routes.presentation import router as presentation_router
 from .routes.web_search import router as web_search_router
 
 
@@ -52,6 +53,7 @@ app.include_router(autonomous.router, tags=["autonomous"])
 app.include_router(documents.router, tags=["documents"])
 app.include_router(action_items.router, tags=["action-items"])
 app.include_router(literature_router, tags=["literature"])
+app.include_router(presentation_router, tags=["presentation"])
 app.include_router(web_search_router, tags=["web-search"])
 
 from .routes.defense import router as defense_router
@@ -62,6 +64,12 @@ app.include_router(assessment_router, tags=["assessment"])
 
 from .routes.user_settings import router as user_settings_router
 app.include_router(user_settings_router, tags=["user-settings"])
+
+from .routes.org import router as org_router
+app.include_router(org_router, tags=["org"])
+
+from .routes.billing import router as billing_router
+app.include_router(billing_router, tags=["billing"])
 
 
 # ── Account key resolution ───────────────────────────────────────────────────

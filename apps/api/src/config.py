@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
     supabase_service_role_key: str = ""
     require_auth: bool = True
+
+    # Billing scaffold (B4): community | professional | institution.
+    # Gates departments/invites/SSO — see services/plans.py and docs/INSTITUTIONAL.md.
+    plan: str = "institution"
     
     # Redis
     redis_url: str = "redis://localhost:6379/0"

@@ -311,7 +311,7 @@ export function MaterialsStep({
         <input
           ref={mainInputRef}
           type="file"
-          accept=".pdf,.docx,.txt,.md"
+          accept=".pdf,.docx,.pptx,.txt,.md"
           style={{ display: 'none' }}
           onChange={(e) => doUpload(e.target.files, 'main_research', true, mainInputRef)}
           disabled={disabled}
@@ -383,7 +383,7 @@ export function MaterialsStep({
             ref={researchInputRef}
             type="file"
             multiple
-            accept=".pdf,.docx,.txt,.md"
+            accept=".pdf,.docx,.pptx,.txt,.md"
             style={{ display: 'none' }}
             onChange={(e) => doUpload(e.target.files, 'research', false, researchInputRef)}
             disabled={disabled}

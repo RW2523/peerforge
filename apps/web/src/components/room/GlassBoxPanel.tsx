@@ -213,7 +213,7 @@ export default function GlassBoxPanel({ debateId }: Props) {
                     <span className={styles.pageBadge}>page {selected.source.page_num}</span>
                   )}
                   {selected.source.material_id &&
-                    data.materials.find(m => m.material_id === selected.source!.material_id)?.kind === 'file' && (
+                    data.materials.find(m => m.material_id === selected.source!.material_id)?.file_mime_type === 'application/pdf' && (
                     <button className={styles.pdfBtn} onClick={() => setPdfOpen(true)}>
                       📖 View in PDF
                     </button>
