@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 from ..auth import get_current_user, check_workspace_access
 from ..debate_service import DebateService
 from ..services.research_analyzer import analyze_research, get_research_profile
-from ..services.question_generator import generate_questions, get_questions
+from ..services.question_generator import generate_questions, get_questions, add_follow_up_question
 from ..services.answer_evaluator import evaluate_answer, get_answers
 from ..services.readiness_reporter import generate_readiness_report, get_readiness_report
 from ..services.persona_suggester import suggest_personas
@@ -71,9 +71,11 @@ class SuggestPersonasRequest(BaseModel):
 
 
 class GenerateQuestionsRequest(BaseModel):
-    model_id:    str              = Field(default="")
-    n_questions: int              = Field(default=15, ge=5, le=30)
-    mode:        ReasoningModeType = Field(default="medium")
+    model_id:      str              = Field(default="")
+    n_questions:   int              = Field(default=15, ge=5, le=30)
+    mode:          ReasoningModeType = Field(default="medium")
+    severity:      str              = Field(default="standard")
+    practice_mode: str              = Field(default="thesis_defense")
 
 
 class SubmitAnswerRequest(BaseModel):
@@ -81,6 +83,7 @@ class SubmitAnswerRequest(BaseModel):
     answer_text: str             = Field(..., min_length=10)
     model_id:    str             = Field(default="")
     mode:        ReasoningModeType = Field(default="medium")
+    severity:    str             = Field(default="standard")
 
 
 class ReadinessReportRequest(BaseModel):
@@ -208,6 +211,8 @@ async def trigger_question_generation(
             model_id=body.model_id,
             n_questions=body.n_questions,
             mode=mode,
+            severity=body.severity,
+            practice_mode=body.practice_mode,
         )
         return {
             "status":    "complete",
@@ -219,6 +224,31 @@ async def trigger_question_generation(
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         logger.exception("Question generation failed for %s", debate_id)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+class FollowUpRequest(BaseModel):
+    parent_question_id: str
+    question_text: str = Field(..., min_length=5)
+
+
+@router.post("/debates/{debate_id}/defense-questions/follow-up")
+async def create_follow_up_question(
+    debate_id: str,
+    body: FollowUpRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Persist a follow-up probe as a real question so it can be answered and
+    evaluated through the normal pipeline (closes the interactive challenge loop)."""
+    debate = _get_debate_or_404(debate_id)
+    check_workspace_access(current_user, debate["workspace_id"])
+    try:
+        q = add_follow_up_question(debate_id, body.parent_question_id, body.question_text)
+        return _serialize(q)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Follow-up creation failed for %s", debate_id)
         raise HTTPException(status_code=500, detail=str(exc))
 
 
@@ -327,6 +357,7 @@ async def submit_answer(
             openrouter_key=key,
             model_id=body.model_id,
             mode=mode,
+            severity=body.severity,
         )
         return result
     except ValueError as exc:

@@ -1,0 +1,69 @@
+/* Advisor console */
+.page { max-width: 940px; margin: 0 auto; padding: 28px 20px 60px; }
+.header { margin-bottom: 20px; }
+.title { margin: 0 0 6px; font-size: 1.4rem; font-weight: 800; color: var(--text-0); }
+.subtitle { margin: 0; max-width: 620px; font-size: 0.85rem; line-height: 1.55; color: var(--text-2); }
+.state { padding: 40px 12px; color: var(--text-2); font-size: 0.9rem; }
+
+.statRow { display: flex; gap: 12px; margin-bottom: 18px; }
+.statCard {
+  display: flex; flex-direction: column; align-items: center; min-width: 120px;
+  padding: 12px 18px; border: 1px solid var(--border-soft); border-radius: var(--radius-lg, 12px);
+  background: var(--surface-1);
+}
+.statNum { font-size: 1.7rem; font-weight: 800; color: var(--text-0); line-height: 1; }
+.statLbl { margin-top: 4px; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-3); }
+.statAtRisk { border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+.statAtRisk .statNum { color: var(--danger); }
+
+.weakBlock {
+  border: 1px solid var(--border-soft); border-radius: var(--radius-lg, 12px);
+  padding: 14px 16px; margin-bottom: 18px; background: var(--surface-1);
+}
+.weakTitle { font-size: 0.8rem; font-weight: 700; color: var(--text-1); margin-bottom: 8px; }
+.weakTags { display: flex; flex-wrap: wrap; gap: 8px; }
+.weakTag {
+  font-size: 0.76rem; color: var(--text-1); background: var(--bg-1);
+  border: 1px solid var(--border-soft); border-radius: 999px; padding: 3px 12px;
+}
+.weakTag em { color: var(--text-3); font-style: normal; margin-left: 5px; }
+
+.list { display: flex; flex-direction: column; gap: 8px; }
+.studentCard {
+  border: 1px solid var(--border-soft); border-radius: var(--radius-lg, 12px);
+  background: var(--surface-1); overflow: hidden;
+}
+.atRiskCard { border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+.studentHead {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  width: 100%; text-align: left; background: none; border: none; padding: 14px 16px; cursor: pointer;
+}
+.studentHead:hover { background: var(--surface-2); }
+.studentName { font-size: 0.95rem; font-weight: 700; color: var(--text-0); display: flex; align-items: center; gap: 8px; }
+.riskDot { color: var(--danger); font-size: 0.7rem; }
+.studentMeta { display: flex; align-items: center; gap: 12px; }
+.sessionCount { font-size: 0.76rem; color: var(--text-3); }
+.chevron { color: var(--text-3); font-size: 0.8rem; }
+.band, .bandMini {
+  font-size: 0.7rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; border: 1px solid; white-space: nowrap;
+}
+.bandMini { font-size: 0.66rem; padding: 2px 8px; }
+.bandStrong { color: var(--success); border-color: color-mix(in srgb, var(--success) 40%, transparent); background: color-mix(in srgb, var(--success) 10%, transparent); }
+.bandCompetent { color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 40%, transparent); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
+.bandDeveloping { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 40%, transparent); background: color-mix(in srgb, var(--warning) 10%, transparent); }
+.bandUnder { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+
+.sessions { border-top: 1px solid var(--border-soft); padding: 6px 16px 12px; }
+.sessionRow {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding: 8px 0; border-bottom: 1px solid var(--border-soft);
+}
+.sessionRow:last-child { border-bottom: none; }
+.sessionTitle { font-size: 0.82rem; color: var(--text-1); }
+.sessionRight { display: flex; align-items: center; gap: 10px; }
+.sessionAnswers { font-size: 0.72rem; color: var(--text-3); }
+.openBtn {
+  background: var(--surface-2); border: 1px solid var(--border-medium); border-radius: 999px;
+  padding: 4px 12px; font-size: 0.74rem; font-weight: 700; color: var(--text-1); cursor: pointer;
+}
+.openBtn:hover { border-color: var(--accent); color: var(--accent); }

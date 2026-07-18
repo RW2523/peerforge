@@ -1587,6 +1587,11 @@ export interface ResearchProfile {
   contribution?: string;
   evidence_summary?: string;
   limitations?: string;
+  hypothesis?: string;
+  key_claims?: string[];
+  results?: string;
+  future_work?: string;
+  contradictions?: { statement_a: string; statement_b: string; explanation: string }[];
   weak_areas?: { area: string; reason: string }[];
   possible_questions?: string[];
   error_message?: string;
@@ -1642,6 +1647,7 @@ export interface ReadinessReport {
   repeated_issues?: any[];
   likely_questions?: string[];
   improvement_plan?: any[];
+  model_answers?: { question: string; improved_answer: string; why_stronger?: string }[];
   next_recommendation?: string;
   generated_at?: string;
 }
@@ -1708,17 +1714,39 @@ export async function getResearchProfile(debateId: string): Promise<ResearchProf
   return response.json();
 }
 
+export type ChallengeSeverity = 'gentle' | 'standard' | 'rigorous' | 'hostile';
+export type PracticeMode = 'thesis_defense' | 'proposal_defense' | 'conference_qa' | 'journal_review';
+
 export async function generateDefenseQuestions(
   debateId: string,
   openrouterKey: string,
   nQuestions = 15,
   mode: ReasoningMode = 'medium',
-  modelId = ''
+  modelId = '',
+  severity: ChallengeSeverity = 'standard',
+  practiceMode: PracticeMode = 'thesis_defense'
 ): Promise<{ count: number; questions: DefenseQuestion[]; mode_used: string }> {
   const response = await fetch(`${API_URL}/debates/${debateId}/defense-questions/generate`, {
     method: 'POST',
     headers: await defenseHeaders(openrouterKey),
-    body: JSON.stringify({ n_questions: nQuestions, model_id: modelId, mode }),
+    body: JSON.stringify({ n_questions: nQuestions, model_id: modelId, mode, severity, practice_mode: practiceMode }),
+  });
+  if (!response.ok) {
+    const b = await response.json().catch(() => null);
+    throw new Error(b?.detail ?? response.statusText);
+  }
+  return response.json();
+}
+
+export async function addFollowUpQuestion(
+  debateId: string,
+  parentQuestionId: string,
+  questionText: string
+): Promise<DefenseQuestion> {
+  const response = await fetch(`${API_URL}/debates/${debateId}/defense-questions/follow-up`, {
+    method: 'POST',
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ parent_question_id: parentQuestionId, question_text: questionText }),
   });
   if (!response.ok) {
     const b = await response.json().catch(() => null);
@@ -1745,12 +1773,13 @@ export async function submitAnswer(
   answerText: string,
   openrouterKey: string,
   mode: ReasoningMode = 'medium',
-  modelId = ''
+  modelId = '',
+  severity: ChallengeSeverity = 'standard'
 ): Promise<AnswerEvaluation> {
   const response = await fetch(`${API_URL}/debates/${debateId}/answers`, {
     method: 'POST',
     headers: await defenseHeaders(openrouterKey),
-    body: JSON.stringify({ question_id: questionId, answer_text: answerText, model_id: modelId, mode }),
+    body: JSON.stringify({ question_id: questionId, answer_text: answerText, model_id: modelId, mode, severity }),
   });
   if (!response.ok) {
     const b = await response.json().catch(() => null);
@@ -1986,6 +2015,46 @@ export async function getReadinessOverview(
   });
   if (!response.ok) throw new Error(response.statusText);
   return response.json();
+}
+
+export interface StudentSession {
+  debate_id: string;
+  title: string;
+  latest_score: number | null;
+  band: string | null;
+  answer_count: number;
+}
+export interface StudentOverview {
+  student: string;
+  session_count: number;
+  avg_score: number | null;
+  band: string | null;
+  at_risk: boolean;
+  sessions: StudentSession[];
+}
+export interface StudentsOverview {
+  workspace_id: string;
+  students: StudentOverview[];
+  student_count: number;
+  at_risk_count: number;
+  common_weak_areas: { area: string; count: number }[];
+}
+
+export async function getStudentsOverview(workspaceId: string): Promise<StudentsOverview> {
+  const response = await fetch(`${API_URL}/workspaces/${workspaceId}/students-overview`, {
+    headers: await getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error(response.statusText);
+  return response.json();
+}
+
+export async function setStudentLabel(debateId: string, label: string): Promise<void> {
+  const response = await fetch(`${API_URL}/debates/${debateId}/student-label`, {
+    method: 'POST',
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ student_label: label }),
+  });
+  if (!response.ok) throw new Error(response.statusText);
 }
 
 /** PUBLIC — no auth header on purpose; anyone with the link can verify. */

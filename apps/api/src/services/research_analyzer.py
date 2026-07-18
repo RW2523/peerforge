@@ -48,12 +48,21 @@ Return a JSON object with EXACTLY these keys:
   "research_problem":   "<one sentence>",
   "research_gap":       "<gap or insufficiency in current knowledge>",
   "research_questions": ["<RQ1>", "<RQ2>", ...],
+  "hypothesis":         "<the stated or implied hypothesis, or 'Insufficient evidence in uploaded materials.'>",
   "main_claim":         "<central thesis or contribution>",
+  "key_claims":         ["<a distinct claim the work makes>", "..."],
   "methodology":        "<methods, approach, experimental design>",
   "dataset_details":    "<datasets, corpora, or sources used>",
+  "results":            "<the main reported results/findings, or 'Insufficient evidence in uploaded materials.'>",
   "contribution":       "<what the work may add — use cautious wording>",
   "evidence_summary":   "<what empirical or theoretical evidence supports the claim>",
   "limitations":        "<stated or apparent limitations>",
+  "future_work":        "<stated future directions, or 'Insufficient evidence in uploaded materials.'>",
+  "contradictions": [
+    {{"statement_a": "<a claim/statement in the materials>",
+      "statement_b": "<another statement that appears to conflict with it>",
+      "explanation": "<why they appear inconsistent>"}}
+  ],
   "weak_areas": [
     {{"area": "<topic>", "reason": "<why it appears weak>"}}
   ],
@@ -61,6 +70,9 @@ Return a JSON object with EXACTLY these keys:
     "<question a committee member might ask>"
   ]
 }}
+For "contradictions", only report genuine internal inconsistencies you can
+point to in the excerpts (e.g. the abstract claims X but Section 4 shows not-X).
+Return an empty array if none are evident — never invent a contradiction.
 """
 
 
@@ -185,7 +197,7 @@ def analyze_research(
             conn.commit()
 
             cur.execute("SELECT * FROM research_profiles WHERE profile_id = %s", (profile_id,))
-            return dict(cur.fetchone())
+            return _merge_raw(dict(cur.fetchone()))
 
     except Exception as exc:
         with get_db_connection() as conn:
@@ -199,6 +211,27 @@ def analyze_research(
         raise
 
 
+_RAW_ONLY_KEYS = (
+    "hypothesis", "key_claims", "results", "future_work", "contradictions",
+)
+
+
+def _merge_raw(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Surface fields that live only inside raw_analysis (the full LLM output),
+    e.g. hypothesis / results / contradictions, at the top level."""
+    raw = row.get("raw_analysis")
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except Exception:
+            raw = None
+    if isinstance(raw, dict):
+        for k in _RAW_ONLY_KEYS:
+            if k in raw and k not in row:
+                row[k] = raw[k]
+    return row
+
+
 def get_research_profile(debate_id: str) -> Optional[Dict[str, Any]]:
     """Return the stored research profile for a debate, or None."""
     with get_db_connection() as conn:
@@ -208,7 +241,7 @@ def get_research_profile(debate_id: str) -> Optional[Dict[str, Any]]:
             (debate_id,)
         )
         row = cur.fetchone()
-        return dict(row) if row else None
+        return _merge_raw(dict(row)) if row else None
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────

@@ -58,6 +58,12 @@ export default function AppNav() {
             >
               Progress
             </Link>
+            <Link
+              href="/advisor"
+              className={`${styles.link} ${isActive('/advisor') ? styles.active : ''}`}
+            >
+              Advisor
+            </Link>
           </div>
 
           <ThemeToggle />

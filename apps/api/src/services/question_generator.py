@@ -94,6 +94,8 @@ def generate_questions(
     model_id: str = "",
     n_questions: int = 15,
     mode: ReasoningMode = "medium",
+    severity: str = "standard",
+    practice_mode: str = "thesis_defense",
 ) -> List[Dict[str, Any]]:
     """
     Generate review questions for *debate_id* and persist to ``defense_questions``.
@@ -113,7 +115,8 @@ def generate_questions(
             f"No completed research profile found for debate {debate_id}. "
             "Run /analyze-research first."
         )
-    profile = dict(profile_row)
+    from .research_analyzer import _merge_raw
+    profile = _merge_raw(dict(profile_row))
     profile_id = profile["profile_id"]
 
     # ── Fetch chunks for source grounding ─────────────────────────────────
@@ -128,16 +131,25 @@ def generate_questions(
         k: profile.get(k)
         for k in (
             "research_problem", "research_gap", "research_questions",
-            "main_claim", "methodology", "contribution",
-            "limitations", "weak_areas",
+            "hypothesis", "main_claim", "key_claims", "methodology",
+            "results", "contribution", "limitations", "future_work",
+            "contradictions", "weak_areas",
         )
+        if profile.get(k)
     }
 
+    from .challenge_levels import question_directive
+    from .practice_modes import mode_focus, mode_emphasis
+    _mode_block = (
+        mode_focus(practice_mode)
+        + "\nWeight questions toward these categories for this mode: "
+        + ", ".join(mode_emphasis(practice_mode)) + "."
+    )
     client = OpenRouterClient(api_key=openrouter_key)
     response = client.chat_completion(
         model=model_id,
         messages=[
-            {"role": "system", "content": _SYSTEM},
+            {"role": "system", "content": _SYSTEM + "\n\n" + _mode_block + "\n\n" + question_directive(severity)},
             {"role": "user",   "content": _USER_TEMPLATE.format(
                 profile_json=json.dumps(profile_summary, indent=2),
                 excerpts=excerpts,
@@ -208,6 +220,52 @@ def generate_questions(
         conn.commit()
 
     return saved
+
+
+def add_follow_up_question(
+    debate_id: str,
+    parent_question_id: str,
+    question_text: str,
+) -> Dict[str, Any]:
+    """Persist a follow-up probe as a real question so the normal answer /
+    evaluation pipeline can handle it — this is what closes the challenge loop.
+    Inherits persona/category from the parent, bumps difficulty, links via
+    follow_up_rule, and appends after the last question."""
+    with get_db_connection() as conn:
+        cur = get_cursor(conn)
+        cur.execute("SELECT * FROM defense_questions WHERE question_id = %s", (parent_question_id,))
+        parent = cur.fetchone()
+        if not parent:
+            raise ValueError(f"Parent question {parent_question_id} not found")
+        parent = dict(parent)
+
+        cur.execute(
+            "SELECT COALESCE(MAX(seq_order), 0) + 1 AS n FROM defense_questions WHERE debate_id = %s",
+            (debate_id,),
+        )
+        seq = cur.fetchone()["n"]
+
+        question_id = str(uuid.uuid4())
+        cur.execute("""
+            INSERT INTO defense_questions (
+                question_id, debate_id, profile_id,
+                question_text, category, difficulty, persona,
+                expected_answer, follow_up_rule, follow_up_q,
+                source_excerpt, source_chunk_id, source_document_id,
+                seq_order, created_at
+            ) VALUES (%s,%s,%s, %s,%s,'hard',%s, %s,%s,%s, %s,%s,%s, %s,NOW())
+        """, (
+            question_id, debate_id, parent.get("profile_id"),
+            question_text, parent.get("category", "panel_challenge"),
+            parent.get("persona", "Skeptical Reviewer"),
+            "", f"follow_up_of:{parent_question_id}", "",
+            parent.get("source_excerpt", ""),
+            parent.get("source_chunk_id"), parent.get("source_document_id"),
+            seq,
+        ))
+        conn.commit()
+        cur.execute("SELECT * FROM defense_questions WHERE question_id = %s", (question_id,))
+        return dict(cur.fetchone())
 
 
 def get_questions(

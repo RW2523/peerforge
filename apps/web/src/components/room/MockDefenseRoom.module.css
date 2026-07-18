@@ -1057,3 +1057,89 @@
   font-size: 0.75rem;
   color: var(--warning);
 }
+
+/* ── Readiness breakdown (axis bands) ───────────────────────────────────── */
+.axisGrid { display: flex; flex-direction: column; gap: 8px; }
+.axisRow {
+  display: grid;
+  grid-template-columns: 160px 1fr 92px;
+  align-items: center;
+  gap: 12px;
+}
+.axisLabel { font-size: 0.82rem; color: var(--text-1); }
+.axisTrack {
+  position: relative; height: 8px; border-radius: 999px;
+  background: var(--bg-1); overflow: hidden;
+}
+.axisFill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 999px; }
+.axisBand { font-size: 0.7rem; font-weight: 700; text-align: right; }
+.axisStrong { background: var(--success); color: var(--success); }
+.axisDeveloping { background: var(--warning); color: var(--warning); }
+.axisWeak { background: var(--danger); color: var(--danger); }
+.axisBand.axisStrong, .axisBand.axisDeveloping, .axisBand.axisWeak { background: transparent; }
+
+.freqBadge {
+  margin-left: 6px; font-size: 0.68rem; font-weight: 700;
+  color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent);
+  border-radius: 999px; padding: 1px 7px;
+}
+
+/* ── Model answers ──────────────────────────────────────────────────────── */
+.modelAnswer {
+  border: 1px solid var(--border-soft); border-radius: var(--radius-md, 8px);
+  padding: 12px 14px; margin-bottom: 8px; background: var(--bg-1);
+}
+.modelQ { font-size: 0.84rem; font-weight: 700; color: var(--text-0); margin-bottom: 6px; }
+.modelA { margin: 0 0 6px; font-size: 0.85rem; line-height: 1.6; color: var(--text-1); }
+.modelWhy { font-size: 0.74rem; color: var(--text-3); font-style: italic; }
+
+/* ── Challenge level selector ───────────────────────────────────────────── */
+.severityRow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.severityCard {
+  text-align: left; background: var(--surface-1); border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md, 8px); padding: 10px 12px; cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.severityCard:hover { border-color: var(--border-medium); }
+.severityActive { border-color: var(--accent); background: var(--surface-2); }
+.severityHostile.severityActive { border-color: var(--danger); }
+.severityLabel { font-size: 0.85rem; font-weight: 700; color: var(--text-0); }
+.severityHint { font-size: 0.72rem; color: var(--text-3); margin-top: 2px; }
+.sevBadge {
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 2px 9px; border-radius: 999px; color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+}
+@media (max-width: 640px) { .severityRow { grid-template-columns: repeat(2, 1fr); } }
+
+/* ── Contradiction detector ─────────────────────────────────────────────── */
+.contradiction {
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  border-radius: var(--radius-md, 8px);
+  padding: 12px 14px; margin-bottom: 8px;
+  background: color-mix(in srgb, var(--danger) 6%, transparent);
+}
+.contraPair { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+.contraA, .contraB { font-size: 0.82rem; color: var(--text-1); font-style: italic; }
+.contraVs {
+  font-size: 0.66rem; font-weight: 800; text-transform: uppercase;
+  color: var(--danger); letter-spacing: 0.06em;
+}
+.contraWhy { font-size: 0.78rem; color: var(--text-2); }
+
+/* ── Delivery card (voice) ──────────────────────────────────────────────── */
+.deliveryCard {
+  border: 1px solid var(--border-soft); border-radius: var(--radius-md, 8px);
+  padding: 12px 14px; margin-top: 12px; background: var(--bg-1);
+}
+.deliveryCard h4 { margin: 0 0 8px; font-size: 0.85rem; }
+.deliveryGrid { display: flex; gap: 20px; flex-wrap: wrap; }
+.deliveryStat { display: flex; flex-direction: column; gap: 1px; }
+.deliveryNum { font-size: 1.3rem; font-weight: 800; color: var(--text-0); line-height: 1; }
+.deliveryLbl { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-3); }
+.deliveryBand { font-size: 0.72rem; font-weight: 700; margin-top: 2px; }
+.deliveryOk { color: var(--success); }
+.deliveryWarn { color: var(--warning); }
+.deliveryBad { color: var(--danger); }
+.deliveryNote { margin: 8px 0 0; font-size: 0.72rem; color: var(--text-3); font-style: italic; }

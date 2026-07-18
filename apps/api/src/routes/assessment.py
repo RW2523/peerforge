@@ -5,7 +5,7 @@ POST /debates/{id}/assessment/generate  → build a fresh ten-dimension assessme
 GET  /debates/{id}/assessment           → latest assessment
 GET  /debates/{id}/assessment/history   → prior overall scores (progress over time)
 """
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
@@ -255,6 +255,117 @@ async def readiness_overview(
         })
 
     return {"workspace_id": workspace_id, "sessions": sessions, "total": len(sessions)}
+
+
+@router.post("/debates/{debate_id}/student-label")
+async def set_student_label(
+    debate_id: str,
+    body: dict,
+    _workspace_id: str = Depends(require_auth),
+):
+    """Tag a session with a student identifier (advisor console grouping)."""
+    from ..database import get_db_connection, get_cursor
+    label = (body or {}).get("student_label")
+    with get_db_connection() as conn:
+        cur = get_cursor(conn)
+        cur.execute("SELECT workspace_id FROM debates WHERE debate_id = %s", (debate_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Session not found")
+        if str(row["workspace_id"]) != _workspace_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        cur.execute(
+            "UPDATE debates SET student_label = %s WHERE debate_id = %s",
+            (label or None, debate_id),
+        )
+        conn.commit()
+    return {"debate_id": debate_id, "student_label": label or None}
+
+
+@router.get("/workspaces/{workspace_id}/students-overview")
+async def students_overview(
+    workspace_id: str,
+    _workspace_id: str = Depends(require_auth),
+):
+    """Advisor console (Phase 3 / M7): group a workspace's assessed sessions by
+    student, with per-student readiness roll-up, an at-risk flag, and the
+    cohort's most common weak areas."""
+    if workspace_id != _workspace_id:
+        raise HTTPException(status_code=403, detail="Access denied to this workspace")
+
+    from ..database import get_db_connection, get_cursor
+    with get_db_connection() as conn:
+        cur = get_cursor(conn)
+        # Latest assessment overall per debate, joined to the debate + student.
+        cur.execute(
+            """
+            WITH latest AS (
+                SELECT debate_id, overall_score,
+                       ROW_NUMBER() OVER (PARTITION BY debate_id ORDER BY generated_at DESC) rn
+                FROM academic_assessments WHERE workspace_id = %s
+            )
+            SELECT COALESCE(d.student_label, 'Unassigned') AS student,
+                   d.debate_id, d.title, l.overall_score,
+                   (SELECT COUNT(*) FROM session_answers sa WHERE sa.debate_id = d.debate_id) AS answers,
+                   p.weak_areas
+            FROM debates d
+            JOIN latest l ON l.debate_id = d.debate_id AND l.rn = 1
+            LEFT JOIN research_profiles p ON p.debate_id = d.debate_id
+            WHERE d.workspace_id = %s
+            """,
+            (workspace_id, workspace_id),
+        )
+        rows = cur.fetchall()
+
+    def band(score):
+        if score is None: return None
+        if score >= 8: return "Strong"
+        if score >= 6: return "Competent"
+        if score >= 4: return "Developing"
+        return "Under-prepared"
+
+    students: Dict[str, Any] = {}
+    weak_counter: Dict[str, int] = {}
+    for r in rows:
+        s = students.setdefault(r["student"], {
+            "student": r["student"], "sessions": [], "scores": [],
+        })
+        score = float(r["overall_score"]) if r["overall_score"] is not None else None
+        s["sessions"].append({
+            "debate_id": str(r["debate_id"]), "title": r["title"],
+            "latest_score": score, "band": band(score), "answer_count": int(r["answers"] or 0),
+        })
+        if score is not None:
+            s["scores"].append(score)
+        wa = r.get("weak_areas")
+        if isinstance(wa, list):
+            for w in wa:
+                area = (w.get("area") if isinstance(w, dict) else str(w)) or ""
+                if area:
+                    weak_counter[area] = weak_counter.get(area, 0) + 1
+
+    out = []
+    for s in students.values():
+        scores = s["scores"]
+        avg = round(sum(scores) / len(scores), 1) if scores else None
+        out.append({
+            "student": s["student"],
+            "session_count": len(s["sessions"]),
+            "avg_score": avg,
+            "band": band(avg),
+            "at_risk": avg is not None and avg < 4,
+            "sessions": sorted(s["sessions"], key=lambda x: x["title"]),
+        })
+    out.sort(key=lambda x: (x["avg_score"] if x["avg_score"] is not None else 99))
+
+    common_weak = sorted(weak_counter.items(), key=lambda kv: kv[1], reverse=True)[:8]
+    return {
+        "workspace_id": workspace_id,
+        "students": out,
+        "student_count": len(out),
+        "at_risk_count": sum(1 for s in out if s["at_risk"]),
+        "common_weak_areas": [{"area": a, "count": c} for a, c in common_weak],
+    }
 
 
 @router.get("/verify/{certificate_id}")

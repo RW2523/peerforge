@@ -9,6 +9,7 @@ import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import {
   analyzeResearch,
   generateDefenseQuestions,
+  addFollowUpQuestion,
   suggestPersonas,
   submitAnswer,
   generateReadinessReport,
@@ -21,6 +22,8 @@ import {
   type ReadinessReport,
   type ReasoningMode,
   type SuggestedPersona,
+  type ChallengeSeverity,
+  type PracticeMode,
 } from '@/lib/api';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -72,8 +75,24 @@ interface Props {
   initialVoice?: boolean;
 }
 
+const SEVERITY_OPTIONS: { id: ChallengeSeverity; label: string; hint: string }[] = [
+  { id: 'gentle', label: 'Gentle', hint: 'Supportive, confidence-building' },
+  { id: 'standard', label: 'Standard', hint: 'A fair, balanced committee' },
+  { id: 'rigorous', label: 'Rigorous', hint: 'Demanding; probes every claim' },
+  { id: 'hostile', label: 'Hostile', hint: 'Adversarial worst-case examiner' },
+];
+
+const PRACTICE_MODE_OPTIONS: { id: PracticeMode; label: string; hint: string }[] = [
+  { id: 'thesis_defense', label: 'Thesis defense', hint: 'Full committee, completed work' },
+  { id: 'proposal_defense', label: 'Proposal defense', hint: 'Gap, plan & feasibility' },
+  { id: 'conference_qa', label: 'Conference Q&A', hint: 'Sharp, high-level audience' },
+  { id: 'journal_review', label: 'Journal review', hint: 'Reviewers assess for publication' },
+];
+
 export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice = false }: Props) {
   const [mode, setMode]       = useState<ReasoningMode>('medium');
+  const [severity, setSeverity] = useState<ChallengeSeverity>('standard');
+  const [practiceMode, setPracticeMode] = useState<PracticeMode>('thesis_defense');
   const [phase, setPhase]     = useState<Phase>('setup');
   const [error, setError]     = useState('');
 
@@ -82,6 +101,11 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
   const stt = useSpeechRecognition();
   const [voiceOn, setVoiceOn] = useState(initialVoice);
   const capturingRef = useRef(false);
+  // Delivery tracking (voice mode): accumulate spoken seconds across dictation
+  // spans for the current answer, then derive pace / fillers / confidence.
+  const speakStartRef = useRef<number | null>(null);
+  const speakSecondsRef = useRef(0);
+  const [delivery, setDelivery] = useState<{ wpm: number; fillers: number; confidence: number } | null>(null);
 
   const [profile, setProfile]         = useState<ResearchProfile | null>(null);
   const [personas, setPersonas]       = useState<SuggestedPersona[]>([]);
@@ -123,6 +147,13 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
+  const endSpeakSpan = useCallback(() => {
+    if (speakStartRef.current != null) {
+      speakSecondsRef.current += (Date.now() - speakStartRef.current) / 1000;
+      speakStartRef.current = null;
+    }
+  }, []);
+
   const handleAnalyzeAndSuggest = useCallback(async () => {
     if (!openrouterKey) {
       setError('OpenRouter API key is required. Add it in Settings.');
@@ -150,7 +181,7 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
     setError('');
     setPhase('analyzing');
     try {
-      const res = await generateDefenseQuestions(debateId, openrouterKey, 15, mode);
+      const res = await generateDefenseQuestions(debateId, openrouterKey, 15, mode, '', severity, practiceMode);
       setQuestions(res.questions);
       setQIndex(0);
       setPhase('defense');
@@ -158,7 +189,7 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
       setError(e.message || 'Question generation failed');
       setPhase('error');
     }
-  }, [debateId, openrouterKey, mode]);
+  }, [debateId, openrouterKey, mode, severity, practiceMode]);
 
   const handleSubmitAnswer = useCallback(async () => {
     if (!answerText.trim() || submitting) return;
@@ -166,8 +197,21 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
     if (!q) return;
     setSubmitting(true);
     setError('');
+    // Delivery metrics (voice mode only) — pace, fillers, ASR confidence.
+    endSpeakSpan();
+    const spokenSeconds = speakSecondsRef.current;
+    speakSecondsRef.current = 0;  // consume this answer's speaking time so it can't leak to the next
+    if (voiceOn && spokenSeconds > 2) {
+      const words = answerText.trim().split(/\s+/).filter(Boolean);
+      const wpm = Math.round((words.length / spokenSeconds) * 60);
+      const fillers = (answerText.toLowerCase().match(
+        /\b(um+|uh+|er+|like|you know|basically|actually|kind of|sort of|i mean)\b/g) || []).length;
+      setDelivery({ wpm, fillers, confidence: Math.round((stt.confidence || 0) * 100) });
+    } else {
+      setDelivery(null);
+    }
     try {
-      const ev = await submitAnswer(debateId, q.question_id, answerText, openrouterKey, mode);
+      const ev = await submitAnswer(debateId, q.question_id, answerText, openrouterKey, mode, '', severity);
       setEvaluation(ev);
       setAnsweredIds(prev => new Set(prev).add(q.question_id));
       setPhase('evaluated');
@@ -176,11 +220,13 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
     } finally {
       setSubmitting(false);
     }
-  }, [answerText, debateId, openrouterKey, mode, questions, qIndex, submitting]);
+  }, [answerText, debateId, openrouterKey, mode, severity, questions, qIndex, submitting, voiceOn, endSpeakSpan, stt.confidence]);
 
   const handleNextQuestion = useCallback(() => {
     setAnswerText('');
     setEvaluation(null);
+    setDelivery(null);
+    speakSecondsRef.current = 0;
     const next = qIndex + 1;
     if (next >= questions.length) {
       setPhase('questions');
@@ -189,6 +235,34 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
       setPhase('defense');
     }
   }, [qIndex, questions.length]);
+
+  // Close the challenge loop: persist the follow-up as a real question and
+  // drop the student straight back into answering it (spoken in voice mode).
+  const handleAnswerFollowUp = useCallback(async () => {
+    if (!evaluation?.follow_up_question) return;
+    const parent = questions[qIndex];
+    if (!parent) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      const fq = await addFollowUpQuestion(debateId, parent.question_id, evaluation.follow_up_question);
+      setQuestions(prev => {
+        const nextList = [...prev];
+        nextList.splice(qIndex + 1, 0, fq);
+        return nextList;
+      });
+      setQIndex(qIndex + 1);
+      setAnswerText('');
+      setEvaluation(null);
+      setDelivery(null);
+      speakSecondsRef.current = 0;
+      setPhase('defense');
+    } catch (e: any) {
+      setError(e.message || 'Could not start the follow-up');
+    } finally {
+      setSubmitting(false);
+    }
+  }, [evaluation, questions, qIndex, debateId]);
 
   const handleGenerateReport = useCallback(async () => {
     setError('');
@@ -241,23 +315,26 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
     if (stt.isListening) {
       capturingRef.current = false;
       stt.stopListening();
+      endSpeakSpan();
       appendTranscript();
     } else {
       tts.cancel();
       capturingRef.current = true;
+      speakStartRef.current = Date.now();
       stt.resetTranscript();
       stt.startListening();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stt.isListening, appendTranscript]);
+  }, [stt.isListening, appendTranscript, endSpeakSpan]);
 
   // Recognition can end on its own (silence) — capture whatever was said.
   useEffect(() => {
     if (capturingRef.current && !stt.isListening && stt.finalTranscript.trim()) {
       capturingRef.current = false;
+      endSpeakSpan();
       appendTranscript();
     }
-  }, [stt.isListening, stt.finalTranscript, appendTranscript]);
+  }, [stt.isListening, stt.finalTranscript, appendTranscript, endSpeakSpan]);
 
   const voiceToggle = (
     <button
@@ -311,6 +388,40 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
                 <div className={styles.modeLabel}>{opt.label}</div>
                 <div className={styles.modeDesc}>{opt.description}</div>
                 <div className={styles.modeCost}>{opt.costHint}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>What are you rehearsing?</div>
+          <p className={styles.hint}>The mode reframes your research for a different evaluation — changing what the panel emphasises.</p>
+          <div className={styles.severityRow}>
+            {PRACTICE_MODE_OPTIONS.map(opt => (
+              <button
+                key={opt.id}
+                className={`${styles.severityCard} ${practiceMode === opt.id ? styles.severityActive : ''}`}
+                onClick={() => setPracticeMode(opt.id)}
+              >
+                <div className={styles.severityLabel}>{opt.label}</div>
+                <div className={styles.severityHint}>{opt.hint}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>Challenge Level</div>
+          <p className={styles.hint}>How hard should the panel push? This changes both what they ask and how strictly they grade.</p>
+          <div className={styles.severityRow}>
+            {SEVERITY_OPTIONS.map(opt => (
+              <button
+                key={opt.id}
+                className={`${styles.severityCard} ${severity === opt.id ? styles.severityActive : ''} ${opt.id === 'hostile' ? styles.severityHostile : ''}`}
+                onClick={() => setSeverity(opt.id)}
+              >
+                <div className={styles.severityLabel}>{opt.label}</div>
+                <div className={styles.severityHint}>{opt.hint}</div>
               </button>
             ))}
           </div>
@@ -407,6 +518,7 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
       <div className={styles.container}>
         <div className={styles.modeBadgeRow}>
           <span className={styles.modeBadge}>{modeInfo.label}</span>
+          {severity !== 'standard' && <span className={styles.sevBadge}>{severity}</span>}
           {voiceToggle}
           {answeredCount > 0 && (
             <span className={styles.progressBadge}>
@@ -448,18 +560,43 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
               <div className={styles.profileGrid}>
                 {[
                   ['Research Problem', profile.research_problem],
+                  ['Hypothesis',       profile.hypothesis],
                   ['Main Claim',       profile.main_claim],
                   ['Methodology',      profile.methodology],
+                  ['Results',          profile.results],
                   ['Contribution',     profile.contribution],
                   ['Limitations',      profile.limitations],
-                ].map(([label, val]) => val ? (
-                  <div key={label as string} className={styles.profileItem}>
-                    <div className={styles.profileLabel}>{label}</div>
-                    <div className={styles.profileValue}>{val as string}</div>
-                  </div>
-                ) : null)}
+                  ['Future Work',      profile.future_work],
+                ].map(([label, val]) =>
+                  val && val !== 'Insufficient evidence in uploaded materials.' ? (
+                    <div key={label as string} className={styles.profileItem}>
+                      <div className={styles.profileLabel}>{label}</div>
+                      <div className={styles.profileValue}>{val as string}</div>
+                    </div>
+                  ) : null)}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Contradiction detector — internal inconsistencies found in the document */}
+        {profile?.contradictions && profile.contradictions.length > 0 && (
+          <div className={styles.section}>
+            <div className={styles.sectionTitle}>⚠ Possible Internal Contradictions</div>
+            <p className={styles.hint}>
+              The panel found statements in your own document that appear to conflict — expect to be
+              pressed on these. Resolve them before the real review.
+            </p>
+            {profile.contradictions.map((c, i) => (
+              <div key={i} className={styles.contradiction}>
+                <div className={styles.contraPair}>
+                  <span className={styles.contraA}>“{c.statement_a}”</span>
+                  <span className={styles.contraVs}>vs</span>
+                  <span className={styles.contraB}>“{c.statement_b}”</span>
+                </div>
+                <div className={styles.contraWhy}>{c.explanation}</div>
+              </div>
+            ))}
           </div>
         )}
 
@@ -519,6 +656,7 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
       <div className={styles.container}>
         <div className={styles.modeBadgeRow}>
           <span className={styles.modeBadge}>{modeInfo.label}</span>
+          {severity !== 'standard' && <span className={styles.sevBadge}>{severity}</span>}
           {voiceToggle}
           {voiceOn && tts.isSupported && (
             <button className={styles.toggleBtn} onClick={speakCurrentQuestion} title="Read the question again">
@@ -626,6 +764,7 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
       <div className={styles.container}>
         <div className={styles.modeBadgeRow}>
           <span className={styles.modeBadge}>{modeInfo.label}</span>
+          {severity !== 'standard' && <span className={styles.sevBadge}>{severity}</span>}
         </div>
 
         <div className={styles.evalCard}>
@@ -661,24 +800,69 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
             </div>
           )}
 
+          {delivery && (
+            <div className={styles.deliveryCard}>
+              <h4>🎙 Delivery (how you said it)</h4>
+              <div className={styles.deliveryGrid}>
+                {(() => {
+                  const pace = delivery.wpm < 110 ? { t: 'A bit slow', c: styles.deliveryWarn }
+                    : delivery.wpm > 175 ? { t: 'A bit fast', c: styles.deliveryWarn }
+                    : { t: 'Good pace', c: styles.deliveryOk };
+                  const fill = delivery.fillers <= 2 ? { t: 'Clean', c: styles.deliveryOk }
+                    : delivery.fillers <= 5 ? { t: 'Some fillers', c: styles.deliveryWarn }
+                    : { t: 'Many fillers', c: styles.deliveryBad };
+                  return (
+                    <>
+                      <div className={styles.deliveryStat}>
+                        <span className={styles.deliveryNum}>{delivery.wpm}</span>
+                        <span className={styles.deliveryLbl}>words / min</span>
+                        <span className={`${styles.deliveryBand} ${pace.c}`}>{pace.t}</span>
+                      </div>
+                      <div className={styles.deliveryStat}>
+                        <span className={styles.deliveryNum}>{delivery.fillers}</span>
+                        <span className={styles.deliveryLbl}>filler words</span>
+                        <span className={`${styles.deliveryBand} ${fill.c}`}>{fill.t}</span>
+                      </div>
+                      {delivery.confidence > 0 && (
+                        <div className={styles.deliveryStat}>
+                          <span className={styles.deliveryNum}>{delivery.confidence}%</span>
+                          <span className={styles.deliveryLbl}>speech clarity</span>
+                          <span className={`${styles.deliveryBand} ${delivery.confidence >= 80 ? styles.deliveryOk : styles.deliveryWarn}`}>
+                            {delivery.confidence >= 80 ? 'Clear' : 'Muffled'}
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+              <p className={styles.deliveryNote}>Delivery is separate from content — a confident delivery of a weak answer still needs work.</p>
+            </div>
+          )}
+
           {followUp && (
             <div className={styles.followUp}>
-              <h4>Follow-up Question</h4>
+              <h4>The panel isn&apos;t satisfied — follow-up</h4>
               <p>{evaluation.follow_up_question}</p>
             </div>
           )}
         </div>
 
         <div className={styles.actionRow}>
-          {qIndex + 1 < questions.length ? (
-            <button className={styles.primaryBtn} onClick={handleNextQuestion}>
-              Next Question
+          {followUp && (
+            <button className={styles.primaryBtn} onClick={handleAnswerFollowUp} disabled={submitting}>
+              {submitting ? 'Preparing…' : '🎯 Answer the follow-up'}
             </button>
-          ) : (
+          )}
+          {qIndex + 1 < questions.length ? (
+            <button className={followUp ? styles.secondaryBtn : styles.primaryBtn} onClick={handleNextQuestion}>
+              {followUp ? 'Skip →' : 'Next Question'}
+            </button>
+          ) : !followUp ? (
             <button className={styles.reportBtn} onClick={handleGenerateReport}>
               Generate Feedback Report
             </button>
-          )}
+          ) : null}
           <button className={styles.secondaryBtn} onClick={() => setPhase('questions')}>
             Back to Overview
           </button>
@@ -704,6 +888,7 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
       <div className={styles.container}>
         <div className={styles.modeBadgeRow}>
           <span className={styles.modeBadge}>{modeInfo.label}</span>
+          {severity !== 'standard' && <span className={styles.sevBadge}>{severity}</span>}
         </div>
 
         <div className={styles.reportHeader}>
@@ -719,6 +904,42 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
             </div>
           </div>
         </div>
+
+        {/* Readiness breakdown — the per-axis picture, as qualitative bands
+            (no raw marks) instead of hiding the data entirely. */}
+        {(() => {
+          const axes = [
+            ['Research clarity', report.research_clarity],
+            ['Methodology defense', report.methodology_score],
+            ['Evidence strength', report.evidence_score],
+            ['Critical thinking', report.critical_thinking],
+            ['Communication', report.communication],
+          ].filter(([, v]) => typeof v === 'number') as [string, number][];
+          if (axes.length === 0) return null;
+          const band = (v: number) =>
+            v >= 75 ? { label: 'Strong', cls: styles.axisStrong }
+            : v >= 50 ? { label: 'Developing', cls: styles.axisDeveloping }
+            : { label: 'Needs work', cls: styles.axisWeak };
+          return (
+            <div className={styles.section}>
+              <div className={styles.sectionTitle}>Readiness Breakdown</div>
+              <div className={styles.axisGrid}>
+                {axes.map(([label, v]) => {
+                  const b = band(v);
+                  return (
+                    <div key={label} className={styles.axisRow}>
+                      <span className={styles.axisLabel}>{label}</span>
+                      <span className={styles.axisTrack}>
+                        <span className={`${styles.axisFill} ${b.cls}`} style={{ width: `${Math.max(4, v)}%` }} />
+                      </span>
+                      <span className={`${styles.axisBand} ${b.cls}`}>{b.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         <div className={styles.swGrid}>
           {report.strong_answers && report.strong_answers.length > 0 && (
@@ -761,6 +982,36 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
                 </li>
               ))}
             </ol>
+          </div>
+        )}
+
+        {report.repeated_issues && report.repeated_issues.length > 0 && (
+          <div className={styles.section}>
+            <div className={styles.sectionTitle}>Recurring Issues</div>
+            <ul className={styles.likelyList}>
+              {report.repeated_issues.map((it: any, i: number) => (
+                <li key={i}>
+                  {typeof it === 'string' ? it : it.issue}
+                  {it?.frequency ? <span className={styles.freqBadge}>×{it.frequency}</span> : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {report.model_answers && report.model_answers.length > 0 && (
+          <div className={styles.section}>
+            <div className={styles.sectionTitle}>Model Answers to Study</div>
+            <p className={styles.hint}>
+              Stronger answers to your weakest questions — grounded in your own methodology and evidence.
+            </p>
+            {report.model_answers.map((m, i) => (
+              <div key={i} className={styles.modelAnswer}>
+                <div className={styles.modelQ}>{m.question}</div>
+                <p className={styles.modelA}>{m.improved_answer}</p>
+                {m.why_stronger && <div className={styles.modelWhy}>Why it's stronger: {m.why_stronger}</div>}
+              </div>
+            ))}
           </div>
         )}
 

@@ -78,8 +78,16 @@ Return a JSON object with EXACTLY these keys:
   "improvement_plan": [
     {{"area": "<area>", "action": "<what to do>", "priority": "high|medium|low"}}
   ],
+  "model_answers": [
+    {{"question": "<a weak question worth re-answering>",
+      "improved_answer": "<a strong, concise model answer (3-5 sentences) the researcher can study — grounded in their stated methodology/evidence, not invented>",
+      "why_stronger": "<one sentence on what this fixes>"}}
+  ],
   "next_recommendation": "<one sentence on what to do next before the formal review>"
 }}
+Produce a "model_answers" entry for each weak answer (up to 5). Ground every
+improved answer in the researcher's actual methodology and evidence — never
+invent results or citations.
 """
 
 
@@ -237,7 +245,7 @@ def generate_readiness_report(
             conn.commit()
 
             cur.execute("SELECT * FROM readiness_reports WHERE report_id = %s", (report_id,))
-            return dict(cur.fetchone())
+            return _merge_full_json(dict(cur.fetchone()))
 
     except Exception as exc:
         with get_db_connection() as conn:
@@ -250,6 +258,21 @@ def generate_readiness_report(
         raise
 
 
+def _merge_full_json(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Surface extra keys stored only in full_report_json (e.g. model_answers)
+    at the top level, so the API returns them alongside the column fields."""
+    extra = row.get("full_report_json")
+    if isinstance(extra, str):
+        try:
+            extra = json.loads(extra)
+        except Exception:
+            extra = None
+    if isinstance(extra, dict):
+        for k, v in extra.items():
+            row.setdefault(k, v)
+    return row
+
+
 def get_readiness_report(debate_id: str) -> Optional[Dict[str, Any]]:
     with get_db_connection() as conn:
         cur = get_cursor(conn)
@@ -258,4 +281,4 @@ def get_readiness_report(debate_id: str) -> Optional[Dict[str, Any]]:
             (debate_id,)
         )
         row = cur.fetchone()
-        return dict(row) if row else None
+        return _merge_full_json(dict(row)) if row else None

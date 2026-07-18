@@ -77,6 +77,7 @@ def evaluate_answer(
     openrouter_key: str,
     model_id: str = "",
     mode: ReasoningMode = "medium",
+    severity: str = "standard",
 ) -> Dict[str, Any]:
     """
     Evaluate *answer_text* against *question_id*, persist to ``session_answers``,
@@ -105,11 +106,12 @@ def evaluate_answer(
     research_context = _build_context(profile, question)
 
     # ── LLM evaluation ────────────────────────────────────────────────────
+    from .challenge_levels import eval_directive
     client = OpenRouterClient(api_key=openrouter_key)
     response = client.chat_completion(
         model=model_id,
         messages=[
-            {"role": "system", "content": _SYSTEM},
+            {"role": "system", "content": _SYSTEM + "\n\n" + eval_directive(severity)},
             {"role": "user",   "content": _USER_TEMPLATE.format(
                 category=question.get("category", ""),
                 persona=question.get("persona", ""),
