@@ -86,10 +86,41 @@ plan per workspace and enforces both feature gates and usage quotas.
 **Payment (optional).** Without Stripe, the owner plan-switch applies
 immediately (self-serve / trials / manual provisioning). With
 `STRIPE_SECRET_KEY` + `STRIPE_PRICE_IDS` set, a *paid upgrade* must go through
-Stripe Checkout; the webhook (`checkout.session.completed`) flips the
-workspace's plan. The direct switch is then limited to downgrades and the free
+Stripe Checkout; the direct switch is then limited to downgrades and the free
 tier, so nobody unlocks paid tiers without paying. The `stripe` library is
-imported lazily — it is not a hard dependency for deployments that don't use it.
+imported lazily — not a hard dependency for deployments that don't use it.
+
+**Subscription lifecycle.** The webhook (`POST /billing/webhook`) is the source
+of truth and handles the full lifecycle, keyed on the Stripe customer +
+subscription IDs stored on the workspace (migration 016):
+
+| Event | Effect |
+|---|---|
+| `checkout.session.completed` | Activate the purchased plan; store customer + subscription IDs; `plan_status = active`. |
+| `customer.subscription.updated` | Plan change (live price → plan), `cancel_at_period_end` → `canceling` (paid through period end), `past_due` on failed payment. |
+| `customer.subscription.deleted` | Downgrade to `community`; clear the subscription link; `plan_status = canceled`. |
+
+Hardening (all covered by tests):
+- **Signature required in production** — an unsigned webhook is refused unless
+  `REQUIRE_AUTH=false` (local dev); a missing `STRIPE_WEBHOOK_SECRET` returns 500.
+- **No stale-event revival** — Stripe does not guarantee event order and retries
+  for days, so an `updated` event is ignored when the workspace is already
+  `canceled` with no linked subscription, or when its `id` doesn't match the
+  workspace's linked subscription. A genuine re-subscribe only comes via
+  `checkout.session.completed`.
+- **Entitlement allowlist** — only `active`/`trialing` grant the plan;
+  `incomplete`/`paused`/etc. never do. Unmapped prices are logged, not guessed.
+
+**Self-service.** `POST /workspaces/{id}/billing/portal` (owner-only) opens the
+Stripe billing portal so a customer can update their card, change plan, or
+cancel — cancellation there fires the `subscription.*` webhooks above. The
+`/billing` page shows subscription status (Canceling / Past due), the renewal
+date, and a **Manage subscription** button. Set `PUBLIC_BASE_URL` so Stripe
+return URLs point at your deployed site rather than localhost.
+
+Production payment env: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
+`STRIPE_PRICE_IDS` (JSON `{"professional":"price_…","institution":"price_…"}`),
+`PUBLIC_BASE_URL`, and `pip install stripe` (pinned in requirements).
 
 **UI:** `/billing` (plan cards + usage meters + upgrade/downgrade), a plan pill
 in the top nav, a locked-feature prompt on the advisor console, and `/join` for

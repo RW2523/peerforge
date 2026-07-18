@@ -2222,18 +2222,26 @@ export interface Plan {
   features: PlanFeatures;
   limits: PlanLimits;
 }
+export interface SubscriptionState {
+  status: string | null;          // active | canceling | canceled | past_due | none
+  renews_at: string | null;
+  has_subscription: boolean;
+  source: string | null;          // default | manual | stripe
+}
 export interface Me {
   user_id: string;
   workspace_id: string;
   role: string;
   email: string | null;
   plan: Plan;
+  subscription: SubscriptionState | null;
 }
 export interface BillingInfo {
   workspace_id: string;
   current: Plan;
   plans: Plan[];
   usage: { sessions: { used: number; limit: number | null }; materials_per_session_limit: number | null };
+  subscription: SubscriptionState;
   payment_enabled: boolean;
 }
 
@@ -2278,6 +2286,20 @@ export async function startCheckout(workspaceId: string, plan: string): Promise<
   }
   const data = await response.json();
   return data.checkout_url;
+}
+
+/** Open the Stripe billing portal (self-service manage/cancel). Returns URL. */
+export async function openBillingPortal(workspaceId: string): Promise<string> {
+  const response = await fetch(`${API_URL}/workspaces/${workspaceId}/billing/portal`, {
+    method: 'POST',
+    headers: await getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail || response.statusText);
+  }
+  const data = await response.json();
+  return data.portal_url;
 }
 
 /** PUBLIC — no auth header on purpose; anyone with the link can verify. */

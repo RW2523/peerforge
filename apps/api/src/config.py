@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     # "institution": "price_..."}. Read from STRIPE_PRICE_IDS as JSON.
     stripe_price_ids: dict = {}
 
+    # Public site URL the frontend is served from — used for Stripe return
+    # URLs (checkout success/cancel, billing portal). Set in production.
+    public_base_url: str = "http://localhost:3000"
+
     # Redis
     redis_url: str = "redis://localhost:6379/0"
     

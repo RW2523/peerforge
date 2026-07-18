@@ -14,11 +14,19 @@ import {
   BillingInfo,
   changePlan,
   getBilling,
+  openBillingPortal,
   Plan,
   startCheckout,
 } from '@/lib/api';
 import { useMe } from '@/lib/workspace';
 import styles from './billing.module.css';
+
+const STATUS_LABEL: Record<string, string> = {
+  active: 'Active',
+  canceling: 'Cancels at period end',
+  canceled: 'Canceled',
+  past_due: 'Payment past due',
+};
 
 const FEATURE_ROWS: { key: keyof Plan['features']; label: string }[] = [
   { key: 'presentation_coach', label: 'Presentation coach' },
@@ -53,6 +61,16 @@ export default function BillingPage() {
   useEffect(() => {
     if (search.get('upgraded')) setNotice('Payment complete — your plan is now active.');
   }, [search]);
+
+  const handlePortal = async () => {
+    setError(null);
+    try {
+      const url = await openBillingPortal(workspaceId);
+      window.location.href = url;
+    } catch (e) {
+      setError(String((e as Error)?.message || e));
+    }
+  };
 
   const handleSelect = async (target: Plan) => {
     if (!info || busy) return;
@@ -94,10 +112,27 @@ export default function BillingPage() {
           <div className={styles.state}>{error ? 'Could not load billing.' : 'Loading plan…'}</div>
         ) : (
           <>
+            {info.subscription?.status && info.subscription.status !== 'active' && (
+              <div className={`${styles.subBanner} ${info.subscription.status === 'past_due' ? styles.subBannerWarn : ''}`}>
+                <span>
+                  {STATUS_LABEL[info.subscription.status] || info.subscription.status}
+                  {info.subscription.renews_at && info.subscription.status === 'canceling' &&
+                    ` — access continues until ${new Date(info.subscription.renews_at).toLocaleDateString()}`}
+                  {info.subscription.status === 'past_due' && ' — update your card to keep your plan.'}
+                </span>
+                {info.subscription.has_subscription && (
+                  <button className={styles.manageInline} onClick={handlePortal}>Manage subscription →</button>
+                )}
+              </div>
+            )}
+
             <section className={styles.usageBar}>
               <div className={styles.usageItem}>
                 <span className={styles.usageLabel}>Current plan</span>
                 <span className={styles.usageValue}>{info.current.label}</span>
+                {info.subscription?.status === 'active' && info.subscription.renews_at && (
+                  <span className={styles.renews}>Renews {new Date(info.subscription.renews_at).toLocaleDateString()}</span>
+                )}
               </div>
               <div className={styles.usageItem}>
                 <span className={styles.usageLabel}>Review sessions</span>
@@ -123,6 +158,12 @@ export default function BillingPage() {
               </div>
             </section>
 
+            {isOwner && info.subscription?.has_subscription && (
+              <div className={styles.manageRow}>
+                <button className={styles.manageBtn} onClick={handlePortal}>Manage subscription</button>
+                <span className={styles.manageHint}>Update your card, change plan, or cancel in the Stripe portal.</span>
+              </div>
+            )}
             {!isOwner && (
               <p className={styles.ownerNote}>Only a workspace owner can change the plan.</p>
             )}
