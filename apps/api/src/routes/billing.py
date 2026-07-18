@@ -26,19 +26,13 @@ from ..services.plans import (
     find_workspace_by_customer,
     find_workspace_by_subscription,
     get_plan,
-    plan_for_price_id,
     set_workspace_plan,
     stored_subscription_id,
     usage_summary,
 )
+from ..services.billing_sync import apply_decision, map_subscription
 
 logger = logging.getLogger(__name__)
-
-# Stripe subscription statuses that mean "no longer entitled" → downgrade.
-_DEAD_SUB_STATUSES = {"canceled", "unpaid", "incomplete_expired"}
-# Statuses that DO entitle the paid plan (allowlist — everything else, e.g.
-# 'incomplete' / 'paused', does not grant access).
-_ENTITLING_STATUSES = {"active", "trialing"}
 
 router = APIRouter(tags=["billing"])
 
@@ -218,22 +212,6 @@ def _extract_workspace(obj: dict) -> Optional[str]:
     return find_workspace_by_customer(obj.get("customer"))
 
 
-def _subscription_price_id(sub: dict) -> Optional[str]:
-    items = ((sub.get("items") or {}).get("data")) or []
-    return (items[0].get("price") or {}).get("id") if items else None
-
-
-def _period_end_dt(sub: dict):
-    ts = sub.get("current_period_end")
-    if not ts:
-        return None
-    from datetime import datetime, timezone
-    try:
-        return datetime.fromtimestamp(int(ts), tz=timezone.utc)
-    except (ValueError, TypeError, OSError):
-        return None
-
-
 def _handle_checkout_completed(obj: dict) -> None:
     ws = _extract_workspace(obj)
     plan = (obj.get("metadata") or {}).get("plan")
@@ -250,9 +228,10 @@ def _handle_subscription_updated(sub: dict) -> None:
     ws = _extract_workspace(sub)
     if not ws:
         return
-    status = sub.get("status")
-    if status in _DEAD_SUB_STATUSES:
-        set_workspace_plan(ws, "community", source="stripe", status="canceled", clear_subscription=True)
+    dec = map_subscription(sub)
+    if dec["kind"] == "downgrade":
+        # A cancellation always downgrades, regardless of link state.
+        apply_decision(ws, sub.get("id"), dec)
         return
 
     # Reject stale / out-of-order updates. Stripe does NOT guarantee event
@@ -270,38 +249,7 @@ def _handle_subscription_updated(sub: dict) -> None:
         # Update is for a subscription that is not this workspace's current one.
         return
 
-    # Prefer the LIVE price over stale checkout metadata; only fall back to
-    # metadata when the event carries no price at all.
-    price_id = _subscription_price_id(sub)
-    plan = plan_for_price_id(price_id) if price_id else (sub.get("metadata") or {}).get("plan")
-    renews = _period_end_dt(sub)
-
-    if sub.get("cancel_at_period_end"):
-        # Keep the current paid tier until the period ends; deletion downgrades.
-        keep = plan or get_plan(ws)["plan"]
-        set_workspace_plan(ws, keep, source="stripe",
-                           subscription_id=sub_id, status="canceling", renews_at=renews)
-        return
-
-    if plan is None:
-        logger.warning(
-            "Stripe subscription %s carries an unmapped price %s; leaving workspace %s plan unchanged",
-            sub_id, price_id, ws,
-        )
-        return
-
-    # Entitle only on an allowlist — never grant on 'incomplete'/'paused'/etc.
-    if status in _ENTITLING_STATUSES:
-        set_workspace_plan(ws, plan, source="stripe", subscription_id=sub_id,
-                           status="active", renews_at=renews)
-    elif status == "past_due":
-        set_workspace_plan(ws, plan, source="stripe", subscription_id=sub_id,
-                           status="past_due", renews_at=renews)
-    else:
-        logger.info(
-            "Stripe subscription %s status %r is non-entitling; leaving workspace %s unchanged",
-            sub_id, status, ws,
-        )
+    apply_decision(ws, sub_id, dec)
 
 
 def _handle_subscription_deleted(sub: dict) -> None:

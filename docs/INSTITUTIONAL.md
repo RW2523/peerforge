@@ -118,6 +118,31 @@ cancel — cancellation there fires the `subscription.*` webhooks above. The
 date, and a **Manage subscription** button. Set `PUBLIC_BASE_URL` so Stripe
 return URLs point at your deployed site rather than localhost.
 
+**Nightly reconciliation (belt-and-suspenders).** Stripe only retries a webhook
+for ~3 days, so a longer endpoint outage could leave a workspace on the wrong
+tier. A nightly job (`services/billing_sync.reconcile_all`) fetches the LIVE
+subscription for every linked workspace and repairs any drift — a missed
+cancellation downgrades, a missed plan change corrects, a subscription Stripe no
+longer knows about is treated as canceled. It shares the exact webhook mapping
+(so the two paths can't diverge), is idempotent, and only writes when the
+workspace's state actually differs. A transient fetch error is counted and
+skipped, never a wrongful downgrade. No-op when Stripe is unconfigured.
+
+It has a **circuit breaker**: a misconfigured Stripe key (a test key against
+live objects, or the wrong account) makes *every* subscription look missing. If
+too many report missing in one run (≥10 and >50% of those checked), the sweep
+aborts without downgrading anyone and logs a CRITICAL — so a bad key can't
+mass-cancel your paying customers. Fix the key and the next run reconciles
+normally.
+
+Run it one of two ways:
+- **Celery Beat** (already scheduled for 03:17 UTC in `celery_app.beat_schedule`):
+  `celery -A src.celery_app beat --loglevel=info` alongside the worker.
+- **Cron / platform scheduler** (deployments without Beat, e.g. eager mode):
+  `python -m src.jobs.reconcile_billing` — prints a JSON summary
+  (`{checked, corrected, errors}`) and exits non-zero if any workspace errored,
+  so the scheduler can alert.
+
 Production payment env: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
 `STRIPE_PRICE_IDS` (JSON `{"professional":"price_…","institution":"price_…"}`),
 `PUBLIC_BASE_URL`, and `pip install stripe` (pinned in requirements).

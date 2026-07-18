@@ -6,6 +6,7 @@ Handles asynchronous material processing tasks
 import os
 
 from celery import Celery
+from celery.schedules import crontab
 from src.config import settings
 
 # Create Celery app
@@ -13,7 +14,11 @@ celery_app = Celery(
     "arinar",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["src.tasks.material_processing", "src.tasks.preflight"]
+    include=[
+        "src.tasks.material_processing",
+        "src.tasks.preflight",
+        "src.tasks.billing_reconcile",
+    ]
 )
 
 # Configure Celery
@@ -49,3 +54,14 @@ celery_app.conf.task_routes = {
 # Workers pick up all queues by default (avoids "task stuck pending" issues).
 celery_app.conf.task_default_queue = "celery"
 celery_app.conf.worker_queues = ("celery", "materials", "preflight")
+
+# Periodic tasks (require a Celery Beat process:
+#   celery -A src.celery_app beat --loglevel=info
+# Deployments without Beat can instead cron `python -m src.jobs.reconcile_billing`).
+# Nightly at 03:17 UTC — off-peak, avoids the top-of-hour thundering herd.
+celery_app.conf.beat_schedule = {
+    "reconcile-subscriptions-nightly": {
+        "task": "src.tasks.billing_reconcile.reconcile_subscriptions",
+        "schedule": crontab(hour=3, minute=17),
+    },
+}
