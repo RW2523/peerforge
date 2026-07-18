@@ -5,10 +5,12 @@ import { usePathname } from 'next/navigation';
 import UserMenu from './UserMenu';
 import ThemeToggle from './ThemeToggle';
 import { APP_NAME, APP_TAGLINE, APP_ICON } from '@/lib/brand';
+import { useMe } from '@/lib/workspace';
 import styles from './AppNav.module.css';
 
 export default function AppNav() {
   const pathname = usePathname();
+  const { me } = useMe();
 
   const isActive = (path: string) => {
     if (path === '/') return pathname === '/';
@@ -66,6 +68,15 @@ export default function AppNav() {
             </Link>
           </div>
 
+          {me?.plan && (
+            <Link
+              href="/billing"
+              className={`${styles.planPill} ${isActive('/billing') ? styles.planPillActive : ''}`}
+              title={`${me.plan.label} plan — manage billing`}
+            >
+              {me.plan.label}
+            </Link>
+          )}
           <ThemeToggle />
           <UserMenu />
         </div>

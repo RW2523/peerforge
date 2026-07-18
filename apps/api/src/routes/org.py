@@ -91,7 +91,7 @@ async def create_department(
 ):
     """Create a department (idempotent on name)."""
     _check_workspace(workspace_id, _adv)
-    require_feature("departments")
+    require_feature("departments", workspace_id)
     name = request.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="Department name is required")
@@ -154,7 +154,7 @@ async def create_invite(
     """Mint a single-use invite token carrying a role (and optional department).
     Share the token; the invitee redeems it at POST /invites/{token}/accept."""
     _check_workspace(workspace_id, _adv)
-    require_feature("invites")
+    require_feature("invites", workspace_id)
     role = (request.role or "").strip().lower()
     if role not in ASSIGNABLE_ROLES:
         raise HTTPException(

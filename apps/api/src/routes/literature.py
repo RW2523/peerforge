@@ -170,6 +170,11 @@ async def save_papers_to_context(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
 
     workspace_id = debate["workspace_id"]
+
+    # Paywall: saved papers count toward the per-session material cap.
+    from ..services.plans import require_material_quota
+    require_material_quota(debate_id, str(workspace_id), len(body.papers))
+
     material_ids: List[str] = []
 
     try:

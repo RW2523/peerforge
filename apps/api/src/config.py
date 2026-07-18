@@ -46,10 +46,19 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = ""
     require_auth: bool = True
 
-    # Billing scaffold (B4): community | professional | institution.
-    # Gates departments/invites/SSO — see services/plans.py and docs/INSTITUTIONAL.md.
+    # Billing (Track C): default plan for workspaces with no explicit plan
+    # (community | professional | institution). Per-workspace plans live in
+    # workspaces.plan. See services/plans.py and docs/INSTITUTIONAL.md.
     plan: str = "institution"
-    
+
+    # Payment (optional). When stripe_secret_key is set, paid upgrades go
+    # through Stripe Checkout; otherwise the owner plan-switch is self-serve.
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    # Map plan key → Stripe price id, e.g. {"professional": "price_...",
+    # "institution": "price_..."}. Read from STRIPE_PRICE_IDS as JSON.
+    stripe_price_ids: dict = {}
+
     # Redis
     redis_url: str = "redis://localhost:6379/0"
     

@@ -1,0 +1,59 @@
+.page { max-width: 1000px; margin: 0 auto; padding: 32px 24px 64px; }
+.header { margin-bottom: 24px; }
+.title { margin: 0 0 6px; font-size: 1.6rem; font-weight: 800; color: var(--text-0); }
+.subtitle { margin: 0; font-size: 0.9rem; color: var(--text-2); max-width: 60ch; }
+
+.state { padding: 40px; color: var(--text-2); font-size: 0.9rem; }
+.notice {
+  border: 1px solid color-mix(in srgb, var(--success) 40%, transparent);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  color: var(--success); border-radius: 10px; padding: 10px 14px; font-size: 0.85rem; margin-bottom: 14px;
+}
+.error {
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger); border-radius: 10px; padding: 10px 14px; font-size: 0.85rem; margin-bottom: 14px;
+}
+.ownerNote, .footNote { font-size: 0.8rem; color: var(--text-3); margin: 16px 0 0; }
+
+/* Usage bar */
+.usageBar {
+  display: flex; gap: 28px; flex-wrap: wrap;
+  border: 1px solid var(--border-soft); border-radius: 12px;
+  background: var(--surface-1); padding: 18px 22px; margin-bottom: 24px;
+}
+.usageItem { display: flex; flex-direction: column; gap: 4px; min-width: 150px; }
+.usageLabel { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-3); }
+.usageValue { font-size: 1.15rem; font-weight: 800; color: var(--text-0); font-variant-numeric: tabular-nums; }
+.meter { height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; margin-top: 4px; }
+.meterFill { height: 100%; background: var(--accent); border-radius: 999px; }
+
+/* Plan cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.card {
+  border: 1px solid var(--border-soft); border-radius: 14px;
+  background: var(--surface-1); padding: 22px; display: flex; flex-direction: column;
+}
+.cardCurrent { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.cardHead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.planName { font-size: 1.15rem; font-weight: 800; color: var(--text-0); }
+.badge {
+  font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--bg-0); background: var(--accent); border-radius: 999px; padding: 2px 9px;
+}
+.price { font-size: 0.95rem; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+.blurb { font-size: 0.82rem; color: var(--text-2); line-height: 1.5; margin: 0 0 14px; min-height: 2.4em; }
+.featureList { list-style: none; margin: 0 0 18px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.featureList li { font-size: 0.82rem; color: var(--text-1); }
+.featureList .off { color: var(--text-3); }
+.featureList strong { color: var(--text-0); }
+
+.cta {
+  margin-top: auto; border: 1px solid var(--border-medium); border-radius: 10px;
+  background: var(--surface-2); color: var(--text-1);
+  padding: 10px 16px; font-size: 0.85rem; font-weight: 700; cursor: pointer;
+}
+.cta:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.cta:disabled { opacity: 0.5; cursor: default; }
+.ctaUpgrade { background: var(--accent); color: var(--bg-0); border-color: var(--accent); }
+.ctaUpgrade:hover:not(:disabled) { background: var(--accent-hover); color: var(--bg-0); }

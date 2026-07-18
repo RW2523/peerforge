@@ -1,0 +1,25 @@
+.page { display: flex; justify-content: center; padding: 64px 24px; }
+.card {
+  width: 100%; max-width: 440px;
+  border: 1px solid var(--border-soft); border-radius: 16px;
+  background: var(--surface-1); padding: 32px;
+}
+.title { margin: 0 0 8px; font-size: 1.4rem; font-weight: 800; color: var(--text-0); }
+.subtitle { margin: 0 0 18px; font-size: 0.88rem; color: var(--text-2); line-height: 1.55; }
+.input {
+  width: 100%; box-sizing: border-box;
+  font-family: var(--font-mono, monospace); font-size: 0.86rem;
+  background: var(--surface-2); color: var(--text-0);
+  border: 1px solid var(--border-medium); border-radius: 10px; padding: 11px 13px;
+}
+.error { color: var(--danger); font-size: 0.82rem; margin: 10px 0 0; }
+.success { color: var(--success); font-size: 0.95rem; margin: 0 0 18px; }
+.actions { display: flex; align-items: center; gap: 12px; margin-top: 18px; }
+.primary {
+  background: var(--accent); color: var(--bg-0); border: none;
+  border-radius: 10px; padding: 10px 20px; font-size: 0.88rem; font-weight: 700; cursor: pointer;
+}
+.primary:hover:not(:disabled) { background: var(--accent-hover); }
+.primary:disabled { opacity: 0.5; cursor: default; }
+.secondary { color: var(--text-2); font-size: 0.85rem; text-decoration: none; }
+.secondary:hover { color: var(--text-0); }

@@ -2191,6 +2191,95 @@ export async function setStudentLabel(debateId: string, label: string): Promise<
   if (!response.ok) throw new Error(response.statusText);
 }
 
+export async function acceptInvite(token: string): Promise<{ workspace_id: string; role: string; joined: boolean }> {
+  const response = await fetch(`${API_URL}/invites/${encodeURIComponent(token)}/accept`, {
+    method: 'POST',
+    headers: await getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail || response.statusText);
+  }
+  return response.json();
+}
+
+// ── Billing / plans (paywall) ───────────────────────────────────────────────
+
+export interface PlanFeatures {
+  advisor_console: boolean; certificates: boolean; presentation_coach: boolean;
+  departments: boolean; invites: boolean; sso: boolean;
+}
+export interface PlanLimits {
+  max_sessions: number | null;
+  max_materials_per_session: number | null;
+}
+export interface Plan {
+  plan: string;
+  rank: number;
+  label: string;
+  price_hint: string;
+  blurb: string;
+  features: PlanFeatures;
+  limits: PlanLimits;
+}
+export interface Me {
+  user_id: string;
+  workspace_id: string;
+  role: string;
+  email: string | null;
+  plan: Plan;
+}
+export interface BillingInfo {
+  workspace_id: string;
+  current: Plan;
+  plans: Plan[];
+  usage: { sessions: { used: number; limit: number | null }; materials_per_session_limit: number | null };
+  payment_enabled: boolean;
+}
+
+export async function getMe(): Promise<Me> {
+  const response = await fetch(`${API_URL}/me`, { headers: await getAuthHeaders() });
+  if (!response.ok) throw new Error(response.statusText);
+  return response.json();
+}
+
+export async function getBilling(workspaceId: string): Promise<BillingInfo> {
+  const response = await fetch(`${API_URL}/workspaces/${workspaceId}/billing`, {
+    headers: await getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error(response.statusText);
+  return response.json();
+}
+
+export async function changePlan(workspaceId: string, plan: string): Promise<BillingInfo['current']> {
+  const response = await fetch(`${API_URL}/workspaces/${workspaceId}/billing/plan`, {
+    method: 'POST',
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ plan }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail || response.statusText);
+  }
+  const data = await response.json();
+  return data.current;
+}
+
+/** Start a Stripe checkout (only when payment_enabled). Returns hosted URL. */
+export async function startCheckout(workspaceId: string, plan: string): Promise<string> {
+  const response = await fetch(`${API_URL}/workspaces/${workspaceId}/billing/checkout`, {
+    method: 'POST',
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ plan }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail || response.statusText);
+  }
+  const data = await response.json();
+  return data.checkout_url;
+}
+
 /** PUBLIC — no auth header on purpose; anyone with the link can verify. */
 export async function getCertificateVerification(certificateId: string): Promise<CertificateVerification> {
   const response = await fetch(`${API_URL}/verify/${encodeURIComponent(certificateId)}`);

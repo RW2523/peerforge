@@ -216,7 +216,11 @@ async def create_debate(
     """
     # Verify user has access to requested workspace
     check_workspace_access(current_user, request.workspace_id)
-    
+
+    # Paywall: block creating another review session past the plan's quota.
+    from ..services.plans import require_session_quota
+    require_session_quota(request.workspace_id)
+
     try:
         service = DebateService()
         debate = service.create_debate(

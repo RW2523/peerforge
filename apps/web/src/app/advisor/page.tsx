@@ -10,6 +10,7 @@
  * Departments partition the cohort; invites bring members in with a role.
  */
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AppNav from '@/components/layout/AppNav';
 import {
@@ -22,6 +23,7 @@ import {
   setDebateDepartment,
   StudentsOverview,
 } from '@/lib/api';
+import { useMe } from '@/lib/workspace';
 import styles from './advisor.module.css';
 
 const WORKSPACE_ID = '00000000-0000-0000-0000-000000000101';
@@ -33,6 +35,9 @@ const BAND_CLASS: Record<string, string> = {
 
 export default function AdvisorPage() {
   const router = useRouter();
+  const { me } = useMe();
+  const canDepartments = me?.plan?.features?.departments ?? true;
+  const canInvites = me?.plan?.features?.invites ?? true;
   const [data, setData] = useState<StudentsOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
@@ -122,29 +127,38 @@ export default function AdvisorPage() {
               ))}
             </select>
           </label>
-          <div className={styles.toolItem}>
-            <input
-              className={styles.toolInput}
-              placeholder="New department…"
-              value={newDept}
-              onChange={(e) => setNewDept(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleCreateDept(); }}
-            />
-            <button className={styles.toolBtn} onClick={handleCreateDept} disabled={!newDept.trim()}>
-              Add
-            </button>
-          </div>
-          <div className={styles.toolItem}>
-            <select
-              className={styles.toolSelect}
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as 'student' | 'advisor')}
-            >
-              <option value="student">Invite a student</option>
-              <option value="advisor">Invite an advisor</option>
-            </select>
-            <button className={styles.toolBtn} onClick={handleInvite}>Create invite</button>
-          </div>
+          {canDepartments ? (
+            <div className={styles.toolItem}>
+              <input
+                className={styles.toolInput}
+                placeholder="New department…"
+                value={newDept}
+                onChange={(e) => setNewDept(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateDept(); }}
+              />
+              <button className={styles.toolBtn} onClick={handleCreateDept} disabled={!newDept.trim()}>
+                Add
+              </button>
+            </div>
+          ) : null}
+          {canInvites ? (
+            <div className={styles.toolItem}>
+              <select
+                className={styles.toolSelect}
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value as 'student' | 'advisor')}
+              >
+                <option value="student">Invite a student</option>
+                <option value="advisor">Invite an advisor</option>
+              </select>
+              <button className={styles.toolBtn} onClick={handleInvite}>Create invite</button>
+            </div>
+          ) : null}
+          {(!canDepartments || !canInvites) && (
+            <Link href="/billing" className={styles.upgradePill}>
+              🔒 Departments &amp; invites are an Institution feature — upgrade
+            </Link>
+          )}
         </div>
         {toolError && <div className={styles.toolError}>{toolError}</div>}
         {invite && (

@@ -58,21 +58,42 @@ Supabase configuration, not code:
 4. First sign-in auto-provisions a personal workspace (`auth.py`); joining the
    department workspace happens via an invite token from an advisor.
 
-## Billing (scaffold — no payment processor)
+## Billing & the paywall
 
-The operator sets `PLAN` in the API environment; `services/plans.py` gates
-features and `GET /billing/plan` exposes the active plan to clients.
+Each **workspace** holds a plan (`workspaces.plan`, migration 015). `NULL`
+inherits the deployment default (`PLAN` env). `services/plans.py` resolves the
+plan per workspace and enforces both feature gates and usage quotas.
 
-| Plan | Departments / invites / SSO | Advisory limits |
-|---|---|---|
-| `community` | — | 5 active sessions, 10 materials/session |
-| `professional` | — | 25 active sessions, 30 materials/session |
-| `institution` (default) | ✓ | none |
+| Plan | Departments / invites / SSO | Sessions | Materials/session |
+|---|---|---|---|
+| `community` | — | 5 | 10 |
+| `professional` | — | 25 | 30 |
+| `institution` | ✓ | unlimited | unlimited |
 
-Gated endpoints return **402** with the reason when the plan lacks a feature.
-Unknown `PLAN` values fail closed to `community`. Limits are advisory
-(surfaced, not yet enforced). When a payment processor is added, checkout only
-has to set the same per-tenant value.
+**Enforcement (real, not advisory):**
+- Feature gates → **402** (departments, invites; SSO is deployment-level).
+- Session quota → **402** on `POST /debates` past `max_sessions`.
+- Material quota → **402** on material upload past `max_materials_per_session`.
+- Unknown plan values and DB errors **fail closed to `community`**.
+
+**Endpoints:**
+- `GET /me` — the caller's workspace, role, and resolved plan (the frontend
+  uses this instead of hardcoding a workspace id).
+- `GET /workspaces/{id}/billing` — current plan, all tiers, live usage.
+- `POST /workspaces/{id}/billing/plan` — **owner-only** plan switch.
+- `POST /workspaces/{id}/billing/checkout` + `POST /billing/webhook` — Stripe.
+
+**Payment (optional).** Without Stripe, the owner plan-switch applies
+immediately (self-serve / trials / manual provisioning). With
+`STRIPE_SECRET_KEY` + `STRIPE_PRICE_IDS` set, a *paid upgrade* must go through
+Stripe Checkout; the webhook (`checkout.session.completed`) flips the
+workspace's plan. The direct switch is then limited to downgrades and the free
+tier, so nobody unlocks paid tiers without paying. The `stripe` library is
+imported lazily — it is not a hard dependency for deployments that don't use it.
+
+**UI:** `/billing` (plan cards + usage meters + upgrade/downgrade), a plan pill
+in the top nav, a locked-feature prompt on the advisor console, and `/join` for
+redeeming invite tokens.
 
 ## Production checklist
 

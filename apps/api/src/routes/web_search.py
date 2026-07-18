@@ -168,6 +168,10 @@ async def save_web_results(
     if not debate:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
 
+    # Paywall: saved web results count toward the per-session material cap.
+    from ..services.plans import require_material_quota
+    require_material_quota(debate_id, str(debate["workspace_id"]), len(body.results))
+
     material_ids: List[str] = []
 
     try:

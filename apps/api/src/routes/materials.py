@@ -124,6 +124,30 @@ async def add_inline_materials(
             (debate_id,),
         )
         old_ids = [str(r["material_id"]) for r in cur.fetchall()]
+
+        # Paywall: inline text/link cards count toward the per-session material
+        # cap. We replace the existing inline set, so gate on the NET increase
+        # BEFORE deleting anything — a rejected request must leave the user's
+        # current materials intact.
+        from ..services.plans import get_plan
+        _mat_limit = get_plan(_workspace_id)["limits"]["max_materials_per_session"]
+        if _mat_limit is not None:
+            _valid_new = sum(
+                1 for m in request.materials
+                if (m.kind == "text" and (m.body_text or "").strip())
+                or (m.kind == "link" and (m.url or "").strip())
+            )
+            cur.execute("SELECT COUNT(*) AS n FROM meeting_materials WHERE debate_id = %s", (debate_id,))
+            _net_total = int(cur.fetchone()["n"]) - len(old_ids) + _valid_new
+            if _net_total > _mat_limit:
+                raise HTTPException(
+                    status_code=402,
+                    detail=(
+                        f"Your plan allows {_mat_limit} materials per session. "
+                        f"Upgrade at /billing to add more."
+                    ),
+                )
+
         for old_id in old_ids:
             cur.execute(
                 "DELETE FROM memory_chunks WHERE source_debate_id = %s AND chunk_metadata->>'material_id' = %s",
@@ -231,6 +255,16 @@ async def upload_materials(
     if str(db_workspace_id) != _workspace_id:
         conn.close()
         raise HTTPException(status_code=403, detail="Access denied to this debate")
+
+    # Paywall: block adding materials past the plan's per-session cap. Broad
+    # except so a DB error in the quota check also closes this connection
+    # (it lives outside the try/finally below) rather than leaking it.
+    from ..services.plans import require_material_quota
+    try:
+        require_material_quota(debate_id, _workspace_id, len(files))
+    except Exception:
+        conn.close()
+        raise
 
     material_ids = []
     job_ids = []
