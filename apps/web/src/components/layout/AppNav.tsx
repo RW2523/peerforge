@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import UserMenu from './UserMenu';
+import WorkspaceSwitcher from './WorkspaceSwitcher';
 import ThemeToggle from './ThemeToggle';
 import { APP_NAME, APP_TAGLINE, APP_ICON } from '@/lib/brand';
 import styles from './AppNav.module.css';
@@ -27,6 +28,7 @@ export default function AppNav() {
         </Link>
 
         <div className={styles.navRight}>
+          <WorkspaceSwitcher />
           <div className={styles.links}>
             <Link
               href="/"
@@ -57,6 +59,12 @@ export default function AppNav() {
               className={`${styles.link} ${isActive('/progress') ? styles.active : ''}`}
             >
               Progress
+            </Link>
+            <Link
+              href="/organization"
+              className={`${styles.link} ${isActive('/organization') ? styles.active : ''}`}
+            >
+              Organization
             </Link>
           </div>
 

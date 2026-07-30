@@ -28,11 +28,13 @@ from ..auth import (
     org_role_in,
     require_org_role,
 )
+from ..config import settings
 from ..database import get_db_connection, get_cursor
+from ..services.invitation_email import send_invitation
 
 router = APIRouter(tags=["organizations"])
 
-INVITE_TTL_DAYS = 14
+INVITE_TTL_DAYS = settings.invite_ttl_days
 ROLES = ("org_admin", "professor", "ta", "student")
 
 
@@ -381,16 +383,33 @@ async def create_invitation(
              token, current_user.get("user_id"), expires_at),
         )
         row = cursor.fetchone()
+
+        cursor.execute("SELECT name FROM tenants WHERE tenant_id = %s", (org_id,))
+        org_name = (cursor.fetchone() or {}).get("name") or "your institution"
         conn.commit()
+
+    # Delivery happens after the commit: a mail failure must not discard an
+    # invitation that already exists, or the token would be unreachable.
+    delivery = send_invitation(
+        email=request.email,
+        org_name=org_name,
+        role=invited_role,
+        token=token,
+        inviter=current_user.get("email"),
+    )
 
     return {
         "invite_id": str(row["invite_id"]),
         "email": request.email,
         "role": invited_role,
         "workspace_id": request.workspace_id,
+        # Returned so the inviter can share the link when no mail transport is
+        # configured, or when delivery failed.
         "token": token,
+        "invite_url": f"{settings.app_base_url.rstrip('/')}/invite/{token}",
         "expires_at": expires_at.isoformat(),
-        "accept_path": f"/invitations/{token}/accept",
+        "email_delivered": delivery["delivered"],
+        "delivery": delivery,
     }
 
 

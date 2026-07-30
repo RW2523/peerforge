@@ -46,6 +46,20 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = ""
     require_auth: bool = True
 
+    # Where the browser app lives — used to build invitation links.
+    app_base_url: str = "http://localhost:3001"
+    invite_ttl_days: int = 14
+
+    # Email transport for invitations. Without one, invitations still work but
+    # the link must be delivered by hand.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
+
     # Comma-separated browser origins allowed to call this API. "*" permits any
     # origin but disables credentialed requests, since the CORS spec forbids
     # pairing a wildcard with Access-Control-Allow-Credentials.

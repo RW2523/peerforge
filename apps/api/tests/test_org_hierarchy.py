@@ -224,3 +224,20 @@ def test_last_admin_cannot_be_demoted():
                      json={'role': 'student'}, headers=_h(admin))
     assert r.status_code == 409, r.text
     assert 'last admin' in r.json()['detail'].lower()
+
+
+def test_invitation_reports_delivery_state_and_link():
+    """With no mail transport the invite still works and says so plainly."""
+    admin = _uid()
+    org_id = client.post('/organizations', json={'name': 'Delivery U'},
+                         headers=_h(admin)).json()['org_id']
+
+    r = client.post(f'/organizations/{org_id}/invitations',
+                    json={'email': 'invitee@university.edu', 'role': 'student'},
+                    headers=_h(admin))
+    assert r.status_code == 201, r.text
+    body = r.json()
+
+    assert body['email_delivered'] is False
+    assert body['delivery']['transport'] == 'none'
+    assert body['invite_url'].endswith(f"/invite/{body['token']}")
