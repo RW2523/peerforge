@@ -79,7 +79,8 @@ class DebateService:
         self,
         workspace_id: str,
         title: str,
-        policy_config: Optional[Dict] = None
+        policy_config: Optional[Dict] = None,
+        owner_user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Create new debate in pending state"""
         debate_id = str(uuid.uuid4())
@@ -91,8 +92,8 @@ class DebateService:
             cursor.execute("""
                 INSERT INTO debates (
                     debate_id, workspace_id, title, state, policy_config,
-                    created_at, updated_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    owner_user_id, created_at, updated_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING debate_id, workspace_id, title, state, created_at
             """, (
                 debate_id,
@@ -100,6 +101,7 @@ class DebateService:
                 title,
                 DebateState.PENDING.value,
                 policy_json,
+                owner_user_id,
                 now,
                 now
             ))
@@ -437,10 +439,14 @@ class DebateService:
         self,
         workspace_id: str,
         limit: int = 20,
-        cursor: Optional[str] = None
+        cursor: Optional[str] = None,
+        owner_user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         List debates in workspace with keyset pagination.
+
+        Passing owner_user_id restricts the result to that user's own sessions
+        (plus sessions predating ownership tracking, which have no owner).
 
         The cursor is an opaque (created_at, debate_id) pair. Both must be in
         the key: created_at alone is not unique, and debate_id alone does not
@@ -458,18 +464,25 @@ class DebateService:
                     FROM debates
                     WHERE workspace_id = %s
                       AND (created_at, debate_id) < (%s, %s)
+                      AND (%s::uuid IS NULL
+                           OR owner_user_id = %s::uuid
+                           OR owner_user_id IS NULL)
                     ORDER BY created_at DESC, debate_id DESC
                     LIMIT %s
-                """, (workspace_id, created_before, id_before, limit + 1))
+                """, (workspace_id, created_before, id_before,
+                      owner_user_id, owner_user_id, limit + 1))
             else:
                 db_cursor.execute("""
                     SELECT debate_id, workspace_id, title, state,
                            created_at, updated_at, started_at, ended_at
                     FROM debates
                     WHERE workspace_id = %s
+                      AND (%s::uuid IS NULL
+                           OR owner_user_id = %s::uuid
+                           OR owner_user_id IS NULL)
                     ORDER BY created_at DESC, debate_id DESC
                     LIMIT %s
-                """, (workspace_id, limit + 1))
+                """, (workspace_id, owner_user_id, owner_user_id, limit + 1))
 
             rows = db_cursor.fetchall()
             items = [dict(row) for row in rows]

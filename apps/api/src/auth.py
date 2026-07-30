@@ -86,7 +86,7 @@ def decode_jwt(token: str) -> Dict[str, Any]:
         raise AuthError(f"Token validation failed: {str(e)}")
 
 
-def get_workspaces_for_user(user_id: str) -> List[Dict[str, Any]]:
+def get_workspaces_for_user(user_id: str, email: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Every workspace the user belongs to, most recently joined first.
 
@@ -120,6 +120,14 @@ def get_workspaces_for_user(user_id: str) -> List[Dict[str, Any]]:
             if rows:
                 return [_membership(r) for r in rows]
 
+            # An invited user must land in the organization that invited them.
+            # Provisioning a personal workspace first would strand them: they
+            # would hold a workspace nobody else can see and no path into the
+            # course they were invited to.
+            joined = _accept_pending_invitation(conn, cursor, user_id, email)
+            if joined:
+                return joined
+
             # Lazy provisioning: a Supabase auth user reaching the PeerForge API
             # for the first time gets their own isolated workspace. This avoids a
             # trigger on auth.users — important when the Supabase project is shared
@@ -136,6 +144,96 @@ def get_workspaces_for_user(user_id: str) -> List[Dict[str, Any]]:
         )
 
 
+# Org roles that carry authority over every workspace in the organization.
+ELEVATED_ORG_ROLES = ('org_admin', 'professor', 'ta')
+
+
+def get_organizations_for_user(user_id: str) -> List[Dict[str, Any]]:
+    """Organizations (universities) the user belongs to, with their role."""
+    from .database import get_db_connection, get_cursor
+    import uuid as _uuid
+
+    try:
+        _uuid.UUID(str(user_id))
+    except (ValueError, AttributeError, TypeError):
+        return []
+
+    with get_db_connection() as conn:
+        cursor = get_cursor(conn)
+        cursor.execute("""
+            SELECT om.org_id, om.org_role, t.name, t.slug
+            FROM organization_members om
+            JOIN tenants t ON t.tenant_id = om.org_id
+            WHERE om.user_id = %s
+            ORDER BY om.created_at ASC
+        """, (user_id,))
+        return [
+            {
+                'org_id': str(r['org_id']),
+                'org_role': r['org_role'],
+                'name': r['name'],
+                'slug': r['slug'],
+            }
+            for r in cursor.fetchall()
+        ]
+
+
+def get_accessible_workspace_ids(user_id: str, memberships: List[Dict[str, Any]]) -> List[str]:
+    """
+    Every workspace the user may reach: their own enrolments, plus every
+    workspace in an organization where they hold an elevated role.
+
+    Computed once per request so authorization stays a set lookup — a
+    professor opening a student's session must not cost an extra query on
+    every access check.
+    """
+    from .database import get_db_connection, get_cursor
+    import uuid as _uuid
+
+    ids = {m['workspace_id'] for m in memberships}
+
+    try:
+        _uuid.UUID(str(user_id))
+    except (ValueError, AttributeError, TypeError):
+        return sorted(ids)
+
+    with get_db_connection() as conn:
+        cursor = get_cursor(conn)
+        cursor.execute("""
+            SELECT w.workspace_id
+            FROM organization_members om
+            JOIN workspaces w ON w.tenant_id = om.org_id
+            WHERE om.user_id = %s AND om.org_role = ANY(%s)
+        """, (user_id, list(ELEVATED_ORG_ROLES)))
+        ids.update(str(r['workspace_id']) for r in cursor.fetchall())
+
+    return sorted(ids)
+
+
+def org_role_in(user: Dict[str, Any], org_id: str) -> Optional[str]:
+    """The user's role in a given organization, or None if not a member."""
+    for o in user.get('organizations') or []:
+        if o['org_id'] == str(org_id):
+            return o['org_role']
+    return None
+
+
+def require_org_role(user: Dict[str, Any], org_id: str, *allowed: str) -> str:
+    """Assert the caller holds one of `allowed` roles in the organization."""
+    role = org_role_in(user, org_id)
+    if role is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this organization"
+        )
+    if allowed and role not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Requires one of: {', '.join(allowed)} (you are {role})"
+        )
+    return role
+
+
 def _membership(row: Dict[str, Any]) -> Dict[str, Any]:
     return {
         'workspace_id': str(row['workspace_id']),
@@ -149,6 +247,49 @@ def get_workspace_for_user(user_id: str) -> Optional[str]:
     """The user's default (most recent) workspace id, or None."""
     memberships = get_workspaces_for_user(user_id)
     return memberships[0]['workspace_id'] if memberships else None
+
+
+def _accept_pending_invitation(conn, cursor, user_id: str, email: Optional[str]):
+    """
+    Redeem the newest pending invitation for this email address, if any.
+
+    Returns the resulting memberships, or None when there is nothing to redeem
+    so the caller can fall back to provisioning a personal workspace.
+    """
+    if not email:
+        return None
+
+    cursor.execute("""
+        SELECT token FROM invitations
+        WHERE LOWER(email) = LOWER(%s)
+          AND accepted_at IS NULL
+          AND revoked_at IS NULL
+          AND expires_at > NOW()
+        ORDER BY created_at DESC
+        LIMIT 1
+    """, (email,))
+    row = cursor.fetchone()
+    if not row:
+        return None
+
+    try:
+        from .routes.organizations import redeem_invitation
+        redeem_invitation(cursor, row['token'], user_id)
+        conn.commit()
+    except Exception as exc:
+        conn.rollback()
+        print(f"[auth] Could not redeem invitation for {email}: {exc}")
+        return None
+
+    cursor.execute("""
+        SELECT uw.workspace_id, uw.role, w.name, w.tenant_id
+        FROM user_workspaces uw
+        JOIN workspaces w ON w.workspace_id = uw.workspace_id
+        WHERE uw.user_id = %s
+        ORDER BY uw.created_at DESC
+    """, (user_id,))
+    rows = cursor.fetchall()
+    return [_membership(r) for r in rows] if rows else None
 
 
 # Default tenant that owns auto-provisioned personal workspaces.
@@ -188,7 +329,9 @@ def _provision_workspace_for_user(conn, cursor, user_id: str) -> Optional[Dict[s
     }
 
 
-DEV_USER_ID = 'test-user'
+# A real UUID so dev matches production, where `sub` is always one
+# and UUID-typed columns such as debates.owner_user_id accept it.
+DEV_USER_ID = '00000000-0000-0000-0000-0000000000de'
 DEV_WORKSPACE_ID = '00000000-0000-0000-0000-000000000101'
 DEV_TENANT_ID = '00000000-0000-0000-0000-000000000001'
 
@@ -226,6 +369,12 @@ def get_current_user(
             'workspaces': dev_memberships,
             'workspace_ids': [DEV_WORKSPACE_ID],
             'workspace_role': active['role'],
+            'organizations': [{
+                'org_id': DEV_TENANT_ID,
+                'org_role': 'org_admin',
+                'name': 'Local Dev',
+                'slug': 'local-dev',
+            }],
         }
 
     if not authorization:
@@ -242,14 +391,15 @@ def get_current_user(
         if not user_id:
             raise AuthError("Token missing user ID (sub)")
 
-        memberships = get_workspaces_for_user(user_id)
-        workspace_ids = [m['workspace_id'] for m in memberships]
+        memberships = get_workspaces_for_user(user_id, payload.get('email'))
+        organizations = get_organizations_for_user(user_id)
+        accessible = get_accessible_workspace_ids(user_id, memberships)
 
         # A workspace_id claim selects among the caller's workspaces; it does
         # not confer access. Membership in user_workspaces is the authority, so
         # a crafted or stale claim cannot reach another tenant.
         requested = x_workspace_id or payload.get('workspace_id')
-        active = _select_active_workspace(memberships, requested)
+        active = _select_active_workspace(memberships, requested, accessible)
 
         return {
             'user_id': user_id,
@@ -257,7 +407,8 @@ def get_current_user(
             'workspace_role': active['role'] if active else None,
             'tenant_id': (active or {}).get('tenant_id') or payload.get('tenant_id'),
             'workspaces': memberships,
-            'workspace_ids': workspace_ids,
+            'workspace_ids': accessible,
+            'organizations': organizations,
             'email': payload.get('email'),
             'role': payload.get('role')
         }
@@ -273,16 +424,29 @@ def get_current_user(
 def _select_active_workspace(
     memberships: List[Dict[str, Any]],
     requested_id: Optional[str],
+    accessible_ids: Optional[List[str]] = None,
 ) -> Optional[Dict[str, Any]]:
-    """Pick the active workspace, rejecting a request for one the user isn't in."""
-    if not memberships:
-        return None
+    """
+    Pick the active workspace, rejecting one the caller cannot reach.
+
+    A professor may make a course they are not enrolled in active, provided
+    their organization role grants access to it.
+    """
     if not requested_id:
-        return memberships[0]
+        return memberships[0] if memberships else None
 
     for m in memberships:
         if m['workspace_id'] == requested_id:
             return m
+
+    if accessible_ids and requested_id in accessible_ids:
+        # Reachable through an organization role rather than enrolment.
+        return {
+            'workspace_id': requested_id,
+            'role': None,
+            'name': None,
+            'tenant_id': None,
+        }
 
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,

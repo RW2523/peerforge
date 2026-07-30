@@ -79,6 +79,9 @@ app.include_router(user_settings_router, tags=["user-settings"])
 from .routes.me import router as me_router
 app.include_router(me_router, tags=["me"])
 
+from .routes.organizations import router as organizations_router
+app.include_router(organizations_router, tags=["organizations"])
+
 
 # ── Account key resolution ───────────────────────────────────────────────────
 # If a request needs an OpenRouter key but the browser did not send one
@@ -87,7 +90,8 @@ app.include_router(me_router, tags=["me"])
 def _resolve_request_user_id(request) -> str:
     from .config import settings as _settings
     if not _settings.require_auth:
-        return "test-user"
+        from .auth import DEV_USER_ID
+        return DEV_USER_ID
     auth_header = request.headers.get("authorization")
     if not auth_header:
         return ""

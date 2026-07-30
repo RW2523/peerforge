@@ -22,6 +22,26 @@ from ..schemas.debates import (
 router = APIRouter()
 
 
+# Course-level roles that see every session in their workspace.
+_SUPERVISORY_WORKSPACE_ROLES = ("owner", "admin", "professor", "ta")
+
+
+def _may_see_whole_workspace(current_user: Optional[Dict[str, Any]], workspace_id: str) -> bool:
+    """True when the caller supervises this course rather than studying in it."""
+    if not current_user:
+        return True  # Auth disabled — no identity to scope by.
+
+    from ..auth import ELEVATED_ORG_ROLES, role_in_workspace
+
+    if role_in_workspace(current_user, workspace_id) in _SUPERVISORY_WORKSPACE_ROLES:
+        return True
+
+    return any(
+        o.get("org_role") in ELEVATED_ORG_ROLES
+        for o in current_user.get("organizations") or []
+    )
+
+
 @router.get("/debates", response_model=DebateListResponse)
 async def list_debates(
     workspace_id: str = Query(..., description="Workspace ID to filter debates"),
@@ -43,9 +63,17 @@ async def list_debates(
             check_workspace_access(current_user, workspace_id)
         
         service = DebateService()
-        
-        # Get debates from DB
-        debates_data = service.list_debates(workspace_id, limit=limit, cursor=cursor)
+
+        # A student sees their own sessions; anyone with authority over the
+        # course — its professor, or an elevated role in the organization —
+        # sees the whole cohort.
+        debates_data = service.list_debates(
+            workspace_id,
+            limit=limit,
+            cursor=cursor,
+            owner_user_id=None if _may_see_whole_workspace(current_user, workspace_id)
+                          else (current_user or {}).get("user_id"),
+        )
         
         items = [
             DebateListItem(
@@ -222,7 +250,8 @@ async def create_debate(
         debate = service.create_debate(
             workspace_id=request.workspace_id,
             title=request.title,
-            policy_config=request.policy_config
+            policy_config=request.policy_config,
+            owner_user_id=current_user.get('user_id')
         )
         
         return DebateResponse(

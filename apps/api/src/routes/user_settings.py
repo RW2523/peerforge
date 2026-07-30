@@ -27,7 +27,8 @@ class SaveKeyRequest(BaseModel):
 
 
 def _user_id(current_user: Dict[str, Any]) -> str:
-    return str(current_user.get("user_id") or current_user.get("sub") or "test-user")
+    from ..auth import DEV_USER_ID
+    return str(current_user.get("user_id") or current_user.get("sub") or DEV_USER_ID)
 
 
 # Short-lived cache so the key-resolution middleware doesn't hit the DB on

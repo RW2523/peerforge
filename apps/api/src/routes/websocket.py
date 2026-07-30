@@ -99,7 +99,8 @@ async def websocket_debate_room(
                 return
         else:
             # Local dev identity (same defaults as HTTP auth bypass)
-            user_id = 'test-user'
+            from ..auth import DEV_USER_ID
+            user_id = DEV_USER_ID
             workspace_id = '00000000-0000-0000-0000-000000000101'
 
         print(f"✅ Attempting to connect WebSocket...")

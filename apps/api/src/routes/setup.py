@@ -40,6 +40,7 @@ async def setup_debate(
                 p.model_dump(exclude_none=True, by_alias=True) for p in request.participants
             ],
             materials=[m.model_dump(exclude_none=True) for m in (request.materials or [])],
+            owner_user_id=current_user.get("user_id"),
         )
     except MeetingSetupError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

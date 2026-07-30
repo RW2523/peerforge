@@ -39,6 +39,7 @@ class MeetingSetupService:
         enable_host: Optional[bool] = False,
         host_model_id: Optional[str] = None,
         reasoning_mode: Optional[str] = "medium",
+        owner_user_id: Optional[str] = None,
     ) -> Tuple[str, List[str], List[str]]:
         """
         Returns: (debate_id, participant_ids, material_ids)
@@ -70,7 +71,8 @@ class MeetingSetupService:
         policy_config["reasoning_mode"] = reasoning_mode or "medium"
 
         debate = self._debates.create_debate(
-            workspace_id=workspace_id, title=title, policy_config=policy_config
+            workspace_id=workspace_id, title=title, policy_config=policy_config,
+            owner_user_id=owner_user_id
         )
         debate_id = debate["debate_id"]
 
