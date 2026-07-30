@@ -214,16 +214,20 @@ class AgentThinkingService:
                 # Store in agent_memories as a 'thinking_session' type
                 memory_id = str(uuid.uuid4())
                 
+                # workspace_id is NOT NULL and the session does not carry one,
+                # so it is read from the debate in the same statement; that
+                # also makes the insert a no-op if the debate is gone.
                 cursor.execute("""
                     INSERT INTO agent_memories (
-                        memory_id, agent_role, debate_id, memory_type, content,
-                        importance, emotional_valence, confidence, created_at
+                        memory_id, workspace_id, agent_role, memory_type,
+                        content, debate_ids, confidence, created_at
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    SELECT %s, d.workspace_id, %s, %s, %s, ARRAY[%s::uuid], %s, %s
+                    FROM debates d
+                    WHERE d.debate_id = %s
                 """, (
                     memory_id,
                     session["agent_name"],
-                    session["debate_id"],
                     'thinking_session',
                     psycopg2.extras.Json({
                         "session_id": session["session_id"],
@@ -232,10 +236,10 @@ class AgentThinkingService:
                         "duration_seconds": session.get("duration_seconds", 0),
                         "stages_completed": len(session["steps"])
                     }),
-                    0.5,  # Medium importance
-                    0.0,  # Neutral emotional valence
+                    session["debate_id"],
                     1.0,  # High confidence (it's raw thinking data)
-                    session["completed_at"]
+                    session["completed_at"],
+                    session["debate_id"],
                 ))
                 
                 conn.commit()
