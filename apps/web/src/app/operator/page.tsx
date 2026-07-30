@@ -8,11 +8,13 @@ import * as api from '@/lib/api';
 import { SummaryDisplay } from '@/components/SummaryDisplay';
 import { SummaryGenerateForm } from '@/components/SummaryGenerateForm';
 import styles from './operator.module.css';
+import { useWorkspace } from '@/components/WorkspaceProvider';
 
 function OperatorContent() {
   const searchParams = useSearchParams();
   const urlDebateId = searchParams.get('debate_id');
   
+  const { workspaceId } = useWorkspace();
   const [debateId, setDebateId] = useState('');
   const [activeDebateId, setActiveDebateId] = useState<string | null>(null);
   const [interventionText, setInterventionText] = useState('');
@@ -36,13 +38,14 @@ function OperatorContent() {
   }, [urlDebateId, debateId]);
 
   const handleCreate = async () => {
+    if (!workspaceId) {
+      setStatus('No workspace available yet.');
+      return;
+    }
     setIsLoading(true);
     setStatus('Creating debate...');
     try {
-      const result = await api.createDebate(
-        '00000000-0000-0000-0000-000000000101', // Test workspace
-        'M2 Test Debate'
-      );
+      const result = await api.createDebate(workspaceId, 'M2 Test Debate');
       setDebateId(result.debate_id);
       setActiveDebateId(result.debate_id);
       setStatus(`Created: ${result.debate_id}`);

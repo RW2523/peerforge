@@ -10,7 +10,7 @@ import { getAccessToken } from '@/lib/supabase';
 import { isValidMaterial, normalizeUrl } from '@/lib/setupValidation';
 
 interface UseDebateSetupActionsOptions {
-  workspaceId: string;
+  workspaceId: string | null;
   title: string;
   problemStatement: string;
   agenda?: string[];
@@ -49,6 +49,10 @@ export function useDebateSetupActions(
   const [createdParticipantIds, setCreatedParticipantIds] = useState<string[]>([]);
 
   const handleCreateDebate = async () => {
+    if (!options.workspaceId) {
+      alert('Still loading your workspace — try again in a moment.');
+      return null;
+    }
     const {
       workspaceId,
       title,

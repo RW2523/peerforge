@@ -76,6 +76,9 @@ app.include_router(assessment_router, tags=["assessment"])
 from .routes.user_settings import router as user_settings_router
 app.include_router(user_settings_router, tags=["user-settings"])
 
+from .routes.me import router as me_router
+app.include_router(me_router, tags=["me"])
+
 
 # ── Account key resolution ───────────────────────────────────────────────────
 # If a request needs an OpenRouter key but the browser did not send one

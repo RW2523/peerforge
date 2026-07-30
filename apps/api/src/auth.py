@@ -1,6 +1,6 @@
 """Supabase Auth JWT validation and authorization"""
 import jwt
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from fastapi import HTTPException, status, Header
 from .config import settings
 
@@ -86,48 +86,76 @@ def decode_jwt(token: str) -> Dict[str, Any]:
         raise AuthError(f"Token validation failed: {str(e)}")
 
 
-def get_workspace_for_user(user_id: str) -> Optional[str]:
+def get_workspaces_for_user(user_id: str) -> List[Dict[str, Any]]:
     """
-    Resolve workspace_id for user from user_workspaces table
-    
-    Args:
-        user_id: Supabase user ID
-    
-    Returns:
-        workspace_id or None if user not mapped to any workspace
+    Every workspace the user belongs to, most recently joined first.
+
+    Returns a list because a user legitimately belongs to many workspaces — a
+    professor to their department and each course they teach. Resolving to a
+    single workspace here silently hides all but one of them.
     """
     from .database import get_db_connection, get_cursor
+    import uuid as _uuid
+
+    # user_workspaces.user_id is UUID-typed, so a non-UUID subject can have no
+    # membership by construction. Checking here keeps a malformed token from
+    # surfacing as a database error.
+    try:
+        _uuid.UUID(str(user_id))
+    except (ValueError, AttributeError, TypeError):
+        return []
 
     try:
         with get_db_connection() as conn:
             cursor = get_cursor(conn)
             cursor.execute("""
-                SELECT workspace_id, role
-                FROM user_workspaces
-                WHERE user_id = %s
-                ORDER BY created_at DESC
-                LIMIT 1
+                SELECT uw.workspace_id, uw.role, w.name, w.tenant_id
+                FROM user_workspaces uw
+                JOIN workspaces w ON w.workspace_id = uw.workspace_id
+                WHERE uw.user_id = %s
+                ORDER BY uw.created_at DESC
             """, (user_id,))
 
-            result = cursor.fetchone()
-            if result:
-                return str(result['workspace_id'])
+            rows = cursor.fetchall()
+            if rows:
+                return [_membership(r) for r in rows]
 
             # Lazy provisioning: a Supabase auth user reaching the PeerForge API
             # for the first time gets their own isolated workspace. This avoids a
             # trigger on auth.users — important when the Supabase project is shared
             # with another app, whose signups must not create PeerForge workspaces.
-            return _provision_workspace_for_user(conn, cursor, user_id)
-    except Exception:
-        # If DB query fails, return None (will be handled by caller)
-        return None
+            provisioned = _provision_workspace_for_user(conn, cursor, user_id)
+            return [provisioned] if provisioned else []
+    except Exception as exc:
+        # A database failure is not the same as "this user has no workspace".
+        # Returning [] here would render as a 403 and look like an access
+        # decision, hiding the outage.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Could not resolve workspace membership: {exc}"
+        )
+
+
+def _membership(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        'workspace_id': str(row['workspace_id']),
+        'role': row['role'],
+        'name': row.get('name'),
+        'tenant_id': str(row['tenant_id']) if row.get('tenant_id') else None,
+    }
+
+
+def get_workspace_for_user(user_id: str) -> Optional[str]:
+    """The user's default (most recent) workspace id, or None."""
+    memberships = get_workspaces_for_user(user_id)
+    return memberships[0]['workspace_id'] if memberships else None
 
 
 # Default tenant that owns auto-provisioned personal workspaces.
 _DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001'
 
 
-def _provision_workspace_for_user(conn, cursor, user_id: str) -> Optional[str]:
+def _provision_workspace_for_user(conn, cursor, user_id: str) -> Optional[Dict[str, Any]]:
     """Create a personal workspace for a first-time PeerForge user and map them to it."""
     import uuid
 
@@ -152,60 +180,88 @@ def _provision_workspace_for_user(conn, cursor, user_id: str) -> Optional[str]:
     """, (user_id, workspace_id))
 
     conn.commit()
-    return workspace_id
+    return {
+        'workspace_id': workspace_id,
+        'role': 'owner',
+        'name': f'Workspace {short}',
+        'tenant_id': _DEFAULT_TENANT_ID,
+    }
 
 
-def get_current_user(authorization: str = Header(None)) -> Dict[str, Any]:
+DEV_USER_ID = 'test-user'
+DEV_WORKSPACE_ID = '00000000-0000-0000-0000-000000000101'
+DEV_TENANT_ID = '00000000-0000-0000-0000-000000000001'
+
+
+def get_current_user(
+    authorization: str = Header(None),
+    x_workspace_id: Optional[str] = Header(None),
+) -> Dict[str, Any]:
     """
-    Extract and validate current user from JWT
-    
-    Args:
-        authorization: Authorization header value
-    
-    Returns:
-        User info dict with user_id, workspace_id, tenant_id
-    
+    Extract and validate current user from JWT.
+
+    Returns every workspace the user belongs to plus one designated active
+    workspace. Clients select the active one with the X-Workspace-Id header;
+    without it the most recently joined workspace is used.
+
     Raises:
-        HTTPException: 401 if token missing/invalid
+        HTTPException: 401 if token missing/invalid, 403 if the requested
+        active workspace is not one the user belongs to.
     """
     if not settings.require_auth:
-        # Auth disabled for local dev/testing
+        # Auth disabled for local dev/testing. The workspace selector is still
+        # validated so dev behaves like production on this dimension — asking
+        # for a workspace you don't belong to fails here too.
+        dev_memberships = [{
+            'workspace_id': DEV_WORKSPACE_ID,
+            'role': 'owner',
+            'name': 'Local Dev',
+            'tenant_id': DEV_TENANT_ID,
+        }]
+        active = _select_active_workspace(dev_memberships, x_workspace_id)
         return {
-            'user_id': 'test-user',
-            'workspace_id': '00000000-0000-0000-0000-000000000101',
-            'tenant_id': '00000000-0000-0000-0000-000000000001'
+            'user_id': DEV_USER_ID,
+            'workspace_id': active['workspace_id'],
+            'tenant_id': active['tenant_id'],
+            'workspaces': dev_memberships,
+            'workspace_ids': [DEV_WORKSPACE_ID],
+            'workspace_role': active['role'],
         }
-    
+
     if not authorization:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing authorization token",
             headers={"WWW-Authenticate": "Bearer"}
         )
-    
+
     try:
         payload = decode_jwt(authorization)
-        
-        # Extract user context from JWT payload
+
         user_id = payload.get('sub')  # Supabase user ID
-        workspace_id = payload.get('workspace_id')
-        tenant_id = payload.get('tenant_id')
-        
         if not user_id:
             raise AuthError("Token missing user ID (sub)")
-        
-        # If workspace_id not in JWT, resolve from user_workspaces table
-        if not workspace_id:
-            workspace_id = get_workspace_for_user(user_id)
-        
+
+        memberships = get_workspaces_for_user(user_id)
+        workspace_ids = [m['workspace_id'] for m in memberships]
+
+        # A workspace_id claim selects among the caller's workspaces; it does
+        # not confer access. Membership in user_workspaces is the authority, so
+        # a crafted or stale claim cannot reach another tenant.
+        requested = x_workspace_id or payload.get('workspace_id')
+        active = _select_active_workspace(memberships, requested)
+
         return {
             'user_id': user_id,
-            'workspace_id': workspace_id,
-            'tenant_id': tenant_id,
+            'workspace_id': active['workspace_id'] if active else None,
+            'workspace_role': active['role'] if active else None,
+            'tenant_id': (active or {}).get('tenant_id') or payload.get('tenant_id'),
+            'workspaces': memberships,
+            'workspace_ids': workspace_ids,
             'email': payload.get('email'),
             'role': payload.get('role')
         }
-    
+
     except AuthError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -214,56 +270,131 @@ def get_current_user(authorization: str = Header(None)) -> Dict[str, Any]:
         )
 
 
+def _select_active_workspace(
+    memberships: List[Dict[str, Any]],
+    requested_id: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    """Pick the active workspace, rejecting a request for one the user isn't in."""
+    if not memberships:
+        return None
+    if not requested_id:
+        return memberships[0]
+
+    for m in memberships:
+        if m['workspace_id'] == requested_id:
+            return m
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Access denied: not a member of the requested workspace"
+    )
+
+
 def check_workspace_access(
     user: Dict[str, Any],
     resource_workspace_id: str
 ) -> None:
     """
-    Verify user has access to workspace
-    
-    Args:
-        user: User context from JWT
-        resource_workspace_id: Workspace ID of requested resource
-    
+    Verify the user belongs to the resource's workspace.
+
+    Checks membership across every workspace the user belongs to, not just the
+    active one — otherwise a professor viewing a second course would be denied
+    purely because of which workspace happened to be selected.
+
     Raises:
         HTTPException: 403 if user lacks access
     """
-    user_workspace_id = user.get('workspace_id')
-    
-    if not user_workspace_id:
-        # No workspace claim in token - deny access
+    member_of = workspace_ids_for(user)
+
+    if not member_of:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User not associated with any workspace"
         )
-    
-    if user_workspace_id != resource_workspace_id:
+
+    if resource_workspace_id is None or str(resource_workspace_id) not in member_of:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: debate belongs to different workspace"
+            detail="Access denied: resource belongs to a different workspace"
         )
 
 
-def require_auth(authorization: str = Header(None)) -> str:
+def authorize_debate(debate_id: str, user: Dict[str, Any]) -> str:
     """
-    Convenience dependency for routes that just need workspace_id
-    
-    Args:
-        authorization: Authorization header value
-    
-    Returns:
-        workspace_id string
-    
+    Resolve a debate's workspace and confirm the caller belongs to it.
+
+    Returns the workspace id so callers can reuse it. Route handlers that take
+    a debate_id must go through this — reading the caller's own workspace and
+    not comparing it to the debate's is how cross-tenant reads happen.
+    """
+    from .database import get_db_connection, get_cursor
+    import uuid as _uuid
+
+    # A malformed id is a missing debate, not a database type error.
+    try:
+        _uuid.UUID(str(debate_id))
+    except (ValueError, AttributeError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Debate {debate_id} not found"
+        )
+
+    with get_db_connection() as conn:
+        cursor = get_cursor(conn)
+        cursor.execute(
+            "SELECT workspace_id FROM debates WHERE debate_id = %s", (debate_id,)
+        )
+        row = cursor.fetchone()
+
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Debate {debate_id} not found"
+        )
+
+    workspace_id = str(row['workspace_id'])
+    check_workspace_access(user, workspace_id)
+    return workspace_id
+
+
+def workspace_ids_for(user: Dict[str, Any]) -> List[str]:
+    """Workspace ids a user belongs to, tolerating the older single-id shape."""
+    ids = user.get('workspace_ids')
+    if ids:
+        return [str(i) for i in ids]
+    active = user.get('workspace_id')
+    return [str(active)] if active else []
+
+
+def role_in_workspace(user: Dict[str, Any], workspace_id: str) -> Optional[str]:
+    """The user's role in a given workspace, or None if not a member."""
+    for m in user.get('workspaces') or []:
+        if m['workspace_id'] == str(workspace_id):
+            return m['role']
+    return None
+
+
+def require_auth(
+    authorization: str = Header(None),
+    x_workspace_id: Optional[str] = Header(None),
+) -> str:
+    """
+    Convenience dependency for routes that only need the active workspace id.
+
+    Prefer Depends(get_current_user) plus check_workspace_access when the route
+    touches a specific resource — this returns the caller's own workspace and
+    cannot tell you whether they may reach the resource they asked for.
+
     Raises:
         HTTPException: 401 if token missing/invalid
     """
-    user = get_current_user(authorization)
+    user = get_current_user(authorization, x_workspace_id)
     workspace_id = user.get('workspace_id')
-    
+
     if not workspace_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User not associated with any workspace"
         )
-    
+
     return workspace_id

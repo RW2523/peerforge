@@ -11,7 +11,7 @@ from typing import Optional
 from datetime import datetime
 
 from src.config import settings
-from src.auth import require_auth
+from src.auth import get_current_user, check_workspace_access
 
 router = APIRouter()
 
@@ -42,14 +42,6 @@ class PresenceResponse(BaseModel):
 
 # Helper functions
 
-def check_workspace_access(workspace_id: str, auth_workspace_id: str):
-    """Check if user has access to workspace"""
-    if workspace_id != auth_workspace_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to workspace"
-        )
-
 
 def get_debate_workspace(debate_id: str) -> str:
     """Get workspace_id for a debate"""
@@ -75,7 +67,7 @@ def get_debate_workspace(debate_id: str) -> str:
 def join_presence(
     debate_id: str,
     request: PresenceJoinRequest,
-    workspace_id: str = Depends(require_auth)
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Signal presence join (user/agent coming online)
@@ -86,7 +78,7 @@ def join_presence(
     Protected: Requires valid JWT and workspace access
     """
     debate_workspace = get_debate_workspace(debate_id)
-    check_workspace_access(debate_workspace, workspace_id)
+    check_workspace_access(current_user, debate_workspace)
     
     conn = psycopg2.connect(settings.database_url)
     cursor = conn.cursor()
@@ -140,7 +132,7 @@ def join_presence(
 def leave_presence(
     debate_id: str,
     request: PresenceLeaveRequest,
-    workspace_id: str = Depends(require_auth)
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Signal presence leave (user/agent going offline)
@@ -150,7 +142,7 @@ def leave_presence(
     Protected: Requires valid JWT and workspace access
     """
     debate_workspace = get_debate_workspace(debate_id)
-    check_workspace_access(debate_workspace, workspace_id)
+    check_workspace_access(current_user, debate_workspace)
     
     conn = psycopg2.connect(settings.database_url)
     cursor = conn.cursor()
@@ -203,7 +195,7 @@ def leave_presence(
 def signal_typing(
     debate_id: str,
     request: TypingRequest,
-    workspace_id: str = Depends(require_auth)
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Signal typing indicator (agent is generating response)
@@ -214,7 +206,7 @@ def signal_typing(
     Protected: Requires valid JWT and workspace access
     """
     debate_workspace = get_debate_workspace(debate_id)
-    check_workspace_access(debate_workspace, workspace_id)
+    check_workspace_access(current_user, debate_workspace)
     
     conn = psycopg2.connect(settings.database_url)
     cursor = conn.cursor()

@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from typing import Literal
 
-from ..auth import require_auth
+from ..auth import get_current_user, check_workspace_access, authorize_debate
 from ..services.academic_assessment import (
     generate_assessment,
     get_latest_assessment,
@@ -33,9 +33,10 @@ async def create_assessment(
     debate_id: str,
     request: GenerateAssessmentRequest,
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
-    _workspace_id: str = Depends(require_auth),
+    current_user: dict = Depends(get_current_user),
 ):
     """Generate the ten-dimension academic assessment from all session evidence."""
+    authorize_debate(debate_id, current_user)
     if not x_openrouter_key:
         raise HTTPException(
             status_code=400,
@@ -58,9 +59,10 @@ async def create_assessment(
 @router.get("/debates/{debate_id}/assessment")
 async def latest_assessment(
     debate_id: str,
-    _workspace_id: str = Depends(require_auth),
+    current_user: dict = Depends(get_current_user),
 ):
     """Return the most recent assessment for this session."""
+    authorize_debate(debate_id, current_user)
     result = get_latest_assessment(debate_id)
     if not result:
         raise HTTPException(
@@ -73,19 +75,21 @@ async def latest_assessment(
 @router.get("/debates/{debate_id}/assessment/history")
 async def assessment_history(
     debate_id: str,
-    _workspace_id: str = Depends(require_auth),
+    current_user: dict = Depends(get_current_user),
 ):
     """Return prior assessments (newest first) for progress tracking."""
+    authorize_debate(debate_id, current_user)
     return {"debate_id": debate_id, "assessments": get_assessment_history(debate_id)}
 
 
 @router.get("/debates/{debate_id}/certificate")
 async def readiness_certificate(
     debate_id: str,
-    _workspace_id: str = Depends(require_auth),
+    current_user: dict = Depends(get_current_user),
 ):
     """Assemble the tamper-evident Review-Readiness Certificate: per-dimension
     trajectory, the evidence ledger it rests on, and a sha256 ledger anchor."""
+    authorize_debate(debate_id, current_user)
     try:
         cert = build_certificate(debate_id)
         cert.pop("_anchor_payload", None)
@@ -111,11 +115,12 @@ async def readiness_certificate(
 @router.post("/debates/{debate_id}/certificate/issue")
 async def issue_certificate(
     debate_id: str,
-    _workspace_id: str = Depends(require_auth),
+    current_user: dict = Depends(get_current_user),
 ):
     """Issue a signed certificate: Ed25519 signature over the canonical anchor
     payload, persisted immutably so anyone can verify it at /verify/{id}.
     Idempotent — re-issuing the same evidence state returns the same record."""
+    authorize_debate(debate_id, current_user)
     from ..services.certificate import canonicalize
     from ..services.cert_signing import sign_canonical
     from ..database import get_db_connection, get_cursor
@@ -180,14 +185,13 @@ async def issue_certificate(
 @router.get("/workspaces/{workspace_id}/readiness-overview")
 async def readiness_overview(
     workspace_id: str,
-    _workspace_id: str = Depends(require_auth),
+    current_user: dict = Depends(get_current_user),
 ):
     """Cohort view (Phase 3): every session with an assessment trajectory —
     first/latest overall score, band, evidence counts, and the issued
     certificate (if any) so an advisor or program can scan readiness at a
     glance and jump to verification."""
-    if workspace_id != _workspace_id:
-        raise HTTPException(status_code=403, detail="Access denied to this workspace")
+    check_workspace_access(current_user, workspace_id)
 
     from ..database import get_db_connection, get_cursor
     with get_db_connection() as conn:

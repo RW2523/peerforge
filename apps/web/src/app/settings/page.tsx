@@ -10,6 +10,7 @@ import { ManagementKeyCard } from '@/components/settings/ManagementKeyCard';
 import { AccountKeyCard } from '@/components/settings/AccountKeyCard';
 import * as api from '@/lib/api';
 import styles from './settings.module.css';
+import { useWorkspace } from '@/components/WorkspaceProvider';
 
 export default function SettingsPage() {
   const { 
@@ -33,8 +34,7 @@ export default function SettingsPage() {
   const [validationSuccess, setValidationSuccess] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  // Demo workspace ID (replace with actual user's workspace in production)
-  const workspaceId = '00000000-0000-0000-0000-000000000101';
+  const { workspaceId } = useWorkspace();
 
   useEffect(() => {
     if (apiKey) {
@@ -300,7 +300,7 @@ export default function SettingsPage() {
           />
 
           {/* Default Models Card */}
-          <DefaultModelsCard apiKey={apiKey} workspaceId={workspaceId} />
+          {workspaceId && <DefaultModelsCard apiKey={apiKey} workspaceId={workspaceId} />}
         </div>
       </div>
     </>

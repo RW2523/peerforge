@@ -15,10 +15,28 @@ from src.config import settings
 client = TestClient(app)
 
 
-def _make_token(secret: str, workspace_id: str, tenant_id: str, exp_delta_s: int = 3600):
+def _grant_membership(user_id: str, workspace_id: str):
+    """Membership in user_workspaces is what grants access — not the JWT claim."""
+    from src.database import get_db_connection, get_cursor
+
+    with get_db_connection() as conn:
+        cursor = get_cursor(conn)
+        cursor.execute("""
+            INSERT INTO user_workspaces (user_id, workspace_id, role)
+            VALUES (%s, %s, 'member')
+            ON CONFLICT (user_id, workspace_id) DO NOTHING
+        """, (user_id, workspace_id))
+        conn.commit()
+
+
+TEST_USER_ID = "00000000-0000-0000-0000-000000000994"
+
+
+def _make_token(secret: str, workspace_id: str, tenant_id: str, exp_delta_s: int = 3600,
+                user_id: str = TEST_USER_ID):
     now = datetime.now(timezone.utc)
     payload = {
-        "sub": "test-user-id",
+        "sub": user_id,
         "email": "test@example.com",
         "role": "authenticated",
         "workspace_id": workspace_id,
@@ -40,7 +58,8 @@ def test_create_debate_requires_auth_when_enabled(create_debate_payload, demo_wo
     resp = client.post("/debates", json=create_debate_payload)
     assert resp.status_code == 401, resp.text
 
-    # Valid token => 201
+    # Valid token for a user who actually belongs to the workspace => 201
+    _grant_membership(TEST_USER_ID, demo_workspace_id)
     token = _make_token(
         secret=secret,
         workspace_id=demo_workspace_id,

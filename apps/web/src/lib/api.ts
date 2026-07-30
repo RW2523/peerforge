@@ -2,6 +2,7 @@
  * API client for Arinar backend
  */
 import { getAccessToken } from './supabase';
+import { getActiveWorkspaceId, WorkspaceMembership } from './workspace';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -25,18 +26,35 @@ function formatErrorDetail(detail: unknown, fallback: string): string {
 
 async function getAuthHeaders(): Promise<HeadersInit> {
   const token = await getAccessToken();
-  
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
   if (token) {
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    };
+    headers['Authorization'] = `Bearer ${token}`;
   }
-  
-  // No token available
-  return {
-    'Content-Type': 'application/json',
-  };
+
+  // Selects which of the caller's workspaces to act in. The server verifies
+  // membership, so this can never widen access.
+  const workspaceId = getActiveWorkspaceId();
+  if (workspaceId) {
+    headers['X-Workspace-Id'] = workspaceId;
+  }
+
+  return headers;
+}
+
+export interface MyWorkspacesResponse {
+  active_workspace_id: string | null;
+  workspaces: WorkspaceMembership[];
+}
+
+export async function getMyWorkspaces(): Promise<MyWorkspacesResponse> {
+  const response = await fetch(`${API_URL}/me/workspaces`, {
+    headers: await getAuthHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error(`Could not load your workspaces (${response.status})`);
+  }
+  return response.json();
 }
 
 // ============================================================================

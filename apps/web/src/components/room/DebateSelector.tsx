@@ -3,12 +3,14 @@
 import { useState } from 'react';
 import styles from './DebateSelector.module.css';
 import * as api from '@/lib/api';
+import { useWorkspace } from '@/components/WorkspaceProvider';
 
 interface DebateSelectorProps {
   onDebateLoaded: (debateId: string, title: string, state: string) => void;
 }
 
 export default function DebateSelector({ onDebateLoaded }: DebateSelectorProps) {
+  const { workspaceId } = useWorkspace();
   const [mode, setMode] = useState<'load' | 'create'>('load');
   const [debateIdInput, setDebateIdInput] = useState('');
   const [titleInput, setTitleInput] = useState('');
@@ -40,11 +42,16 @@ export default function DebateSelector({ onDebateLoaded }: DebateSelectorProps) 
       return;
     }
 
+    if (!workspaceId) {
+      setError('No workspace available yet. Try again in a moment.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      const debate = await api.createDebate('00000000-0000-0000-0000-000000000101', titleInput);
+      const debate = await api.createDebate(workspaceId, titleInput);
       onDebateLoaded(debate.debate_id, debate.title, debate.state);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create debate');

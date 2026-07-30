@@ -13,8 +13,7 @@ import { useRouter } from 'next/navigation';
 import AppNav from '@/components/layout/AppNav';
 import { getReadinessOverview, ReadinessOverviewSession } from '@/lib/api';
 import styles from './progress.module.css';
-
-const WORKSPACE_ID = '00000000-0000-0000-0000-000000000101';
+import { useWorkspace } from '@/components/WorkspaceProvider';
 
 const BAND_CLASS: Record<string, string> = {
   Strong: 'bandStrong',
@@ -24,17 +23,20 @@ const BAND_CLASS: Record<string, string> = {
 };
 
 export default function ProgressPage() {
+  const { workspaceId } = useWorkspace();
   const router = useRouter();
   const [sessions, setSessions] = useState<ReadinessOverviewSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getReadinessOverview(WORKSPACE_ID)
+    if (!workspaceId) return;
+    setLoading(true);
+    getReadinessOverview(workspaceId)
       .then((r) => setSessions(r.sessions))
       .catch((e) => setError(String(e?.message || e)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [workspaceId]);
 
   return (
     <>

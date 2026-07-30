@@ -11,7 +11,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 from src.config import settings
-from src.auth import require_auth
+from src.auth import get_current_user, check_workspace_access
 from src.database import get_cursor
 from src.tasks.preflight import orchestrate_preflight
 from src.services.memory_retrieval import get_query_embedding
@@ -71,14 +71,6 @@ class PreflightActionResponse(BaseModel):
 
 # Helper functions
 
-def check_workspace_access(workspace_id: str, auth_workspace_id: str):
-    """Check if user has access to workspace"""
-    if workspace_id != auth_workspace_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to workspace"
-        )
-
 
 def get_debate_workspace(debate_id: str) -> str:
     """Get workspace_id for a debate"""
@@ -103,7 +95,7 @@ def get_debate_workspace(debate_id: str) -> str:
 @router.post("/debates/{debate_id}/preflight/start", response_model=PreflightStartResponse)
 def start_preflight(
     debate_id: str,
-    workspace_id: str = Depends(require_auth),
+    current_user: dict = Depends(get_current_user),
     x_openrouter_key: Optional[str] = Header(None)
 ):
     """
@@ -121,7 +113,7 @@ def start_preflight(
     """
     # Check workspace access
     debate_workspace = get_debate_workspace(debate_id)
-    check_workspace_access(debate_workspace, workspace_id)
+    check_workspace_access(current_user, debate_workspace)
     
     conn = psycopg2.connect(settings.database_url)
     cursor = get_cursor(conn)
@@ -291,7 +283,7 @@ def start_preflight(
 @router.get("/debates/{debate_id}/preflight/status", response_model=PreflightStatusResponse)
 def get_preflight_status(
     debate_id: str,
-    workspace_id: str = Depends(require_auth)
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Get preflight preparation status for a debate
@@ -302,7 +294,7 @@ def get_preflight_status(
     """
     # Check workspace access
     debate_workspace = get_debate_workspace(debate_id)
-    check_workspace_access(debate_workspace, workspace_id)
+    check_workspace_access(current_user, debate_workspace)
     
     conn = psycopg2.connect(settings.database_url)
     cursor = get_cursor(conn)
@@ -378,7 +370,7 @@ def get_preflight_status(
 def retry_participant_preflight(
     debate_id: str,
     request: PreflightRetryRequest,
-    workspace_id: str = Depends(require_auth)
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Retry preflight preparation for a specific participant
@@ -389,7 +381,7 @@ def retry_participant_preflight(
     """
     # Check workspace access
     debate_workspace = get_debate_workspace(debate_id)
-    check_workspace_access(debate_workspace, workspace_id)
+    check_workspace_access(current_user, debate_workspace)
     
     conn = psycopg2.connect(settings.database_url)
     cursor = get_cursor(conn)
@@ -458,7 +450,7 @@ def retry_participant_preflight(
 def skip_participant_preflight(
     debate_id: str,
     request: PreflightSkipRequest,
-    workspace_id: str = Depends(require_auth)
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Skip preflight preparation for a specific participant
@@ -470,7 +462,7 @@ def skip_participant_preflight(
     """
     # Check workspace access
     debate_workspace = get_debate_workspace(debate_id)
-    check_workspace_access(debate_workspace, workspace_id)
+    check_workspace_access(current_user, debate_workspace)
     
     conn = psycopg2.connect(settings.database_url)
     cursor = get_cursor(conn)

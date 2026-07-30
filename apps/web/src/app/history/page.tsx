@@ -7,8 +7,10 @@ import PracticeJourneyCard from '@/components/room/PracticeJourneyCard';
 import * as api from '@/lib/api';
 import type { DebateListItem } from '@/lib/api';
 import styles from './history.module.css';
+import { useWorkspace } from '@/components/WorkspaceProvider';
 
 export default function HistoryPage() {
+  const { workspaceId } = useWorkspace();
   const router = useRouter();
   const [debates, setDebates] = useState<DebateListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,12 +29,13 @@ export default function HistoryPage() {
   }, []);
 
   const loadDebates = async () => {
+    if (!workspaceId) return;
     setLoading(true);
     setError(null);
     
     try {
       // Use proper API endpoint
-      const response = await api.listDebates('00000000-0000-0000-0000-000000000101', 50);
+      const response = await api.listDebates(workspaceId, 50);
       setDebates(response.items || []);
     } catch (err) {
       console.error('Failed to load debates:', err);

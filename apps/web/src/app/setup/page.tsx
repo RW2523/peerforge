@@ -22,6 +22,7 @@ import { useDebateSetupActions } from '@/hooks/useDebateSetupActions';
 import { useStep1Draft } from '@/hooks/useStep1Draft';
 import { loadStep1Draft, step1DraftToState } from '@/lib/step1Draft';
 import styles from './setup.module.css';
+import { useWorkspace } from '@/components/WorkspaceProvider';
 
 export default function SetupPage() {
   const router = useRouter();
@@ -156,7 +157,7 @@ export default function SetupPage() {
   // Validation
   const { canGoNext: validateStep } = useSetupValidation();
   
-  const workspaceId = '00000000-0000-0000-0000-000000000101';
+  const { workspaceId } = useWorkspace();
 
   // Debate setup actions (create, launch)
   const {
@@ -197,6 +198,7 @@ export default function SetupPage() {
   ];
 
   useEffect(() => {
+    if (!workspaceId) return;
     const loadData = async () => {
       try {
         console.log('Loading templates and agents...');
@@ -215,7 +217,7 @@ export default function SetupPage() {
     };
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [workspaceId]);
 
   // Create debate early (after step 1) to enable file uploads
   const handleCreateDebateEarly = async () => {
@@ -415,7 +417,7 @@ export default function SetupPage() {
           </>
           )}
 
-          {step === 4 && (
+          {step === 4 && workspaceId && (
             <MemoryImportStep
               workspaceId={workspaceId}
               participants={participants}
@@ -452,7 +454,7 @@ export default function SetupPage() {
                 autoTurnDelay={autoTurnDelay}
                 materials={materials}
                 participants={participants}
-                workspaceId={workspaceId}
+                workspaceId={workspaceId ?? ''}
               />
             </>
           )}

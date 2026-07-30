@@ -176,16 +176,23 @@ def test_cross_workspace_access_denied():
 
 
 def test_user_with_workspace_claim_in_jwt():
-    """Test that user with workspace_id in JWT can access debates"""
-    from src.debate_service import DebateService
-    
+    """A workspace_id claim selects among the workspaces the user belongs to."""
     test_user_id = '00000000-0000-0000-0000-000000000997'
     test_workspace_id = '00000000-0000-0000-0000-000000000101'
-    
-    # Generate token with workspace_id claim
+
+    from src.database import get_db_connection, get_cursor
+
+    with get_db_connection() as conn:
+        cursor = get_cursor(conn)
+        cursor.execute("""
+            INSERT INTO user_workspaces (user_id, workspace_id, role)
+            VALUES (%s, %s, 'member')
+            ON CONFLICT (user_id, workspace_id) DO NOTHING
+        """, (test_user_id, test_workspace_id))
+        conn.commit()
+
     token = generate_test_jwt(test_user_id, workspace_id=test_workspace_id)
-    
-    # Create debate
+
     response = client.post(
         "/debates",
         json={
@@ -194,10 +201,70 @@ def test_user_with_workspace_claim_in_jwt():
         },
         headers={"Authorization": f"Bearer {token}"}
     )
-    
+
     assert response.status_code == 201  # POST debate returns 201 Created
     data = response.json()
     assert data['workspace_id'] == test_workspace_id
+
+
+def test_workspace_claim_alone_does_not_grant_access():
+    """A workspace_id claim must not confer access without a membership row.
+
+    Otherwise a crafted or stale token reaches any tenant's data.
+    """
+    stranger_id = '00000000-0000-0000-0000-000000000996'
+    someone_elses_workspace = '00000000-0000-0000-0000-000000000101'
+
+    token = generate_test_jwt(stranger_id, workspace_id=someone_elses_workspace)
+
+    response = client.post(
+        "/debates",
+        json={
+            "workspace_id": someone_elses_workspace,
+            "title": "Should be rejected"
+        },
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 403, response.text
+
+
+def test_user_in_multiple_workspaces_can_reach_both():
+    """A user belonging to two workspaces is not limited to the newest one."""
+    multi_user = '00000000-0000-0000-0000-000000000995'
+    ws_a = '00000000-0000-0000-0000-000000000101'
+    ws_b = '00000000-0000-0000-0000-000000000102'
+
+    from src.database import get_db_connection, get_cursor
+
+    with get_db_connection() as conn:
+        cursor = get_cursor(conn)
+        for ws in (ws_a, ws_b):
+            cursor.execute("""
+                INSERT INTO workspaces (workspace_id, tenant_id, name, slug)
+                VALUES (%s, '00000000-0000-0000-0000-000000000001', %s, %s)
+                ON CONFLICT (workspace_id) DO NOTHING
+            """, (ws, f'WS {ws[-3:]}', f'ws-{ws[-3:]}'))
+            cursor.execute("""
+                INSERT INTO user_workspaces (user_id, workspace_id, role)
+                VALUES (%s, %s, 'member')
+                ON CONFLICT (user_id, workspace_id) DO NOTHING
+            """, (multi_user, ws))
+        conn.commit()
+
+    token = generate_test_jwt(multi_user)
+
+    for ws in (ws_a, ws_b):
+        response = client.post(
+            "/debates",
+            json={"workspace_id": ws, "title": f"Multi-workspace {ws[-3:]}"},
+            headers={
+                "Authorization": f"Bearer {token}",
+                "X-Workspace-Id": ws,
+            }
+        )
+        assert response.status_code == 201, f"{ws}: {response.text}"
+        assert response.json()['workspace_id'] == ws
 
 
 def test_user_without_mapping_is_auto_provisioned_then_scoped():

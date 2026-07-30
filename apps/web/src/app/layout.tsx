@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from 'next'
 import { Inter, Space_Grotesk } from 'next/font/google'
 import '../styles/globals.css'
 import { APP_NAME_TAGLINE, APP_DESCRIPTION } from '@/lib/brand'
+import { WorkspaceProvider } from '@/components/WorkspaceProvider'
+import { AuthGuard } from '@/components/AuthGuard'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -40,7 +42,11 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body>{children}</body>
+      <body>
+        <AuthGuard>
+          <WorkspaceProvider>{children}</WorkspaceProvider>
+        </AuthGuard>
+      </body>
     </html>
   )
 }
