@@ -98,6 +98,8 @@ function RoomPageContent() {
     }
   }, [searchParams, debateId]);
 
+  const seenCountsRef = useRef({ messages: 0, states: 0 });
+
   // WebSocket connection for realtime room transport (single connection owner)
   const { events, sendCommand, connectionStatus } = useDebateRoom({
     debateId: debateId || '',
@@ -107,10 +109,16 @@ function RoomPageContent() {
   // Update policy config and debate metadata when new agent messages arrive or state changes
   useEffect(() => {
     if (!debateId) return;
-    
-    const hasNewAgentMessage = events.some(e => e.type === 'agent_message');
-    const hasStateChange = events.some(e => e.type === 'state_update');
-    
+
+    // Compare counts rather than asking "does the history contain one?" — that
+    // predicate stays true forever after the first message, so every change to
+    // the events array refetched the debate.
+    const messageCount = events.filter(e => e.type === 'agent_message').length;
+    const stateCount = events.filter(e => e.type === 'state_update').length;
+    const hasNewAgentMessage = messageCount > seenCountsRef.current.messages;
+    const hasStateChange = stateCount > seenCountsRef.current.states;
+    seenCountsRef.current = { messages: messageCount, states: stateCount };
+
     if (hasNewAgentMessage || hasStateChange) {
       api.getDebate(debateId)
         .then(debate => {

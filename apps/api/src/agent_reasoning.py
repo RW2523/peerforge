@@ -15,6 +15,9 @@ from typing import Any, Dict, List, Optional
 
 from .openrouter_client import OpenRouterClient
 
+# Used only when a participant has no model configured.
+DEFAULT_REASONING_MODEL = "openai/gpt-4o-mini"
+
 # Placeholder names the LLM should never emit
 _PLACEHOLDER_PATTERNS = re.compile(
     r"\b(agent\s*[a-z]|reviewer\s*[0-9]+|participant\s*[0-9]+|persona\s*[a-z]|"
@@ -53,6 +56,7 @@ class AgentReasoningEngine:
         valid_participant_names: Optional[List[str]] = None,
         session_title: Optional[str] = None,
         material_context: Optional[str] = None,
+        model_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Think through the agent's position before responding.
@@ -79,6 +83,7 @@ class AgentReasoningEngine:
             prompt=prompt,
             debate_id=debate_id,
             agent_name=agent_name,
+            model_id=model_id,
         )
 
         # ── Validation ──────────────────────────────────────────────────
@@ -106,6 +111,7 @@ class AgentReasoningEngine:
                 prompt=regenerated_prompt,
                 debate_id=debate_id,
                 agent_name=agent_name,
+                model_id=model_id,
             )
             regenerated = True
 
@@ -135,6 +141,7 @@ class AgentReasoningEngine:
                 prompt=repeat_prompt,
                 debate_id=debate_id,
                 agent_name=agent_name,
+                model_id=model_id,
             )
             # Force am_i_repeating to 'new' after retry
             if reasoning.get("am_i_repeating") == "repeat":
@@ -157,11 +164,12 @@ class AgentReasoningEngine:
         prompt: str,
         debate_id: Optional[str],
         agent_name: str,
+        model_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Call the LLM and parse JSON, returning a safe fallback on error."""
         try:
             response = self.client.chat_completion(
-                model="openai/gpt-4o-mini",
+                model=model_id or DEFAULT_REASONING_MODEL,
                 messages=[
                     {
                         "role": "system",

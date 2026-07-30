@@ -21,8 +21,8 @@ class DebateSetupRequest(BaseModel):
     problem_statement: str
     agenda: Optional[List[str]] = Field(default=None, description="Meeting agenda items")
     desired_outcomes: Optional[List[str]] = Field(default=None, description="Desired meeting outcomes")
-    timebox_minutes: Optional[int] = None
-    max_rounds: Optional[int] = Field(default=None, description="Number of rounds (each participant speaks once per round)")
+    timebox_minutes: Optional[int] = Field(default=None, ge=1, le=1440)
+    max_rounds: Optional[int] = Field(default=None, ge=1, le=50, description="Number of rounds (each participant speaks once per round)")
     enable_host: Optional[bool] = Field(default=False, description="Enable Ultimate Host for final conclusion")
     host_model_id: Optional[str] = Field(default=None, description="AI model for host (only if enable_host=true)")
     # Deferred staffing: the setup wizard creates the session with an empty

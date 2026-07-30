@@ -236,16 +236,21 @@ Format: {{"summary": "...", "minutes_of_meeting": "...", "action_items": ["item1
             temperature=0.5
         )
         
-        # Parse JSON from response (best effort)
-        import json
+        # Models routinely wrap JSON in markdown fences, which a bare
+        # json.loads rejects — parse_llm_json strips them and repairs common
+        # malformations before giving up on the fallback.
+        from .utils.json_repair import parse_llm_json
+
         try:
-            outputs = json.loads(response['content'])
-        except json.JSONDecodeError:
-            # Fallback if model doesn't return valid JSON
+            outputs = parse_llm_json(response['content'], stage="synthesis")
+            if not isinstance(outputs, dict):
+                raise ValueError(f"expected an object, got {type(outputs).__name__}")
+        except ValueError as exc:
+            print(f"    [synthesis] Could not parse synthesis JSON ({exc}) — using raw text")
             outputs = {
                 'summary': response['content'][:500],
                 'minutes_of_meeting': response['content'],
-                'action_items': ['Review discussion transcript', 'Schedule follow-up', 'Document decisions']
+                'action_items': [],
             }
-        
+
         return outputs

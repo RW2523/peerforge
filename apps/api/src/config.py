@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
     supabase_service_role_key: str = ""
     require_auth: bool = True
+
+    # Comma-separated browser origins allowed to call this API. "*" permits any
+    # origin but disables credentialed requests, since the CORS spec forbids
+    # pairing a wildcard with Access-Control-Allow-Credentials.
+    cors_allow_origins: str = "*"
     
     # Redis
     redis_url: str = "redis://localhost:6379/0"

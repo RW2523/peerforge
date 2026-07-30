@@ -26,13 +26,23 @@ while IFS= read -r f; do
   files+=("$f")
 done < <(ls -1 "${ROOT_DIR}/infra/supabase/migrations/"*.sql 2>/dev/null | sort || true)
 
+# The apps/api set runs after infra: it adds tables that reference the base
+# schema. Tracked under an "api/" prefix so the two directories can never
+# collide on a shared basename.
+while IFS= read -r f; do
+  files+=("$f")
+done < <(ls -1 "${ROOT_DIR}/apps/api/migrations/"*.sql 2>/dev/null | sort || true)
+
 if [ "${#files[@]}" -eq 0 ]; then
   echo "ℹ️  No migration files found."
   exit 0
 fi
 
 for file in "${files[@]}"; do
-  base="$(basename "${file}")"
+  case "${file}" in
+    "${ROOT_DIR}/apps/api/migrations/"*) base="api/$(basename "${file}")" ;;
+    *)                                   base="$(basename "${file}")" ;;
+  esac
   applied="$(docker exec "${DB_CONTAINER}" psql -U "${DB_USER}" -d "${DB_NAME}" -tAc "SELECT 1 FROM arinar_schema_migrations WHERE filename='${base}'" || true)"
   if [ "${applied}" = "1" ]; then
     echo "↪︎ Skipping ${base} (already applied)"

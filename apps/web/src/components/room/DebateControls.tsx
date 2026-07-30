@@ -32,18 +32,17 @@ export default function DebateControls({ debateId, currentState, isYoloMode = fa
   const [pausingYolo, setPausingYolo] = useState(false);
   const [startingAuto, setStartingAuto] = useState(false);
   
-  // Debug: Log API key status
-  console.log('🔑 DebateControls API Key:', apiKey ? `EXISTS (${apiKey.substring(0, 15)}...)` : 'NOT FOUND');
-
-  // Keyboard shortcut: Space or Enter to trigger next turn (power user feature)
+  // Keyboard shortcut: Ctrl/Cmd+Enter to trigger next turn (power user feature).
+  // Bare Space/Enter would also fire while a button or link has focus, so
+  // activating any control on the page triggered a billed turn.
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      // Only if running, not in input field, and not triggering already
       if (
         currentState === 'running' &&
         !isYoloMode &&
         !triggeringTurn &&
-        (e.key === ' ' || e.key === 'Enter') &&
+        e.key === 'Enter' &&
+        (e.ctrlKey || e.metaKey) &&
         !(e.target as HTMLElement).matches('input, textarea, [contenteditable]')
       ) {
         e.preventDefault();
@@ -373,7 +372,7 @@ export default function DebateControls({ debateId, currentState, isYoloMode = fa
             className={shouldConclude ? styles.btnConclude : (canTriggerTurn ? styles.btnPrimary : '')}
             title={shouldConclude ? (policyConfig?.enable_host ? 'Host will provide final conclusion' : 'All rounds complete - End meeting') : (!apiKey ? 'Add OpenRouter API key in Settings' : 'Trigger next agent to speak')}
           >
-            {triggeringTurn ? '🤔 Agent thinking...' : shouldConclude ? '🏁 Conclude Meeting' : '▶ Next Turn'} {!triggeringTurn && !shouldConclude && currentState === 'running' && !isYoloMode ? <span style={{opacity: 0.6, fontSize: '0.85em'}}>(Space)</span> : null}
+            {triggeringTurn ? '🤔 Agent thinking...' : shouldConclude ? '🏁 Conclude Meeting' : '▶ Next Turn'} {!triggeringTurn && !shouldConclude && currentState === 'running' && !isYoloMode ? <span style={{opacity: 0.6, fontSize: '0.85em'}}>(Ctrl+Enter)</span> : null}
           </button>
         )}
 

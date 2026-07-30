@@ -126,6 +126,22 @@ def _persona_lane_from_description(description: str) -> str:
     )
 
 
+def _agent_role_text(agent_config: Dict[str, Any]) -> str:
+    """
+    Free-text role description for an agent.
+
+    Participants are persisted with `role_description` (see
+    MeetingSetupService._normalize_participant); no code path ever writes a
+    `description` key, so reading that alone yields '' for every agent and
+    collapses the whole panel onto one persona lane.
+    """
+    return (
+        agent_config.get('role_description')
+        or agent_config.get('description')
+        or (agent_config.get('system_prompt') or '')[:200]
+    )
+
+
 def _build_repetition_blacklist(history_events: List[Dict], current_agent: str) -> str:
     """
     Extract the key points each agent has already raised so the current
@@ -191,13 +207,23 @@ class TurnOrchestrator:
         with get_db_connection() as conn:
             cursor = get_cursor(conn)
             
-            # Get debate details
+            # Serialise turn advancement: the turn index is read here and
+            # written back after the LLM call, so without a row lock two
+            # concurrent callers pick the same speaker and the counter advances
+            # once (lost update). Three entry points reach this — the HTTP
+            # route, the WebSocket command, and the autonomous loop.
+            #
+            # NO KEY UPDATE, not UPDATE: events.debate_id references this row,
+            # so every INSERT INTO events takes FOR KEY SHARE on it. Plain FOR
+            # UPDATE conflicts with that and deadlocks against this turn's own
+            # thinking-step writes, which use a separate connection.
             cursor.execute("""
                 SELECT debate_id, title, description, state, policy_config
                 FROM debates
                 WHERE debate_id = %s
+                FOR NO KEY UPDATE
             """, (debate_id,))
-            
+
             debate = cursor.fetchone()
             if not debate:
                 raise ValueError(f"Debate {debate_id} not found")
@@ -622,12 +648,12 @@ How to respond:
             # ── Persona lane + repetition blacklist ──────────────────
             _lane = _PERSONA_LANE.get(
                 agent_name.lower().strip(),
-                _persona_lane_from_description(agent_config.get('description', ''))
+                _persona_lane_from_description(_agent_role_text(agent_config))
             )
             _blacklist = _build_repetition_blacklist(history_events, agent_name)
 
             # Add turn instruction with conversational guidance
-            role_context = agent_config.get('description', f"You are {agent_name}")
+            role_context = _agent_role_text(agent_config) or f"You are {agent_name}"
             
             # Build round-aware strategy guide with enforced debate structure
             if max_rounds:
@@ -1855,7 +1881,7 @@ Requirements:
 
             reasoning = self.reasoning_engine.evaluate_stance(
                 agent_name=agent_name,
-                agent_role=agent_config.get('description', agent_config.get('system_prompt', '')[:100]),
+                agent_role=_agent_role_text(agent_config),
                 past_positions=memory_context,
                 recent_conversation=recent_conversation,
                 user_intervention=latest_intervention,
@@ -1863,6 +1889,7 @@ Requirements:
                 valid_participant_names=all_participant_names,
                 session_title=debate_context.get('title'),
                 material_context=material_context,
+                model_id=model_id,
             )
             print(f"    Stance: {reasoning['current_stance'][:60]}...")
             print(f"    Confidence: {reasoning['confidence']}")
@@ -1894,7 +1921,10 @@ Requirements:
             
             agent_message = self.response_generator.generate_response(
                 agent_name=agent_name,
-                agent_role_description=agent_config.get('system_prompt', ''),
+                # The role description, not the full system prompt: _get_schema
+                # substring-matches this, and system prompts name other roles in
+                # their "what you do not do" sections, misrouting the schema.
+                agent_role_description=_agent_role_text(agent_config),
                 reasoning=reasoning,
                 conversation_history=conversation_history,
                 debate_context=debate_context,
@@ -1902,6 +1932,7 @@ Requirements:
                 debate_id=debate_id,
                 material_context=material_context,
                 valid_participant_names=all_participant_names,
+                model_id=model_id,
             )
             print(f"    Generated {len(agent_message)} chars")
             
@@ -1945,7 +1976,7 @@ Requirements:
                 message=agent_message,
                 reasoning=reasoning,
                 agent_name=agent_name,
-                agent_role=agent_config.get('description', ''),
+                agent_role=_agent_role_text(agent_config),
                 past_messages=past_messages_text,
                 active_participants=all_participant_names,  # All valid names, not just those who spoke
                 recent_other_messages=recent_other_messages
@@ -2002,7 +2033,7 @@ Requirements:
                         constraints.append(f"- Only reference participants from this list: {', '.join(all_participant_names)}")
                     
                     constraints.extend([
-                        f"- Follow your role as {agent_config.get('description', 'agent')}",
+                        f"- Follow your role as {_agent_role_text(agent_config) or 'agent'}",
                         "",
                         "Regenerate your response following these rules."
                     ])

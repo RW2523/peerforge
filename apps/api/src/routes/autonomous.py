@@ -3,7 +3,7 @@ Autonomous Debate API Routes
 """
 
 from fastapi import APIRouter, HTTPException, Header
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from ..autonomous_debate_service import autonomous_service
 
@@ -11,7 +11,8 @@ router = APIRouter(prefix="/api/debates", tags=["autonomous"])
 
 
 class StartAutonomousRequest(BaseModel):
-    auto_turn_delay_seconds: int = 10
+    # A zero delay turns the autonomous loop into a tight paid-API spin.
+    auto_turn_delay_seconds: int = Field(default=10, ge=1, le=3600)
 
 
 @router.post("/{debate_id}/start-autonomous")

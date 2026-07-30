@@ -9,6 +9,9 @@ const nextConfig = {
     config.resolve.alias = {
       ...config.resolve.alias,
       '@popperjs/core': require.resolve('@popperjs/core/dist/cjs/popper.js'),
+      // pdfjs-dist requires the native 'canvas' package during SSR; it is only
+      // needed for Node-side rendering, which the app doesn't use.
+      canvas: false,
     };
     return config;
   },

@@ -57,3 +57,6 @@ apps/api/eval_logs/*.json
 # Build artifacts
 *.bak
 tsconfig.tsbuildinfo
+
+# Local Cloudflare tunnel binary (37MB, not source)
+cloudflared

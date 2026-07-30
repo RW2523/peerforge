@@ -29,9 +29,11 @@ export function useDebateRoom(options: UseDebateRoomOptions): UseDebateRoomResul
   const clientRef = useRef<WSClient | null>(null);
   const lastSeenSequenceRef = useRef<number>(0);
 
-  // Poll for new thinking events from DB every 1 second
+  // Backfill thinking events once on mount. The WebSocket delivers these
+  // live, so polling only duplicated work the socket was already doing.
   useEffect(() => {
     if (!enabled || !debateId) return;
+    lastSeenSequenceRef.current = 0;
 
     const pollThinkingEvents = async () => {
       try {
@@ -69,10 +71,7 @@ export function useDebateRoom(options: UseDebateRoomOptions): UseDebateRoomResul
       }
     };
 
-    const interval = setInterval(pollThinkingEvents, 1000);
-    pollThinkingEvents(); // Initial poll
-
-    return () => clearInterval(interval);
+    pollThinkingEvents();
   }, [enabled, debateId]);
 
   // Event handler

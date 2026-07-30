@@ -97,6 +97,12 @@ source .venv/bin/activate
 python -m uvicorn src.main:app --reload --host 0.0.0.0 --port "$BACKEND_PORT" &
 BACKEND_PID=$!
 
+# Without a worker, every .delay() call queues to Redis and waits forever:
+# uploaded files are never text-extracted, chunked, embedded, or OCR'd.
+celery -A src.celery_app worker --loglevel=info --concurrency=2 \
+  --queues=celery,materials,preflight &
+WORKER_PID=$!
+
 sleep 3
 
 cd "$WEB_DIR"
@@ -107,6 +113,7 @@ cleanup() {
   echo ""
   echo "Stopping servers..."
   kill "$BACKEND_PID" 2>/dev/null || true
+  kill "$WORKER_PID" 2>/dev/null || true
   kill "$FRONTEND_PID" 2>/dev/null || true
   echo "Servers stopped."
 }

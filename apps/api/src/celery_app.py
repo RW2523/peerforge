@@ -6,6 +6,7 @@ Handles asynchronous material processing tasks
 import os
 
 from celery import Celery
+from kombu import Queue
 from src.config import settings
 
 # Create Celery app
@@ -46,6 +47,10 @@ celery_app.conf.task_routes = {
     "src.tasks.preflight.*": {"queue": "preflight"},
 }
 
-# Workers pick up all queues by default (avoids "task stuck pending" issues).
 celery_app.conf.task_default_queue = "celery"
-celery_app.conf.worker_queues = ("celery", "materials", "preflight")
+# Consume every routed queue by default. `worker_queues` is not a Celery
+# setting and was silently ignored, so a worker started without -Q listened
+# only on "celery" and material/preflight tasks queued forever.
+celery_app.conf.task_queues = tuple(
+    Queue(name) for name in ("celery", "materials", "preflight")
+)

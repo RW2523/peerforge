@@ -18,11 +18,24 @@ app = FastAPI(
     version="2.0.0"
 )
 
+PLACEHOLDER_JWT_SECRET = "your-jwt-secret-here"
+
+if settings.require_auth and settings.supabase_jwt_secret == PLACEHOLDER_JWT_SECRET:
+    raise RuntimeError(
+        "REQUIRE_AUTH is enabled but SUPABASE_JWT_SECRET is still the placeholder. "
+        "Any attacker could mint a valid token — set a real secret before serving traffic."
+    )
+
 # CORS middleware
+_origins = [o.strip() for o in settings.cors_allow_origins.split(",") if o.strip()]
+_wildcard = "*" in _origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_origins,
+    # Starlette answers a wildcard by echoing the caller's Origin; combined with
+    # credentials that lets any site make authenticated cross-origin calls.
+    allow_credentials=not _wildcard,
     allow_methods=["*"],
     allow_headers=["*", "X-OpenRouter-Key"],
     expose_headers=["*"],

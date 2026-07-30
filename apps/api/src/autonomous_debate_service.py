@@ -10,6 +10,12 @@ from .database import get_db_connection, get_cursor
 from .turn_orchestrator import TurnOrchestrator
 from .summary_service import SummaryService
 
+# Termination bounds. Every autonomous turn issues paid LLM calls, so the loop
+# must terminate even when a debate was created with no policy at all.
+DEFAULT_MAX_ROUNDS = 5
+MAX_TURNS_HARD_CEILING = 200
+MAX_CONSECUTIVE_FAILURES = 3
+
 
 class AutonomousDebateService:
     """Manages autonomous debate execution"""
@@ -95,7 +101,8 @@ class AutonomousDebateService:
     ):
         """Main autonomous execution loop"""
         orchestrator = TurnOrchestrator(openrouter_api_key)
-        
+        consecutive_failures = 0
+
         try:
             while True:
                 # Check status
@@ -117,9 +124,17 @@ class AutonomousDebateService:
                 try:
                     result = orchestrator.trigger_next_turn(debate_id)
                     print(f"🤖 Auto-turn completed: {result.get('agent_name')}")
+                    consecutive_failures = 0
                 except Exception as e:
-                    print(f"❌ Auto-turn failed: {e}")
-                    await asyncio.sleep(delay_seconds)
+                    consecutive_failures += 1
+                    print(f"❌ Auto-turn failed ({consecutive_failures}/{MAX_CONSECUTIVE_FAILURES}): {e}")
+                    if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                        # A provider outage or a misconfigured debate would
+                        # otherwise retry forever, paying for each attempt.
+                        print(f"⛔ Pausing {debate_id} after {consecutive_failures} consecutive failures")
+                        self._set_status(debate_id, 'paused')
+                        break
+                    await asyncio.sleep(delay_seconds * consecutive_failures)
                     continue
                 
                 # Wait before next turn
@@ -182,8 +197,15 @@ class AutonomousDebateService:
             participant_count = cursor.fetchone()['count']
             cursor.close()
             
-            # Check max_rounds
-            max_rounds = policy.get('max_rounds')
+            # Absolute ceiling: even a misconfigured policy cannot spend without
+            # bound, because every turn issues paid LLM calls.
+            if turn_count >= MAX_TURNS_HARD_CEILING:
+                print(f"⛔ Ending due to hard turn ceiling: {turn_count} >= {MAX_TURNS_HARD_CEILING}")
+                return True
+
+            # Check max_rounds. Falls back to a default so that a debate created
+            # without max_rounds or timebox_minutes still terminates.
+            max_rounds = policy.get('max_rounds') or DEFAULT_MAX_ROUNDS
             if max_rounds and participant_count > 0:
                 current_round = (turn_count // participant_count) + 1
                 print(f"📊 Round check: {current_round}/{max_rounds} (turns={turn_count}, participants={participant_count})")

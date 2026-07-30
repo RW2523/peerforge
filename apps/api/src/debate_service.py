@@ -1,10 +1,27 @@
 """Debate lifecycle service for M2 control operations"""
+import base64
 import uuid
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 import psycopg2.extras
 from .database import get_db_connection, get_cursor
 from .state_machine import DebateState, DebateStateMachine, StateTransitionError
+
+
+def _encode_debate_cursor(created_at: datetime, debate_id: Any) -> str:
+    """Opaque keyset cursor: the sort key, not just the id."""
+    return base64.urlsafe_b64encode(
+        f"{created_at.isoformat()}|{debate_id}".encode()
+    ).decode()
+
+
+def _decode_debate_cursor(cursor: str) -> tuple:
+    try:
+        raw = base64.urlsafe_b64decode(cursor.encode()).decode()
+        created_at, debate_id = raw.split("|", 1)
+        return datetime.fromisoformat(created_at), debate_id
+    except Exception as exc:
+        raise ValueError(f"Malformed pagination cursor: {cursor!r}") from exc
 
 
 class DebateService:
@@ -423,44 +440,48 @@ class DebateService:
         cursor: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        List debates in workspace with cursor pagination.
-        
-        Cursor is debate_id for simple pagination.
+        List debates in workspace with keyset pagination.
+
+        The cursor is an opaque (created_at, debate_id) pair. Both must be in
+        the key: created_at alone is not unique, and debate_id alone does not
+        follow the sort order, so paging on it skips and duplicates rows.
         Returns items + next_cursor (if more results exist).
         """
         with get_db_connection() as conn:
             db_cursor = get_cursor(conn)
-            
+
             if cursor:
-                # Fetch after cursor
-                db_cursor.execute("""
-                    SELECT debate_id, workspace_id, title, state,
-                           created_at, updated_at, started_at, ended_at
-                    FROM debates
-                    WHERE workspace_id = %s AND debate_id > %s
-                    ORDER BY debate_id ASC
-                    LIMIT %s
-                """, (workspace_id, cursor, limit + 1))
-            else:
-                # First page
+                created_before, id_before = _decode_debate_cursor(cursor)
                 db_cursor.execute("""
                     SELECT debate_id, workspace_id, title, state,
                            created_at, updated_at, started_at, ended_at
                     FROM debates
                     WHERE workspace_id = %s
-                    ORDER BY created_at DESC
+                      AND (created_at, debate_id) < (%s, %s)
+                    ORDER BY created_at DESC, debate_id DESC
+                    LIMIT %s
+                """, (workspace_id, created_before, id_before, limit + 1))
+            else:
+                db_cursor.execute("""
+                    SELECT debate_id, workspace_id, title, state,
+                           created_at, updated_at, started_at, ended_at
+                    FROM debates
+                    WHERE workspace_id = %s
+                    ORDER BY created_at DESC, debate_id DESC
                     LIMIT %s
                 """, (workspace_id, limit + 1))
-            
+
             rows = db_cursor.fetchall()
             items = [dict(row) for row in rows]
-            
+
             # Check if there are more results
             next_cursor = None
             if len(items) > limit:
                 items = items[:limit]
-                next_cursor = items[-1]["debate_id"]
-            
+                next_cursor = _encode_debate_cursor(
+                    items[-1]["created_at"], items[-1]["debate_id"]
+                )
+
             return {
                 "items": items,
                 "next_cursor": next_cursor
