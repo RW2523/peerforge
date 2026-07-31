@@ -18,6 +18,7 @@ export default function HistoryPage() {
   const [selectedDebate, setSelectedDebate] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<any[]>([]);
   const [summary, setSummary] = useState<any | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'transcript' | 'summary'>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'title-asc' | 'title-desc'>('date-desc');
@@ -70,12 +71,19 @@ export default function HistoryPage() {
     setSelectedDebate(debateId);
     setViewMode('summary');
     
+    setSummaryError(null);
     try {
       const data = await api.getDebateSummary(debateId);
       setSummary(data);
-    } catch (err) {
+      // A 404 genuinely means no report exists; anything else is a failure to
+      // find out, which must not be rendered as "there is nothing here".
+    } catch (err: any) {
       console.error('Failed to load summary:', err);
       setSummary(null);
+      const message = String(err?.message ?? '');
+      if (!/404|not found/i.test(message)) {
+        setSummaryError(message || 'Could not load the report');
+      }
     }
   };
 
@@ -513,6 +521,17 @@ export default function HistoryPage() {
                       {summary.model_used && ` using ${summary.model_used}`}
                     </div>
                   )}
+                </div>
+              ) : summaryError ? (
+                <div className={styles.emptyState} role="alert">
+                  <h3>Could not load this report</h3>
+                  <p>{summaryError}</p>
+                  <button
+                    className={styles.retryButton}
+                    onClick={() => selectedDebate && viewDebateSummary(selectedDebate)}
+                  >
+                    Try again
+                  </button>
                 </div>
               ) : (
                 <div className={styles.emptyState}>

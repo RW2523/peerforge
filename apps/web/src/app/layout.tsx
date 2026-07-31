@@ -4,6 +4,7 @@ import '../styles/globals.css'
 import { APP_NAME_TAGLINE, APP_DESCRIPTION } from '@/lib/brand'
 import { WorkspaceProvider } from '@/components/WorkspaceProvider'
 import { AuthGuard } from '@/components/AuthGuard'
+import { Toaster } from '@/components/ui/Toaster'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -45,7 +46,9 @@ export default function RootLayout({
       <body>
         <a className="skip-link" href="#main-content">Skip to main content</a>
         <AuthGuard>
-          <WorkspaceProvider>{children}</WorkspaceProvider>
+          <WorkspaceProvider>
+            <Toaster>{children}</Toaster>
+          </WorkspaceProvider>
         </AuthGuard>
       </body>
     </html>

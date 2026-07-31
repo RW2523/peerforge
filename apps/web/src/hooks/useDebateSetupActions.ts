@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import * as api from '@/lib/api';
 import type { SetupParticipant, SetupMaterial } from '@/lib/api';
 import { getAccessToken } from '@/lib/supabase';
+import { useToast } from '@/components/ui/Toaster';
 import { isValidMaterial, normalizeUrl } from '@/lib/setupValidation';
 
 interface UseDebateSetupActionsOptions {
@@ -45,12 +46,13 @@ export function useDebateSetupActions(
 ): UseDebateSetupActionsReturn {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const toast = useToast();
   const [createdDebateId, setCreatedDebateId] = useState<string | null>(null);
   const [createdParticipantIds, setCreatedParticipantIds] = useState<string[]>([]);
 
   const handleCreateDebate = async () => {
     if (!options.workspaceId) {
-      alert('Still loading your workspace — try again in a moment.');
+      toast.notify('Still loading your workspace — try again in a moment.');
       return null;
     }
     const {
@@ -118,7 +120,7 @@ export function useDebateSetupActions(
           console.log('Memory imported successfully');
         } catch (memErr: any) {
           console.error('Memory import failed:', memErr);
-          alert(`Warning: Memory import failed: ${memErr.message}. Continuing with debate creation.`);
+          toast.notify(`Past-session memory could not be imported (${memErr.message}). The session will run without it.`);
         }
       }
 
@@ -141,13 +143,13 @@ export function useDebateSetupActions(
           }
         } catch (docErr: any) {
           console.error('Document creation failed:', docErr);
-          alert(`Warning: Document creation failed: ${docErr.message}. Continuing with debate.`);
+          toast.notify(`The shared document could not be created (${docErr.message}). The session will run without it.`);
         }
       }
 
       return { debateId: debate_id, participantIds: participant_ids };
     } catch (err: any) {
-      alert(`Failed to create debate: ${err.message}`);
+      toast.error(`Could not create the session: ${err.message}`);
       return null;
     } finally {
       setIsLoading(false);
@@ -165,21 +167,22 @@ export function useDebateSetupActions(
     try {
       const authToken = await getAccessToken();
       if (!authToken) {
-        alert(
-          '⚠️ Authentication Required\n\nNo auth token available. This should not happen in development mode.\n\nPlease check your .env.local file has NEXT_PUBLIC_AUTH_MODE=development and NEXT_PUBLIC_TEST_TOKEN configured.'
-        );
+        // This used to instruct the person using the product to edit a
+        // .env.local file they have never seen.
+        toast.error('You are signed out. Sign in again to start this session.');
         return;
       }
     } catch (err: any) {
-      alert(`⚠️ Authentication Error\n\nFailed to get auth token: ${err.message}`);
+      toast.error(`Could not confirm you are signed in: ${err.message}`);
       return;
     }
 
     // Validate API key before launching
     if (!apiKey) {
-      alert(
-        '⚠️ OpenRouter API Key Required\n\nYou need to add your OpenRouter API key in Settings before starting the debate.\n\nThe AI agents need this key to participate in the discussion.'
-      );
+      toast.error('An OpenRouter API key is needed before the panel can run.', {
+        label: 'Open Settings',
+        onClick: () => { window.location.href = '/settings'; },
+      });
       return;
     }
 
@@ -198,7 +201,7 @@ export function useDebateSetupActions(
     // }
 
     if (!debateId) {
-      alert('No debate created yet. Please complete the setup first.');
+      toast.error('This session has not been created yet — finish the setup steps first.');
       return;
     }
 
@@ -213,7 +216,7 @@ export function useDebateSetupActions(
       } catch { /* ignore — getDebate failing shouldn't block launch */ }
 
       if (currentState === 'ended') {
-        alert('This review session has already ended. Please create a new one.');
+        toast.error('This review session has already ended. Start a new one to continue.');
         return;
       }
 
@@ -245,7 +248,7 @@ export function useDebateSetupActions(
       router.push(`/room?debate_id=${debateId}`);
     } catch (err: any) {
       console.error('Failed to start debate:', err);
-      alert(`Failed to start debate: ${err.message || 'Unknown error'}`);
+      toast.error(`Could not start the session: ${err.message || 'unknown error'}`);
     } finally {
       setIsLoading(false);
     }

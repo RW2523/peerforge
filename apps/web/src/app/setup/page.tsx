@@ -23,6 +23,7 @@ import { useStep1Draft } from '@/hooks/useStep1Draft';
 import { loadStep1Draft, step1DraftToState } from '@/lib/step1Draft';
 import styles from './setup.module.css';
 import { useWorkspace } from '@/components/WorkspaceProvider';
+import { useToast } from '@/components/ui/Toaster';
 
 export default function SetupPage() {
   const router = useRouter();
@@ -158,6 +159,7 @@ export default function SetupPage() {
   const { canGoNext: validateStep } = useSetupValidation();
   
   const { workspaceId } = useWorkspace();
+  const toast = useToast();
 
   // Debate setup actions (create, launch)
   const {
@@ -212,7 +214,7 @@ export default function SetupPage() {
         setAgents(agentsData);
       } catch (err: any) {
         console.error('Failed to load templates/agents:', err);
-        alert(`Failed to load templates/agents: ${err.message}`);
+        toast.error(`Could not load reviewer templates: ${err.message}`);
       }
     };
     loadData();
@@ -240,14 +242,14 @@ export default function SetupPage() {
   const handleCreateDebate = async () => {
     // Validate participants exist
     if (participants.length === 0) {
-      alert('Please add at least one participant before continuing');
+      toast.error('Add at least one reviewer before continuing.');
       return;
     }
     
     // Validate memory import
     const memoryError = validateMemoryImport(participants);
     if (memoryError) {
-      alert(memoryError);
+      toast.error(memoryError);
       return;
     }
 
@@ -263,7 +265,7 @@ export default function SetupPage() {
         setCreatedParticipantIds(addResult.participant_ids); // Update hook state
         result = { debateId: createdDebateId, participantIds: addResult.participant_ids };
       } catch (err: any) {
-        alert(`Failed to add participants: ${err.message}`);
+        toast.error(`Could not add those reviewers: ${err.message}`);
         return;
       }
     } else {
@@ -289,7 +291,16 @@ export default function SetupPage() {
           await api.addInlineMaterials(result.debateId, inline, apiKey);
         }
       } catch (matErr: any) {
+        // These are notes and links the researcher typed by hand. Warning to
+        // the console and advancing the wizard loses them with no sign that
+        // anything went wrong.
         console.warn('Failed to persist inline materials:', matErr);
+        toast.error(
+          `Your typed notes and links could not be saved (${matErr?.message ?? 'unknown error'}). ` +
+            'They are still in the previous step — go back and try again.',
+          { label: 'Back to materials', onClick: () => setStep(2) }
+        );
+        return;
       }
 
       // Create memory grants if enabled, then advance to Literature step

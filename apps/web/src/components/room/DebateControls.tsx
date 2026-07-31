@@ -5,6 +5,7 @@ import styles from './DebateControls.module.css';
 import * as api from '@/lib/api';
 import { useOpenRouterKey } from '@/hooks/useOpenRouterKey';
 import { WSCommandType, WSAckMessage } from '@/lib/wsClient';
+import { useToast } from '@/components/ui/Toaster';
 
 interface DebateControlsProps {
   debateId: string;
@@ -24,6 +25,7 @@ interface DebateControlsProps {
 
 export default function DebateControls({ debateId, currentState, isYoloMode = false, yoloStatus, policyConfig, totalTurns = 0, participantCount = 0, onPolicyUpdate, onStateChange, onYoloStatusChange, onAutoModeChange, sendCommand }: DebateControlsProps) {
   const { apiKey } = useOpenRouterKey();
+  const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
@@ -227,7 +229,7 @@ export default function DebateControls({ debateId, currentState, isYoloMode = fa
             // The host will speak, and THEN we can end the meeting
           } catch (error: any) {
             console.error('❌ Host conclusion failed:', error);
-            alert(`Failed to conclude debate: ${error.message || 'Unknown error'}`);
+            toast.error(`Could not conclude the session: ${error.message || 'unknown error'}`);
             setTriggeringTurn(false);
             return;
           }

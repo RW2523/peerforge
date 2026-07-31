@@ -12,6 +12,7 @@ import {
 import { EditableListItem } from './EditableListItem';
 import { activateOnKey } from '@/lib/a11y';
 import styles from './SetupSteps.module.css';
+import { useToast } from '@/components/ui/Toaster';
 
 interface BasicInfoStepProps {
   title: string;
@@ -62,6 +63,7 @@ export function BasicInfoStep({
 }: BasicInfoStepProps) {
   const router = useRouter();
   const { apiKey } = useOpenRouterKey();
+  const toast = useToast();
   const [agendaInput, setAgendaInput] = useState('');
   const [outcomeInput, setOutcomeInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -263,7 +265,7 @@ export function BasicInfoStep({
     }
 
     if (!problemStatement || problemStatement.trim().length < 10) {
-      alert('Please enter at least a brief problem statement (10+ characters) to improve');
+      toast.error('Write at least a sentence about your work before asking for suggestions.');
       return;
     }
 
@@ -280,7 +282,7 @@ export function BasicInfoStep({
     // Set a 25 second timeout (backend times out at 20s)
     const timeoutId = setTimeout(() => {
       setIsGenerating(false);
-      alert('Request is taking too long. Please check:\n\n1. Your OpenRouter API key is valid\n2. You have credits at openrouter.ai\n3. Your internet connection is stable');
+      toast.error('That request timed out. Check your OpenRouter key and credits, then try again.');
     }, 25000);
     
     try {
@@ -334,13 +336,13 @@ export function BasicInfoStep({
       
       // Show helpful error messages
       if (errorMsg.includes('Invalid API key')) {
-        alert('❌ Invalid OpenRouter API Key\n\nPlease check your API key in Settings.\nGet a key at: openrouter.ai');
+        toast.error('Your OpenRouter key was rejected.', { label: 'Open Settings', onClick: () => { window.location.href = '/settings'; } });
       } else if (errorMsg.includes('insufficient credits')) {
-        alert('💳 Insufficient Credits\n\nYour OpenRouter account needs credits.\nAdd credits at: openrouter.ai');
+        toast.error('Your OpenRouter account is out of credits. Add credits at openrouter.ai, then try again.');
       } else if (errorMsg.includes('slow to respond')) {
-        alert('⏱️ AI Service Timeout\n\nOpenRouter is responding slowly.\n\nTry:\n1. Wait a moment and try again\n2. Check openrouter.ai/status\n3. Use a shorter problem statement');
+        toast.error('OpenRouter is responding slowly. Wait a moment and try again, or shorten your description.');
       } else {
-        alert(`❌ Error: ${errorMsg}\n\nPlease try again or check the console for details.`);
+        toast.error(`That did not work: ${errorMsg}`);
       }
     } finally {
       setIsGenerating(false);

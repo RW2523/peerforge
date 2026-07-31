@@ -4,14 +4,16 @@
 
 import { useState, useCallback } from 'react';
 import * as api from '@/lib/api';
+import { useToast } from '@/components/ui/Toaster';
 
 export function useParticipants() {
+  const toast = useToast();
   const [participants, setParticipants] = useState<api.SetupParticipant[]>([]);
 
   const handleAddFromTemplate = useCallback((template: api.AgentTemplate) => {
     setParticipants(prev => {
       if (prev.length >= 8) {
-        alert('Maximum 8 participants allowed');
+        toast.error('A panel can have at most 8 reviewers.');
         return prev;
       }
       return [
@@ -30,7 +32,7 @@ export function useParticipants() {
   const handleAddExisting = useCallback((agent: api.Agent) => {
     setParticipants(prev => {
       if (prev.length >= 8) {
-        alert('Maximum 8 participants allowed');
+        toast.error('A panel can have at most 8 reviewers.');
         return prev;
       }
       return [...prev, { 

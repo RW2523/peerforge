@@ -12,6 +12,7 @@ import { SkipDialog } from './PreflightDialogs';
 import { PrepPackDialog } from './PrepPackDialog';
 import { useOpenRouterKey } from '@/hooks/useOpenRouterKey';
 import styles from './SetupSteps.module.css';
+import { useToast } from '@/components/ui/Toaster';
 
 interface PreflightStepProps {
   debateId: string | null;
@@ -95,6 +96,7 @@ export function PreflightStep({
     totalCount,
   } = usePreflight();
 
+  const toast = useToast();
   const [skipDialogOpen, setSkipDialogOpen] = useState(false);
   const [skipParticipantId, setSkipParticipantId] = useState<string | null>(null);
   const [skipReason, setSkipReason] = useState('');
@@ -179,7 +181,7 @@ export function PreflightStep({
       setPrepPackDialogOpen(true);
     } catch (error) {
       console.error('Failed to load prep pack:', error);
-      alert('Failed to load prep pack. Please try again.');
+      toast.error('Could not load the preparation pack.');
     } finally {
       setLoadingPrepPack(false);
     }

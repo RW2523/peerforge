@@ -9,6 +9,7 @@ import styles from './UserMenu.module.css';
 export default function UserMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const [credits, setCredits] = useState<number | null>(null);
+  const [creditsError, setCreditsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -52,9 +53,14 @@ export default function UserMenu() {
       } else {
         setCredits(null);
       }
+      setCreditsError(null);
     } catch (error) {
+      // Previously this fell through to the same state as "no balance
+      // reported", which renders "API Connected" — asserting a working
+      // connection at the exact moment there isn't one.
       console.error('Failed to fetch credits:', error);
       setCredits(null);
+      setCreditsError(error instanceof Error ? error.message : 'unreachable');
     } finally {
       setLoading(false);
     }
@@ -77,6 +83,14 @@ export default function UserMenu() {
               <span className={styles.creditIcon}>💳</span>
               <span className={styles.creditAmount}>${credits.toFixed(2)}</span>
             </>
+          ) : creditsError ? (
+            <button
+              className={styles.creditError}
+              onClick={fetchCredits}
+              title={`Could not reach OpenRouter: ${creditsError}`}
+            >
+              Balance unavailable — retry
+            </button>
           ) : (
             <span className={styles.creditNA}>API Connected</span>
           )}
