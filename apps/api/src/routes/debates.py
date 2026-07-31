@@ -31,15 +31,23 @@ def _may_see_whole_workspace(current_user: Optional[Dict[str, Any]], workspace_i
     if not current_user:
         return True  # Auth disabled — no identity to scope by.
 
-    from ..auth import ELEVATED_ORG_ROLES, role_in_workspace
+    from ..auth import ELEVATED_ORG_ROLES, org_role_in, role_in_workspace
 
     if role_in_workspace(current_user, workspace_id) in _SUPERVISORY_WORKSPACE_ROLES:
         return True
 
-    return any(
-        o.get("org_role") in ELEVATED_ORG_ROLES
-        for o in current_user.get("organizations") or []
+    # Scoped to the organization that owns this course. Asking merely whether
+    # the caller is elevated *somewhere* let a TA at one university read every
+    # cohort at a second one they were only a student at.
+    owning_org = next(
+        (str(w.get("tenant_id")) for w in current_user.get("workspaces") or []
+         if str(w.get("workspace_id")) == str(workspace_id) and w.get("tenant_id")),
+        None,
     )
+    if not owning_org:
+        return False
+
+    return org_role_in(current_user, owning_org) in ELEVATED_ORG_ROLES
 
 
 @router.get("/debates", response_model=DebateListResponse)
@@ -105,7 +113,10 @@ async def list_debates(
 
 
 @router.post("/debates/run", response_model=DebateRunResponse, status_code=status.HTTP_200_OK)
-async def run_debate(request: DebateRunRequest):
+async def run_debate(
+    request: DebateRunRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     """
     Run a 5-turn debate with 3 agents
     

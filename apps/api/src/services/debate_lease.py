@@ -16,6 +16,7 @@ instance and no worse than the behaviour it replaces.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Optional
 
 from ..config import settings
@@ -28,6 +29,9 @@ logger = logging.getLogger(__name__)
 # ceiling is one turn's duration.
 LEASE_TTL_SECONDS = 180
 
+# How long to wait before trying Redis again after a failed connection.
+RECONNECT_INTERVAL_SECONDS = 30
+
 
 def _key(debate_id: str) -> str:
     return f"peerforge:debate-lease:{debate_id}"
@@ -36,20 +40,25 @@ def _key(debate_id: str) -> str:
 class DebateLease:
     def __init__(self) -> None:
         self._redis = None
-        self._unavailable = False
+        self._retry_after = 0.0
 
     def _client(self):
-        if self._redis is None and not self._unavailable:
+        # Retried on a timer rather than disabled for the life of the process:
+        # Redis being briefly down at boot used to leave double-run protection
+        # off permanently, and nothing said so again after the first warning.
+        if self._redis is None and time.monotonic() >= self._retry_after:
             try:
                 import redis
 
-                self._redis = redis.from_url(settings.redis_url, decode_responses=True)
-                self._redis.ping()
+                client = redis.from_url(settings.redis_url, decode_responses=True)
+                client.ping()
+                self._redis = client
             except Exception as exc:
-                self._unavailable = True
+                self._retry_after = time.monotonic() + RECONNECT_INTERVAL_SECONDS
                 logger.warning(
                     "Debate leases unavailable (%s); a second instance could "
-                    "double-run a session", exc
+                    "double-run a session. Retrying in %ss",
+                    exc, RECONNECT_INTERVAL_SECONDS
                 )
         return self._redis
 
@@ -70,12 +79,19 @@ class DebateLease:
             return True
 
     def renew(self, debate_id: str) -> bool:
-        """Extend the claim. False means it was lost and the loop should stop."""
+        """Extend the claim. False means someone else has it and we should stop."""
         client = self._client()
         if client is None:
             return True
         try:
-            if client.get(_key(debate_id)) != INSTANCE_ID:
+            holder = client.get(_key(debate_id))
+            if holder is None:
+                # Expired rather than taken — a long pause can outlive the TTL.
+                # Reclaim it, unless another instance got there first. Treating
+                # an absent key as "lost" stopped loops nobody was competing for.
+                return bool(client.set(_key(debate_id), INSTANCE_ID,
+                                       nx=True, ex=LEASE_TTL_SECONDS))
+            if holder != INSTANCE_ID:
                 return False
             client.expire(_key(debate_id), LEASE_TTL_SECONDS)
             return True

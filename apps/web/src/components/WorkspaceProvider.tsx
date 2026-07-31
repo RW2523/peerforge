@@ -16,6 +16,7 @@ import {
   useState,
 } from 'react';
 import { getMyWorkspaces } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import {
   getActiveWorkspaceId,
   setActiveWorkspaceId,
@@ -90,6 +91,23 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const reload = useCallback(() => setReloadToken((n) => n + 1), []);
+
+  // This provider sits in the root layout, so it mounts on the login page and
+  // fetches once — before there is a session. Client-side navigation after
+  // sign-in never remounts it, so without this the app landed on /setup still
+  // holding the 401 from before anyone had signed in.
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+        if (event === 'SIGNED_OUT') {
+          setWorkspaces([]);
+          setWorkspaceId(null);
+        }
+        reload();
+      }
+    });
+    return () => data.subscription.unsubscribe();
+  }, [reload]);
 
   const role = useMemo(
     () => workspaces.find((w) => w.workspace_id === workspaceId)?.role ?? null,

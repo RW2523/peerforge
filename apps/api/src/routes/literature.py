@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from psycopg2.extras import Json
 from pydantic import BaseModel, Field
 
-from src.auth import get_current_user
+from src.auth import authorize_debate, get_current_user
 from src.database import get_db_connection, get_cursor
 from src.debate_service import DebateService
 from src.services.literature_search import (
@@ -118,6 +118,7 @@ async def search_academic_literature(
     Returns deduplicated, ranked results from all requested providers.
     Does NOT persist anything — call /literature/save to add papers to context.
     """
+    authorize_debate(debate_id, current_user)
     # Verify debate exists and user has access
     service = DebateService()
     debate = service.get_debate(debate_id)
@@ -164,6 +165,7 @@ async def save_papers_to_context(
     abstract is chunked into memory_chunks so it will be retrieved during
     reviewer prep packs and turn context.
     """
+    authorize_debate(debate_id, current_user)
     service = DebateService()
     debate = service.get_debate(debate_id)
     if not debate:
@@ -277,6 +279,7 @@ async def create_committee_twins(
 
     Pulls each reviewer's actual publications, ingests them as retrievable
     corpus, and returns a twin persona specialised on that person's work."""
+    authorize_debate(debate_id, current_user)
     service = DebateService()
     debate = service.get_debate(debate_id)
     if not debate:
@@ -304,6 +307,7 @@ async def list_saved_papers(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """List all literature papers saved to a review session's context."""
+    authorize_debate(debate_id, current_user)
     service = DebateService()
     debate = service.get_debate(debate_id)
     if not debate:

@@ -1,7 +1,9 @@
 """AI assistance endpoints for improving user input"""
-from fastapi import APIRouter, HTTPException, status, Header
+from fastapi import Depends, APIRouter, HTTPException, status, Header
+
+from src.auth import get_current_user
 from pydantic import BaseModel
-from typing import Optional
+from typing import Any, Dict, Optional
 import httpx
 import asyncio
 import json
@@ -94,7 +96,8 @@ async def health_check(
 @router.post("/ai/improve-problem-statement", response_model=ProblemStatementResponse)
 async def improve_problem_statement(
     request: ProblemStatementRequest,
-    x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key")
+    x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
     Improve a problem statement for debate using AI.
@@ -402,6 +405,7 @@ class PanelSuggestResponse(BaseModel):
 async def suggest_panel(
     request: PanelSuggestRequest,
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
     Read the session title + abstract and rank the most relevant agent

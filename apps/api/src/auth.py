@@ -277,7 +277,7 @@ def _accept_pending_invitation(conn, cursor, user_id: str, email: Optional[str])
 
     try:
         from .routes.organizations import redeem_invitation
-        redeem_invitation(cursor, row['token'], user_id)
+        redeem_invitation(cursor, row['token'], user_id, caller_email=email)
         conn.commit()
     except Exception as exc:
         conn.rollback()

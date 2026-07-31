@@ -7,11 +7,11 @@ import psycopg2
 from psycopg2.extras import Json
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Any, Dict, Optional
 from datetime import datetime
 
 from src.config import settings
-from src.auth import require_auth
+from src.auth import check_workspace_access, get_current_user
 
 router = APIRouter()
 
@@ -50,7 +50,7 @@ class WorkspaceModelsResponse(BaseModel):
 @router.get("/workspaces/{workspace_id}/settings/models", response_model=WorkspaceModelsResponse)
 async def get_workspace_models(
     workspace_id: str,
-    _user_workspace_id: str = Depends(require_auth)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Get workspace model defaults for RAG/embeddings and OCR post-processing.
@@ -65,6 +65,7 @@ async def get_workspace_models(
     Returns:
         WorkspaceModelsResponse with current or default model IDs
     """
+    check_workspace_access(current_user, workspace_id)
     conn = psycopg2.connect(settings.database_url)
     cursor = conn.cursor()
     
@@ -108,7 +109,7 @@ async def get_workspace_models(
 async def update_workspace_models(
     workspace_id: str,
     request: WorkspaceModelsRequest,
-    _user_workspace_id: str = Depends(require_auth)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Update workspace model defaults for RAG/embeddings and OCR post-processing.
@@ -133,6 +134,7 @@ async def update_workspace_models(
     Returns:
         WorkspaceModelsResponse with updated settings
     """
+    check_workspace_access(current_user, workspace_id)
     conn = psycopg2.connect(settings.database_url)
     cursor = conn.cursor()
     

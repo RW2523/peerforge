@@ -1,6 +1,8 @@
 """Persona generation and validation endpoints"""
-from fastapi import APIRouter, HTTPException, status, Header
-from typing import Optional
+from fastapi import Depends, APIRouter, HTTPException, status, Header
+
+from src.auth import get_current_user
+from typing import Any, Dict, Optional
 import httpx
 from ..persona_service import generate_persona_draft, validate_persona
 from ..schemas.personas import (
@@ -18,7 +20,8 @@ router = APIRouter()
 @router.post("/personas/generate-draft", response_model=GeneratePersonaDraftResponse)
 async def generate_draft(
     request: GeneratePersonaDraftRequest,
-    x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key")
+    x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
     Generate persona draft using AI (OpenRouter BYOK).
@@ -92,7 +95,10 @@ async def generate_draft(
 
 
 @router.post("/personas/validate", response_model=ValidatePersonaResponse)
-async def validate(request: ValidatePersonaRequest):
+async def validate(
+    request: ValidatePersonaRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     """
     Validate persona structure and compiled prompt.
     

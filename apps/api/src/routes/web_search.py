@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from psycopg2.extras import Json
 from pydantic import BaseModel, Field
 
-from src.auth import get_current_user
+from src.auth import authorize_debate, get_current_user
 from src.config import settings
 from src.database import get_db_connection, get_cursor
 from src.debate_service import DebateService
@@ -106,6 +106,7 @@ async def web_search(
 
     Requires TAVILY_API_KEY to be set in the API environment.
     """
+    authorize_debate(debate_id, current_user)
     if not settings.tavily_api_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -163,6 +164,7 @@ async def save_web_results(
     Each result is stored as a meeting_material (kind='web') and its content
     is also saved to memory_chunks for semantic retrieval during AI reviews.
     """
+    authorize_debate(debate_id, current_user)
     service = DebateService()
     debate = service.get_debate(debate_id)
     if not debate:
@@ -265,6 +267,7 @@ async def list_web_results(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """List all web search results saved to a review session's context."""
+    authorize_debate(debate_id, current_user)
     service = DebateService()
     debate = service.get_debate(debate_id)
     if not debate:

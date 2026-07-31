@@ -88,6 +88,22 @@ def _slugify(name: str) -> str:
 # This is a pricing decision as much as a technical one; change it here.
 BILLABLE_ROLES = ("student",)
 
+# Organization roles and course roles are separate vocabularies, and
+# user_workspaces.role has a CHECK constraint that does not include
+# 'org_admin'. Writing one straight into the other raised a bare 500 when an
+# admin invited a co-admin into a course.
+_ORG_TO_WORKSPACE_ROLE = {
+    "org_admin": "admin",
+    "professor": "professor",
+    "ta": "ta",
+    "student": "student",
+}
+
+
+def _workspace_role_for(org_role: str) -> str:
+    """The course-level role an organization role carries into a workspace."""
+    return _ORG_TO_WORKSPACE_ROLE.get(org_role, "student")
+
 
 def _seats_used(cursor, org_id: str) -> int:
     """Billable members, counted live so the number cannot drift."""
@@ -271,6 +287,18 @@ async def update_member_role(
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Member not found")
+
+        # A professor demoted to student keeps professor powers inside every
+        # course until this row follows: workspace role is read from here,
+        # not from the organization membership.
+        cursor.execute(
+            """UPDATE user_workspaces SET role = %s
+               WHERE user_id = %s
+                 AND workspace_id IN (
+                     SELECT workspace_id FROM workspaces WHERE tenant_id = %s
+                 )""",
+            (_workspace_role_for(new_role), user_id, org_id),
+        )
         conn.commit()
 
     return {"org_id": org_id, "user_id": user_id, "role": row["org_role"]}
@@ -303,6 +331,18 @@ async def remove_member(
             (org_id, user_id),
         )
         removed = cursor.rowcount
+
+        # Course membership lives in a second table. Dropping only the
+        # organization row frees the seat while leaving the person full
+        # access to every course in it - billed to nobody, visible to all.
+        cursor.execute(
+            """DELETE FROM user_workspaces
+               WHERE user_id = %s
+                 AND workspace_id IN (
+                     SELECT workspace_id FROM workspaces WHERE tenant_id = %s
+                 )""",
+            (user_id, org_id),
+        )
         conn.commit()
 
     if not removed:
@@ -670,7 +710,9 @@ async def accept_invitation(
 
     with get_db_connection() as conn:
         cursor = get_cursor(conn)
-        result = redeem_invitation(cursor, token, user_id)
+        result = redeem_invitation(
+            cursor, token, user_id, caller_email=current_user.get("email")
+        )
         conn.commit()
 
     return result
@@ -678,10 +720,36 @@ async def accept_invitation(
 
 # ── Redemption, shared with first-login provisioning ────────────────────────
 
-def redeem_invitation(cursor, token: str, user_id: str,
-                      display_name: Optional[str] = None) -> Dict[str, Any]:
+def _assert_invited_party(invited_email: Optional[str], caller_email: Optional[str]) -> None:
     """
-    Consume an invitation for `user_id`.
+    Confirm the caller is the person the invitation was addressed to.
+
+    An invitation is an offer to one address, not a bearer credential. Without
+    this, anyone who comes by the token - a forwarded email, a shared screen,
+    a proxy log, a browser history - is handed the invited role, and
+    invited_role may be org_admin.
+    """
+    if not settings.require_auth:
+        # Local dev authenticates nobody, so there is no identity to bind to.
+        return
+    if not caller_email:
+        raise HTTPException(
+            status_code=403,
+            detail="Your account has no verified email address, so this "
+                   "invitation cannot be matched to you.",
+        )
+    if caller_email.strip().lower() != (invited_email or "").strip().lower():
+        raise HTTPException(
+            status_code=403,
+            detail="This invitation was issued to a different email address.",
+        )
+
+
+def redeem_invitation(cursor, token: str, user_id: str,
+                      display_name: Optional[str] = None,
+                      caller_email: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Consume an invitation for `user_id`, who must be its addressee.
 
     Lives here rather than in the route so first login can redeem a pending
     invitation instead of provisioning an orphan personal workspace.
@@ -697,6 +765,9 @@ def redeem_invitation(cursor, token: str, user_id: str,
 
     if not invite:
         raise HTTPException(status_code=404, detail="Invitation not found")
+    # Ahead of the revoked/expired branches: a stranger holding the token
+    # should not learn anything about it, not even that it is spent.
+    _assert_invited_party(invite["email"], caller_email)
     if invite["revoked_at"]:
         raise HTTPException(status_code=410, detail="This invitation was revoked")
     if invite["accepted_at"]:
@@ -739,7 +810,7 @@ def redeem_invitation(cursor, token: str, user_id: str,
             """INSERT INTO user_workspaces (user_id, workspace_id, role)
                VALUES (%s, %s, %s)
                ON CONFLICT (user_id, workspace_id) DO UPDATE SET role = EXCLUDED.role""",
-            (user_id, workspace_id, invite["invited_role"]),
+            (user_id, workspace_id, _workspace_role_for(invite["invited_role"])),
         )
 
     cursor.execute(

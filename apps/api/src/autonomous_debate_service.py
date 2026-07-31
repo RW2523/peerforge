@@ -115,23 +115,26 @@ class AutonomousDebateService:
 
         try:
             while True:
+                # Renew before anything can `continue` past it. Skipping this
+                # while paused let the claim lapse after LEASE_TTL_SECONDS, and
+                # the first resume then died on the next renew while the
+                # session still read 'running' with nothing driving it.
+                from .services.debate_lease import lease
+                if not lease.renew(debate_id):
+                    # Lost the claim — another instance has taken over.
+                    logger.warning(f"Lease lost for {debate_id}; stopping this loop")
+                    break
+
                 # Check status
                 status = self._get_debate_status(debate_id)
-                
+
                 if status == 'paused':
                     await asyncio.sleep(2)
                     continue
-                
+
                 if status != 'running':
                     break
 
-                from .services.debate_lease import lease
-                if not lease.renew(debate_id):
-                    # Lost the claim — another instance has taken over, or this
-                    # one stalled long enough for the lease to expire.
-                    logger.warning(f"Lease lost for {debate_id}; stopping this loop")
-                    break
-                
                 # Check if debate should end
                 if self._should_end_debate(debate_id):
                     await self._conclude_debate(debate_id, openrouter_api_key)

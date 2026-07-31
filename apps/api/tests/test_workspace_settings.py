@@ -116,19 +116,22 @@ def test_put_workspace_models_empty_string():
 
 def test_get_workspace_models_nonexistent_workspace():
     """
-    GET for nonexistent workspace returns 404.
+    GET for a workspace the caller does not belong to returns 403.
+
+    Deliberately 403 and not 404: answering "no such workspace" differently
+    from "not yours" would let anyone enumerate workspace ids.
     """
     response = client.get(
         "/workspaces/00000000-0000-0000-0000-000000009999/settings/models",
         headers={"Authorization": "Bearer test-jwt-token"}
     )
     
-    assert response.status_code == 404
+    assert response.status_code == 403
 
 
 def test_put_workspace_models_nonexistent_workspace():
     """
-    PUT for nonexistent workspace returns 404.
+    PUT for a workspace the caller does not belong to returns 403.
     """
     response = client.put(
         "/workspaces/00000000-0000-0000-0000-000000009999/settings/models",
@@ -139,4 +142,4 @@ def test_put_workspace_models_nonexistent_workspace():
         }
     )
     
-    assert response.status_code == 404
+    assert response.status_code == 403

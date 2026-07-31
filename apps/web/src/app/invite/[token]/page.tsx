@@ -16,11 +16,13 @@ export default function AcceptInvitePage() {
 
   const [phase, setPhase] = useState<Phase>('accepting');
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<number | null>(null);
   const [result, setResult] = useState<{ workspace_id: string | null; role: string } | null>(null);
 
   const accept = useCallback(async () => {
     setPhase('accepting');
     setError(null);
+    setStatus(null);
     try {
       const data = await acceptInvitation(token);
       // Land the user in the course they were invited to, not whichever
@@ -30,9 +32,14 @@ export default function AcceptInvitePage() {
       setPhase('joined');
     } catch (err: any) {
       setError(err?.message ?? 'This invitation could not be accepted.');
+      setStatus(typeof err?.status === 'number' ? err.status : null);
       setPhase('failed');
     }
   }, [token]);
+
+  // An invitation is addressed to one person, so the usual "it expired" advice
+  // is wrong when the real problem is that you are signed in as someone else.
+  const wrongAccount = status === 403 || status === 401;
 
   useEffect(() => {
     if (token) accept();
@@ -74,14 +81,27 @@ export default function AcceptInvitePage() {
           <>
             <h1 className={styles.title}>This invitation didn&rsquo;t work</h1>
             <p className={styles.body}>{error}</p>
-            <p className={styles.hint}>
-              Invitations expire after a couple of weeks and can only be used once.
-              Ask whoever invited you to send a new one.
-            </p>
+            {wrongAccount ? (
+              <p className={styles.hint}>
+                Invitations are tied to the email address they were sent to.
+                Sign in with that address and open this link again.
+              </p>
+            ) : (
+              <p className={styles.hint}>
+                Invitations expire after a couple of weeks and can only be used once.
+                Ask whoever invited you to send a new one.
+              </p>
+            )}
             <div className={styles.actions}>
-              <button className={styles.primary} onClick={accept}>
-                Try again
-              </button>
+              {wrongAccount ? (
+                <Link className={styles.primary} href="/login">
+                  Sign in as someone else
+                </Link>
+              ) : (
+                <button className={styles.primary} onClick={accept}>
+                  Try again
+                </button>
+              )}
               <Link className={styles.secondary} href="/">
                 Go home
               </Link>

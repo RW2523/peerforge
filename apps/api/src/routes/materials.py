@@ -5,7 +5,7 @@ Materials upload and status endpoints
 import io
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 import psycopg2
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Header
 from pydantic import BaseModel
@@ -22,7 +22,7 @@ from src.schemas.materials import (
 from src.utils.storage import get_storage_client
 from src.utils.text_extraction import TextExtractor
 from src.tasks.material_processing import process_material
-from src.auth import require_auth
+from src.auth import authorize_debate, get_current_user
 from src.tasks.material_processing import generate_debate_embeddings, chunk_inline_material
 from src.database import get_db_connection, get_cursor
 import logging
@@ -103,7 +103,7 @@ async def add_inline_materials(
     debate_id: str,
     request: AddInlineMaterialsRequest,
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
-    _workspace_id: str = Depends(require_auth),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
     Add (replace) inline TEXT/LINK materials for an existing debate and chunk
@@ -113,6 +113,7 @@ async def add_inline_materials(
     so inline text/link cards are persisted here. Idempotent: replaces all
     existing inline (kind in text/link) materials for the debate.
     """
+    authorize_debate(debate_id, current_user)
     resolved_key = x_openrouter_key or settings.openrouter_api_key
 
     with get_db_connection() as conn:
@@ -187,7 +188,7 @@ async def upload_materials(
     category: str = Form('supplementary'),
     is_primary: bool = Form(False),
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
-    _workspace_id: str = Depends(require_auth)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Upload multiple files for a debate
@@ -205,6 +206,7 @@ async def upload_materials(
     Returns:
         MaterialUploadResponse with material IDs and job IDs
     """
+    authorize_debate(debate_id, current_user)
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
 
@@ -222,19 +224,6 @@ async def upload_materials(
     cursor = conn.cursor()
 
     # Verify debate exists and user has access
-    cursor.execute("""
-        SELECT workspace_id FROM debates WHERE debate_id = %s
-    """, (debate_id,))
-    result = cursor.fetchone()
-    if not result:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Debate not found")
-
-    db_workspace_id = result[0]
-    if str(db_workspace_id) != _workspace_id:
-        conn.close()
-        raise HTTPException(status_code=403, detail="Access denied to this debate")
-
     material_ids = []
     job_ids = []
     stale_storage_keys: List[str] = []
@@ -339,12 +328,13 @@ async def upload_materials(
 async def get_material_file(
     debate_id: str,
     material_id: str,
-    _workspace_id: str = Depends(require_auth)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Stream the original uploaded file (e.g. the PDF) for source viewing.
 
     Powers the Glass-Box "view in PDF" experience: the browser renders the
     actual manuscript and highlights the verified passage."""
+    authorize_debate(debate_id, current_user)
     conn = psycopg2.connect(settings.database_url)
     cursor = conn.cursor()
     try:
@@ -360,9 +350,7 @@ async def get_material_file(
 
     if not row:
         raise HTTPException(status_code=404, detail="Material not found")
-    file_key, mime_type, title, ws_id = row
-    if str(ws_id) != _workspace_id:
-        raise HTTPException(status_code=403, detail="Access denied to this debate")
+    file_key, mime_type, title, _ws_id = row
     if not file_key:
         raise HTTPException(status_code=404, detail="This material has no stored file (inline text/link)")
 
@@ -382,7 +370,7 @@ async def get_material_file(
 @router.get("/debates/{debate_id}/materials/status", response_model=MaterialsStatusResponse)
 async def get_materials_status(
     debate_id: str,
-    _workspace_id: str = Depends(require_auth)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Get processing status of all materials in a debate
@@ -390,6 +378,7 @@ async def get_materials_status(
     Returns:
         MaterialsStatusResponse with status for each material
     """
+    authorize_debate(debate_id, current_user)
     conn = psycopg2.connect(settings.database_url)
     cursor = conn.cursor()
     
@@ -401,11 +390,6 @@ async def get_materials_status(
     if not result:
         conn.close()
         raise HTTPException(status_code=404, detail="Debate not found")
-    
-    db_workspace_id = result[0]
-    if str(db_workspace_id) != _workspace_id:
-        conn.close()
-        raise HTTPException(status_code=403, detail="Access denied to this debate")
     
     # Fetch all materials for this debate
     cursor.execute("""
@@ -458,9 +442,10 @@ async def get_materials_status(
 async def delete_material(
     debate_id: str,
     material_id: str,
-    _workspace_id: str = Depends(require_auth),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Remove a material from the debate session (DB row, chunks, and stored file)."""
+    authorize_debate(debate_id, current_user)
     with get_db_connection() as conn:
         cur = get_cursor(conn)
         cur.execute(
@@ -475,8 +460,6 @@ async def delete_material(
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Material not found")
-        if str(row["workspace_id"]) != _workspace_id:
-            raise HTTPException(status_code=403, detail="Access denied to this debate")
 
         file_key = _delete_material_record(cur, debate_id, material_id)
 
@@ -489,7 +472,7 @@ async def delete_material(
 async def retry_material_processing(
     debate_id: str,
     request: MaterialRetryRequest,
-    _workspace_id: str = Depends(require_auth)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Retry processing a failed material
@@ -501,6 +484,7 @@ async def retry_material_processing(
     Returns:
         MaterialRetryResponse with new job ID
     """
+    authorize_debate(debate_id, current_user)
     conn = psycopg2.connect(settings.database_url)
     cursor = conn.cursor()
     
@@ -552,7 +536,7 @@ async def retry_material_processing(
 async def trigger_embedding_generation(
     debate_id: str,
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
-    _workspace_id: str = Depends(require_auth),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
     Trigger (or re-trigger) embedding generation for all unembedded chunks in a debate.
@@ -563,6 +547,7 @@ async def trigger_embedding_generation(
 
     Requires X-OpenRouter-Key header (BYOK).
     """
+    authorize_debate(debate_id, current_user)
     resolved_key = x_openrouter_key or settings.openrouter_api_key
     if not resolved_key:
         raise HTTPException(

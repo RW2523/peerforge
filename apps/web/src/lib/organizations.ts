@@ -86,7 +86,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     } catch {
       /* keep the status-based message */
     }
-    throw new Error(detail);
+    // Carry the status so callers can tell "not your invitation" from
+    // "expired" and say something useful instead of one generic hint.
+    const error = new Error(detail) as Error & { status?: number };
+    error.status = response.status;
+    throw error;
   }
 
   return response.json();

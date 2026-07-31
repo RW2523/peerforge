@@ -6,13 +6,14 @@ OpenRouter BYOK, client-driven, no server-side key storage
 import uuid
 import shutil
 from datetime import datetime
+from typing import Any, Dict
 import psycopg2
 import httpx
 from psycopg2.extras import Json
 from fastapi import APIRouter, HTTPException, Depends, Header
 
 from src.config import settings
-from src.auth import require_auth
+from src.auth import authorize_debate, get_current_user
 
 router = APIRouter()
 
@@ -34,7 +35,7 @@ async def generate_embeddings(
     debate_id: str,
     material_id: str,
     x_openrouter_key: str = Header(None, alias="X-OpenRouter-Key"),
-    _workspace_id: str = Depends(require_auth)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Generate embeddings for material chunks using OpenRouter (BYOK).
@@ -51,6 +52,7 @@ async def generate_embeddings(
     Returns:
         Status and chunk counts
     """
+    authorize_debate(debate_id, current_user)
     if not x_openrouter_key:
         raise HTTPException(
             status_code=400,
@@ -203,7 +205,7 @@ async def generate_embeddings(
 async def get_embedding_status(
     debate_id: str,
     material_id: str,
-    _workspace_id: str = Depends(require_auth)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Get embedding status for a material's chunks
@@ -211,6 +213,7 @@ async def get_embedding_status(
     Returns:
         Chunk counts by embedding_status
     """
+    authorize_debate(debate_id, current_user)
     conn = psycopg2.connect(settings.database_url)
     cursor = conn.cursor()
     
@@ -271,7 +274,7 @@ async def get_embedding_status(
 async def run_ocr(
     debate_id: str,
     material_id: str,
-    _workspace_id: str = Depends(require_auth)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Run OCR on a scanned PDF material
@@ -284,6 +287,7 @@ async def run_ocr(
     Returns:
         Job ID and status
     """
+    authorize_debate(debate_id, current_user)
     conn = psycopg2.connect(settings.database_url)
     cursor = conn.cursor()
     
@@ -371,7 +375,7 @@ async def run_ocr(
 async def get_ocr_status(
     debate_id: str,
     material_id: str,
-    _workspace_id: str = Depends(require_auth)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Get OCR processing status for a material
@@ -379,6 +383,7 @@ async def get_ocr_status(
     Returns:
         OCR status and metadata
     """
+    authorize_debate(debate_id, current_user)
     conn = psycopg2.connect(settings.database_url)
     cursor = conn.cursor()
     
