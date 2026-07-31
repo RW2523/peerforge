@@ -1,18 +1,18 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import mermaid from 'mermaid';
 import AppNav from '@/components/layout/AppNav';
 import styles from './architecture.module.css';
+import { currentTheme, onThemeChange, Theme } from '@/lib/theme';
 
 export default function ArchitecturePage() {
-  const initialized = useRef(false);
 
   useEffect(() => {
-    if (!initialized.current) {
+    const render = (mode: Theme) => {
       mermaid.initialize({
         startOnLoad: true,
-        theme: 'dark',
+        theme: mode === 'dark' ? 'dark' : 'default',
         themeVariables: {
           darkMode: true,
           background: '#000000',
@@ -41,13 +41,22 @@ export default function ArchitecturePage() {
           messageMargin: 35,
         },
       });
-      initialized.current = true;
-    }
+      // Mermaid caches its rendered SVG, so a re-init alone leaves the old
+      // colours on screen; the nodes have to be reset before running again.
+      document.querySelectorAll('.mermaid').forEach((el) => {
+        const source = el.getAttribute('data-mermaid-source');
+        if (source) {
+          el.removeAttribute('data-processed');
+          el.innerHTML = source;
+        } else if (el.textContent) {
+          el.setAttribute('data-mermaid-source', el.textContent);
+        }
+      });
+      mermaid.run({ querySelector: '.mermaid' });
+    };
 
-    // Re-render all mermaid diagrams
-    mermaid.run({
-      querySelector: '.mermaid',
-    });
+    render(currentTheme());
+    return onThemeChange(render);
   }, []);
 
   return (

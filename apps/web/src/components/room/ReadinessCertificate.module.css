@@ -374,8 +374,8 @@
   .cert {
     border: none;
     padding: 0;
-    background: #fff;
-    color: #000;
+    background: var(--bg-1);
+    color: var(--text-0);
   }
   .drill {
     display: block !important;
@@ -454,14 +454,14 @@
   align-items: center;
   gap: 6px;
   padding: 10px;
-  background: #fff;
+  background: var(--bg-1);
   border-radius: var(--radius-md);
   flex-shrink: 0;
 }
 .qrLabel {
   font-size: 0.62rem;
   font-weight: 700;
-  color: #333;
+  color: var(--text-1);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }

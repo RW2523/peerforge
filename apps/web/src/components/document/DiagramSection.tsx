@@ -6,6 +6,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
 import styles from './DiagramSection.module.css';
+import { currentTheme, onThemeChange, Theme } from '@/lib/theme';
 
 interface DiagramSectionProps {
   mermaidCode: string;
@@ -23,19 +24,38 @@ export default function DiagramSection({
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
+  const [theme, setTheme] = useState<Theme>('light');
+
+  // Mermaid renders its own colours, so it cannot inherit the theme through
+  // CSS. Hardcoding 'dark' put black diagrams on a white page in light mode.
   useEffect(() => {
-    mermaid.initialize({
-      startOnLoad: true,
-      theme: 'dark',
-      themeVariables: {
-        primaryColor: '#3b82f6',
-        primaryTextColor: '#fff',
-        primaryBorderColor: '#2563eb',
-        lineColor: '#64748b',
-        secondaryColor: '#8b5cf6',
-        tertiaryColor: '#10b981',
-      },
-    });
+    const apply = (next: Theme) => {
+      setTheme(next);
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: next === 'dark' ? 'dark' : 'default',
+        themeVariables:
+          next === 'dark'
+            ? {
+                primaryColor: '#3b82f6',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#2563eb',
+                lineColor: '#64748b',
+                secondaryColor: '#8b5cf6',
+                tertiaryColor: '#10b981',
+              }
+            : {
+                primaryColor: '#dbeafe',
+                primaryTextColor: '#1e293b',
+                primaryBorderColor: '#2563eb',
+                lineColor: '#64748b',
+                secondaryColor: '#ede9fe',
+                tertiaryColor: '#d1fae5',
+              },
+      });
+    };
+    apply(currentTheme());
+    return onThemeChange(apply);
   }, []);
 
   useEffect(() => {
@@ -56,7 +76,7 @@ export default function DiagramSection({
     };
 
     renderDiagram();
-  }, [code, isEditing]);
+  }, [code, isEditing, theme]);
 
   const handleSave = () => {
     onUpdate?.(code);

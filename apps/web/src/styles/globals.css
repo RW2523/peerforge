@@ -195,6 +195,48 @@ textarea {
 }
 
 
+/* ── Legacy token aliases ──────────────────────────────────────────────────
+   These names are referenced across the component modules but were never
+   defined, so every rule using them resolved to nothing — a modal with no
+   background, text the colour of a border. Mapping them onto the real tokens
+   fixes all of those at once, and keeps them theme-aware, rather than editing
+   two dozen call sites to hardcode a colour each.
+
+   New code should use the canonical names directly. */
+:root {
+  --bg: var(--bg-1);
+  --bg-panel: var(--bg-1);
+  --border: var(--border-soft);
+  --text-muted: var(--text-2);
+  --text-secondary: var(--text-1);
+  --accent-bright: var(--accent);
+  --warning-bg: var(--gold-subtle);
+  --warning-dark: var(--warning);
+  --radius-full: 9999px;
+  --font-body: var(--font-sans);
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* The collaborative document is a writing surface and deliberately reads as
+     paper. In dark mode that becomes a warm off-black sheet rather than a
+     glaring white one, so it still reads as paper without blinding anyone. */
+  --surface-paper: #FFFFFF;
+  --text-paper: #1A1A1A;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root { --surface-paper: #12161C; --text-paper: #E8EDF4; }
+}
+:root[data-theme='dark']  { --surface-paper: #12161C; --text-paper: #E8EDF4; }
+:root[data-theme='light'] { --surface-paper: #FFFFFF; --text-paper: #1A1A1A; }
+
+/* The accent is near-black in light mode, which reads as "bright" only on a
+   dark ground; in dark mode the gold is what carries emphasis. */
+@media (prefers-color-scheme: dark) {
+  :root { --accent-bright: var(--gold); }
+}
+:root[data-theme='dark'] { --accent-bright: var(--gold); }
+:root[data-theme='light'] { --accent-bright: var(--accent); }
+
 /* ── Accessibility foundations ─────────────────────────────────────────────
    Added in the accessibility pass. Previously there were no focus-visible
    rules anywhere, and 21 infinite animations with no way to opt out. */

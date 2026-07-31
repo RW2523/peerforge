@@ -2005,7 +2005,7 @@
 
 .toggleSwitch input:checked + .slider:before {
   transform: translateX(22px);
-  background: #ffffff;
+  background: var(--bg-1);
 }
 
 .yoloSettings {
@@ -2300,7 +2300,7 @@
   z-index: 10001;
   width: 100%;
   max-width: 460px;
-  background: #ffffff;
+  background: var(--bg-1);
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 12px;
   padding: 24px;
@@ -2314,7 +2314,7 @@
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--text-1);
   letter-spacing: -0.01em;
 }
 
@@ -2322,7 +2322,7 @@
   margin: 14px 0 0;
   font-size: 14px;
   line-height: 1.55;
-  color: #334155;
+  color: var(--text-1);
 }
 
 .deleteConfirmModal .modalBody {
@@ -2360,12 +2360,12 @@
   align-items: center;
   justify-content: center;
   padding: 10px 18px;
-  background: #ffffff;
+  background: var(--bg-1);
   border: 1.5px solid #cbd5e1;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--text-1);
   cursor: pointer;
   transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }

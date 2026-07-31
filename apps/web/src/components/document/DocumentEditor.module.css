@@ -9,7 +9,7 @@
 
 .editor {
   min-height: 120px;
-  color: #1a1a1a !important;
+  color: var(--text-paper) !important;
   font-size: 15px;
   line-height: 1.8;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -18,22 +18,22 @@
 .editor :global(.ProseMirror) {
   outline: none;
   padding: 8px 0;
-  color: #1a1a1a !important;
+  color: var(--text-paper) !important;
 }
 
 .editor :global(.ProseMirror p) {
   margin: 0 0 16px 0;
   text-align: justify;
-  color: #1a1a1a !important;
+  color: var(--text-paper) !important;
 }
 
 .editor :global(.ProseMirror strong) {
-  color: #000 !important;
+  color: var(--text-0) !important;
   font-weight: 600;
 }
 
 .editor :global(.ProseMirror) * {
-  color: #1a1a1a !important;
+  color: var(--text-paper) !important;
 }
 
 .editor :global(.ProseMirror h1),

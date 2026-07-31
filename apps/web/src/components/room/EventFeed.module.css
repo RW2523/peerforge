@@ -356,14 +356,16 @@
   font-size: 15px;
   font-weight: 600;
   margin-bottom: 8px;
-  color: var(--border-soft);
+  /* Was var(--border-soft) — a border colour used as text, which rendered
+     this heading at roughly the contrast of a hairline in both themes. */
+  color: var(--text-0);
 }
 
 .strategicDetail {
   margin: 4px 0;
   padding-left: 12px;
   font-size: 14px;
-  color: #333;
+  color: var(--text-1);
 }
 
 .strategicOptions {
