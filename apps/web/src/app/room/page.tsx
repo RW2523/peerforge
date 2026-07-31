@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import AppNav from '@/components/layout/AppNav';
 import DebateSelector from '@/components/room/DebateSelector';
 import EventFeed from '@/components/room/EventFeed';
@@ -9,16 +10,23 @@ import DebateControls from '@/components/room/DebateControls';
 import DebateTimer from '@/components/room/DebateTimer';
 import AgentBehaviorsPanel from '@/components/room/AgentBehaviorsPanel';
 import InterveneComposer from '@/components/room/InterveneComposer';
-import SummaryReport from '@/components/room/SummaryReport';
-import DocumentPanel from './DocumentPanel';
-import MockDefenseRoom from '@/components/room/MockDefenseRoom';
-import GlassBoxPanel from '@/components/room/GlassBoxPanel';
-import ReadinessCertificate from '@/components/room/ReadinessCertificate';
-import CommitteeTwinBuilder from '@/components/room/CommitteeTwinBuilder';
+
 import { useDebateRoom } from '@/hooks/useDebateRoom';
 import { useOpenRouterKey } from '@/hooks/useOpenRouterKey';
 import * as api from '@/lib/api';
 import styles from './room.module.css';
+
+// Tab panels load on demand. Only one renders at a time, but importing them
+// statically pulled mermaid, d3, cytoscape, katex, tiptap and yjs into the
+// room's first load — roughly 200 kB gzipped for panels most visits never open.
+const panelLoading = () => <div className={styles.panelLoading}>Loading…</div>;
+
+const SummaryReport = dynamic(() => import('@/components/room/SummaryReport'), { loading: panelLoading });
+const DocumentPanel = dynamic(() => import('./DocumentPanel'), { loading: panelLoading, ssr: false });
+const MockDefenseRoom = dynamic(() => import('@/components/room/MockDefenseRoom'), { loading: panelLoading, ssr: false });
+const GlassBoxPanel = dynamic(() => import('@/components/room/GlassBoxPanel'), { loading: panelLoading, ssr: false });
+const ReadinessCertificate = dynamic(() => import('@/components/room/ReadinessCertificate'), { loading: panelLoading });
+const CommitteeTwinBuilder = dynamic(() => import('@/components/room/CommitteeTwinBuilder'), { loading: panelLoading });
 
 /**
  * Room Page - Live Debate Control Center

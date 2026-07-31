@@ -155,3 +155,66 @@ def test_apply_writes_role_description_so_lanes_differentiate():
         )
         roles = sorted(row['rd'] for row in cur.fetchall())
     assert roles == ['external examiner', 'friendly professor']
+
+
+# ── Pooling and readiness (Phase 4) ──────────────────────────────────────────
+
+def test_pool_is_reused_across_many_borrows():
+    """The point of the pool: repeated work must not open a connection each time."""
+    from src.database import get_cursor, get_db_connection, pool_stats
+
+    before = pool_stats()
+    for _ in range(30):
+        with get_db_connection() as conn:
+            cur = get_cursor(conn)
+            cur.execute('SELECT 1 AS ok')
+            cur.fetchone()
+    after = pool_stats()
+
+    assert after['pooled'] >= before['pooled'] + 30
+    # Nested turns can overflow by design, but plain sequential work must not.
+    assert after['overflow'] == before['overflow']
+
+
+def test_nested_connections_do_not_deadlock():
+    """A turn holds 12-15 at once; a blocking pool would deadlock on itself."""
+    from src.database import get_cursor, get_db_connection
+
+    depth = 25
+    stack = []
+    try:
+        for _ in range(depth):
+            ctx = get_db_connection()
+            conn = ctx.__enter__()
+            stack.append((ctx, conn))
+            cur = get_cursor(conn)
+            cur.execute('SELECT 1 AS ok')
+            assert cur.fetchone()['ok'] == 1
+    finally:
+        for ctx, _ in reversed(stack):
+            ctx.__exit__(None, None, None)
+
+
+def test_readiness_reports_blocking_gaps_with_fixes():
+    r = client.get('/readiness')
+    assert r.status_code == 200, r.text
+    body = r.json()
+
+    assert 'ready_for_public_launch' in body
+    names = {c['name'] for c in body['checks']}
+    assert {'authentication', 'jwt_secret', 'database', 'background_worker'} <= names
+
+    # Every failing check must say what to do about it.
+    for check in body['checks']:
+        if not check['ok']:
+            assert check['fix'], f"{check['name']} reports a problem with no fix"
+            assert check['severity'] in ('blocking', 'degraded')
+
+
+def test_readiness_flags_disabled_auth_as_blocking():
+    """Auth off is the one thing that must never read as ready."""
+    r = client.get('/readiness').json()
+    auth = next(c for c in r['checks'] if c['name'] == 'authentication')
+    if not auth['ok']:
+        assert auth['severity'] == 'blocking'
+        assert r['ready_for_public_launch'] is False

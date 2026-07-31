@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = ""
     require_auth: bool = True
 
+    # Connection pool. The max is a steady-state cap, not a hard ceiling:
+    # exhaustion falls back to a direct connection rather than blocking.
+    db_pool_min: int = 2
+    db_pool_max: int = 20
+
     # Where the browser app lives — used to build invitation links.
     app_base_url: str = "http://localhost:3001"
     invite_ttl_days: int = 14

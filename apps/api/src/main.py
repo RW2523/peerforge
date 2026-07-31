@@ -85,6 +85,9 @@ app.include_router(organizations_router, tags=["organizations"])
 from .routes.conversational_setup import router as conversational_setup_router
 app.include_router(conversational_setup_router, tags=["conversational-setup"])
 
+from .routes.readiness import router as readiness_router
+app.include_router(readiness_router, tags=["readiness"])
+
 
 # ── Account key resolution ───────────────────────────────────────────────────
 # If a request needs an OpenRouter key but the browser did not send one

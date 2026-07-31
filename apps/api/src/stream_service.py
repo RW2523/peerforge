@@ -6,6 +6,10 @@ from datetime import datetime, timezone
 from .database import get_db_connection, get_cursor
 from .state_machine import DebateState
 
+# A fresh subscriber asks from sequence 0; without a bound that is the whole
+# history of the debate in one query.
+MAX_EVENTS_PER_POLL = 200
+
 
 class StreamService:
     """Service for streaming debate events via SSE"""
@@ -43,7 +47,9 @@ class StreamService:
             state = debate['state']
             
             # Stream historical events first (filter out noisy types)
-            events = self._get_events(debate_id, since_sequence or 0)
+            events = await asyncio.to_thread(
+                self._get_events, debate_id, since_sequence or 0
+            )
             
             for event in events:
                 # Skip noisy event types that clutter the UI
@@ -84,7 +90,9 @@ class StreamService:
                 poll_count += 1
                 
                 # Check for new events
-                new_events = self._get_events(debate_id, last_sequence)
+                new_events = await asyncio.to_thread(
+                    self._get_events, debate_id, last_sequence
+                )
                 
                 for event in new_events:
                     # Skip noisy event types that clutter the UI (including NULL event_types)
@@ -171,7 +179,8 @@ class StreamService:
                     WHERE debate_id = %s
                       AND sequence_number > %s
                     ORDER BY sequence_number ASC
-                """, (debate_id, since_sequence))
+                    LIMIT %s
+                """, (debate_id, since_sequence, MAX_EVENTS_PER_POLL))
                 
                 events = []
                 for row in cur.fetchall():

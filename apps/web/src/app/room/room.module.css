@@ -583,3 +583,12 @@
   overflow-y: auto;
   min-height: 0;
 }
+
+.panelLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 12rem;
+  color: var(--text-2, #64748b);
+  font-size: 0.9rem;
+}
