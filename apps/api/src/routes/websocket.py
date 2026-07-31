@@ -14,6 +14,30 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _may_access_debate(user_id: str, debate_id: str) -> bool:
+    """Whether this user may reach this debate, by enrolment or org role."""
+    from ..auth import get_accessible_workspace_ids, get_workspaces_for_user
+    from ..database import get_cursor, get_db_connection
+
+    try:
+        with get_db_connection() as conn:
+            cursor = get_cursor(conn)
+            cursor.execute(
+                "SELECT workspace_id FROM debates WHERE debate_id = %s", (debate_id,)
+            )
+            row = cursor.fetchone()
+        if not row:
+            return False
+
+        memberships = get_workspaces_for_user(user_id)
+        accessible = get_accessible_workspace_ids(user_id, memberships)
+        return str(row["workspace_id"]) in accessible
+    except Exception as exc:
+        # Fail closed: an error resolving membership must not grant access.
+        logger.warning(f"WS access check failed for {debate_id}: {exc}")
+        return False
+
+
 @router.websocket("/ws/debates/{debate_id}")
 async def websocket_debate_room(
     websocket: WebSocket,
@@ -96,6 +120,15 @@ async def websocket_debate_room(
             workspace_id = user.get('workspace_id')
             if not workspace_id:
                 await websocket.close(code=1008, reason="User not associated with a workspace")
+                return
+
+            # Authenticating the caller is not the same as authorising them for
+            # THIS debate. Without this, any signed-in user could join any
+            # session's stream by id — replaying its full history and issuing
+            # commands — regardless of which organization it belongs to.
+            if not _may_access_debate(user_id, debate_id):
+                logger.warning(f"WS rejected (not a member): debate={debate_id} user={user_id}")
+                await websocket.close(code=1008, reason="Not authorised for this session")
                 return
         else:
             # Local dev identity (same defaults as HTTP auth bypass)

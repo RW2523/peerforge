@@ -87,11 +87,61 @@ class DocumentWebSocketHub:
 document_hub = DocumentWebSocketHub()
 
 
+def _may_access_document(user_id: str, document_id: str) -> bool:
+    """Whether this user may reach the debate that owns this document."""
+    from ..auth import get_accessible_workspace_ids, get_workspaces_for_user
+    from ..database import get_cursor, get_db_connection
+
+    try:
+        with get_db_connection() as conn:
+            cursor = get_cursor(conn)
+            cursor.execute(
+                """SELECT d.workspace_id
+                   FROM documents doc
+                   JOIN debates d ON d.debate_id = doc.debate_id
+                   WHERE doc.document_id = %s""",
+                (document_id,),
+            )
+            row = cursor.fetchone()
+        if not row:
+            return False
+
+        memberships = get_workspaces_for_user(user_id)
+        return str(row["workspace_id"]) in get_accessible_workspace_ids(user_id, memberships)
+    except Exception:
+        # Fail closed.
+        return False
+
+
 async def handle_document_websocket(websocket: WebSocket, document_id: str):
     """
-    Handle WebSocket connection for document collaboration
-    Implements Yjs sync protocol
+    Handle WebSocket connection for document collaboration.
+    Implements Yjs sync protocol.
+
+    This endpoint previously had no authentication at all: anyone who knew a
+    document id could read the full collaborative state and broadcast edits to
+    everyone else working on it.
     """
+    from ..config import settings
+
+    if settings.require_auth:
+        token = dict(websocket.query_params).get("token")
+        if not token:
+            await websocket.close(code=1008, reason="Missing auth token")
+            return
+        try:
+            from ..auth import get_current_user_ws
+
+            user = await get_current_user_ws(token)
+        except Exception:
+            await websocket.close(code=1008, reason="Invalid auth token")
+            return
+
+        user_id = user.get("sub") or user.get("user_id")
+        if not user_id or not _may_access_document(user_id, document_id):
+            await websocket.close(code=1008, reason="Not authorised for this document")
+            return
+
     await document_hub.connect(websocket, document_id)
     
     try:

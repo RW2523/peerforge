@@ -29,9 +29,21 @@ export async function getAccessToken(): Promise<string | null> {
   const authMode = process.env.NEXT_PUBLIC_AUTH_MODE;
 
   if (authMode === 'development') {
-    // Prefer an explicit token from env (useful for integration tests), but
-    // fall back to a static dev sentinel — the backend ignores it anyway.
-    return process.env.NEXT_PUBLIC_TEST_TOKEN || 'dev-bypass-token';
+    // The bypass is refused in a production build. Otherwise a stray
+    // NEXT_PUBLIC_AUTH_MODE=development in a deploy environment would make
+    // every visitor "authenticate" as nobody — failing open, silently.
+    // Falling through to the real session instead fails closed: no session
+    // means no token, and the API answers 401.
+    if (process.env.NODE_ENV === 'production') {
+      console.error(
+        'NEXT_PUBLIC_AUTH_MODE=development is set in a production build. ' +
+          'The dev bypass is ignored; sign-in is required.'
+      );
+    } else {
+      // Prefer an explicit token from env (useful for integration tests), but
+      // fall back to a static dev sentinel — the backend ignores it anyway.
+      return process.env.NEXT_PUBLIC_TEST_TOKEN || 'dev-bypass-token';
+    }
   }
 
   // Production: use Supabase session

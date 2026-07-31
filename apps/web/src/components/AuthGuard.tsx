@@ -25,7 +25,11 @@ function isPublic(pathname: string): boolean {
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const devMode = process.env.NEXT_PUBLIC_AUTH_MODE === 'development';
+  // Matches lib/supabase.ts: the dev bypass never applies to a production
+  // build, so a stray env var cannot leave protected pages ungated.
+  const devMode =
+    process.env.NEXT_PUBLIC_AUTH_MODE === 'development' &&
+    process.env.NODE_ENV !== 'production';
   const [checked, setChecked] = useState(devMode);
 
   useEffect(() => {
