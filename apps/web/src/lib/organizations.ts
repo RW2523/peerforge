@@ -21,6 +21,8 @@ export interface Organization {
 export interface OrgMember {
   user_id: string;
   role: OrgRole;
+  email: string | null;
+  display_name: string | null;
   joined_at: string;
 }
 
@@ -210,3 +212,55 @@ export const applySetup = (debateId: string, proposal: SetupProposal, modelId?: 
     `/debates/${debateId}/setup/apply`,
     { method: 'POST', body: JSON.stringify({ ...proposal, model_id: modelId || null }) }
   );
+
+// ── Cohort and bulk enrolment ───────────────────────────────────────────────
+
+export interface CohortPerson {
+  user_id: string | null;
+  role: OrgRole;
+  email: string | null;
+  display_name: string | null;
+  sessions: number;
+  sessions_completed: number;
+  last_activity: string | null;
+  latest_score: number | null;
+  score_delta: number | null;
+  not_started: boolean;
+  invite_state?: 'pending' | 'expired';
+}
+
+export interface Cohort {
+  org_id: string;
+  workspace_id: string | null;
+  people: CohortPerson[];
+  summary: {
+    members: number;
+    invited_not_joined: number;
+    students: number;
+    students_not_started: number;
+    sessions_total: number;
+  };
+}
+
+export interface BulkInviteResult {
+  submitted: number;
+  counts: Record<string, number>;
+  emails_delivered: number;
+  results: { email: string; state: string; invite_url?: string; detail?: string | null }[];
+}
+
+export const getCohort = (orgId: string, workspaceId?: string | null) =>
+  request<Cohort>(
+    `/organizations/${orgId}/cohort${workspaceId ? `?workspace_id=${workspaceId}` : ''}`
+  );
+
+export const inviteBulk = (
+  orgId: string,
+  emails: string,
+  role: OrgRole,
+  workspaceId?: string | null
+) =>
+  request<BulkInviteResult>(`/organizations/${orgId}/invitations/bulk`, {
+    method: 'POST',
+    body: JSON.stringify({ emails, role, workspace_id: workspaceId || null }),
+  });

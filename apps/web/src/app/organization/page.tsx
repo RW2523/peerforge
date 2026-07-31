@@ -13,6 +13,7 @@ import {
   Seats,
   createCourse,
   createInvitation,
+  inviteBulk,
   getSeats,
   listCourses,
   listInvitations,
@@ -51,6 +52,7 @@ export default function OrganizationPage() {
   const [inviteRole, setInviteRole] = useState<OrgRole>('student');
   const [inviteCourse, setInviteCourse] = useState<string>('');
   const [courseName, setCourseName] = useState('');
+  const [bulkEmails, setBulkEmails] = useState('');
 
   const myRole = orgs.find((o) => o.org_id === orgId)?.org_role ?? null;
   const isAdmin = myRole === 'org_admin';
@@ -326,6 +328,48 @@ export default function OrganizationPage() {
               <button className={styles.button} type="submit">Send invitation</button>
             </form>
 
+            <details className={styles.details}>
+              <summary className={styles.summary}>Invite a whole class</summary>
+              <form
+                className={styles.bulkForm}
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!orgId || !bulkEmails.trim()) return;
+                  setError(null);
+                  setNotice(null);
+                  try {
+                    const res = await inviteBulk(orgId, bulkEmails, inviteRole, inviteCourse || null);
+                    const parts = Object.entries(res.counts)
+                      .map(([k, v]) => `${v} ${k.replace(/_/g, ' ')}`)
+                      .join(', ');
+                    setNotice(`${res.submitted} address(es) processed — ${parts}.`);
+                    setBulkEmails('');
+                    await loadOrgDetail(orgId);
+                  } catch (err: any) {
+                    setError(err?.message ?? 'Bulk invitation failed');
+                  }
+                }}
+              >
+                <label className={styles.field}>
+                  <span className={styles.label}>
+                    Paste addresses — commas, semicolons or one per line
+                  </span>
+                  <textarea
+                    className={styles.textarea}
+                    rows={4}
+                    value={bulkEmails}
+                    onChange={(e) => setBulkEmails(e.target.value)}
+                    placeholder={'alice@university.edu\nbob@university.edu'}
+                  />
+                </label>
+                <p className={styles.muted}>
+                  Uses the role and course selected above. Duplicates and existing
+                  members are skipped.
+                </p>
+                <button className={styles.button} type="submit">Invite everyone</button>
+              </form>
+            </details>
+
             {lastInvite && !lastInvite.email_delivered && (
               <div className={styles.linkBox}>
                 <span className={styles.label}>Share this link</span>
@@ -372,8 +416,12 @@ export default function OrganizationPage() {
             {members.map((m) => (
               <li key={m.user_id} className={styles.row}>
                 <div>
-                  <div className={styles.rowTitle}>{ROLE_LABEL[m.role]}</div>
-                  <div className={styles.mutedMono}>{m.user_id}</div>
+                  <div className={styles.rowTitle}>
+                    {m.display_name || m.email || 'Unnamed member'}
+                  </div>
+                  <div className={styles.muted}>
+                    {m.email ? `${m.email} · ` : ''}{ROLE_LABEL[m.role]}
+                  </div>
                 </div>
                 {isAdmin && (
                   <div className={styles.rowActions}>

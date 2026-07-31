@@ -151,3 +151,33 @@
   .inline { flex-direction: column; align-items: stretch; }
   .input, .select { min-width: 0; width: 100%; }
 }
+
+.details {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border-soft, #eef2f6);
+  padding-top: 0.9rem;
+}
+
+.summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.summary:focus-visible { outline: 2px solid var(--accent, #4338ca); outline-offset: 2px; }
+
+.bulkForm { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.8rem; }
+
+.textarea {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border-medium, #cbd5e1);
+  border-radius: 7px;
+  font: inherit;
+  font-size: 0.9rem;
+  background: var(--bg-0, #fff);
+  color: inherit;
+  resize: vertical;
+  width: 100%;
+}
+
+.textarea:focus-visible { outline: 2px solid var(--accent, #4338ca); outline-offset: 2px; }

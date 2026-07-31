@@ -241,3 +241,107 @@ def test_invitation_reports_delivery_state_and_link():
     assert body['email_delivered'] is False
     assert body['delivery']['transport'] == 'none'
     assert body['invite_url'].endswith(f"/invite/{body['token']}")
+
+
+def test_bulk_enrolment_parses_a_messy_paste():
+    """One bad address in a pasted roster must not discard the rest."""
+    admin = _uid()
+    org_id = client.post('/organizations', json={'name': 'Bulk U'},
+                         headers=_h(admin, 'admin@bulk.edu')).json()['org_id']
+
+    paste = """one@bulk.edu, two@bulk.edu
+    three@bulk.edu; not-an-email
+    one@bulk.edu"""
+    r = client.post(f'/organizations/{org_id}/invitations/bulk',
+                    json={'emails': paste, 'role': 'student'},
+                    headers=_h(admin, 'admin@bulk.edu'))
+    assert r.status_code == 201, r.text
+    body = r.json()
+
+    assert body['submitted'] == 3, 'duplicate and junk should be dropped'
+    assert body['counts'].get('invited') == 3
+
+
+def test_bulk_enrolment_reports_already_invited_rather_than_duplicating():
+    admin = _uid()
+    org_id = client.post('/organizations', json={'name': 'No Dupes U'},
+                         headers=_h(admin, 'a@nodupes.edu')).json()['org_id']
+
+    payload = {'emails': 'repeat@nodupes.edu', 'role': 'student'}
+    client.post(f'/organizations/{org_id}/invitations/bulk', json=payload,
+                headers=_h(admin, 'a@nodupes.edu'))
+    r = client.post(f'/organizations/{org_id}/invitations/bulk', json=payload,
+                    headers=_h(admin, 'a@nodupes.edu'))
+    assert r.json()['counts'].get('already_invited') == 1
+
+
+def test_bulk_enrolment_stops_at_the_seat_limit():
+    """Seats running out mid-batch is reported, not silently dropped."""
+    admin = _uid()
+    org_id = client.post('/organizations', json={'name': 'Tight Seats U'},
+                         headers=_h(admin, 'a@tight.edu')).json()['org_id']
+    client.put(f'/organizations/{org_id}/seats', json={'seats_purchased': 1},
+               headers=_h(admin, 'a@tight.edu'))
+
+    r = client.post(f'/organizations/{org_id}/invitations/bulk',
+                    json={'emails': 'x@tight.edu, y@tight.edu', 'role': 'student'},
+                    headers=_h(admin, 'a@tight.edu'))
+    assert r.json()['counts'].get('skipped') == 2
+
+
+def test_roster_shows_identity_not_uuids():
+    admin = _uid()
+    org_id = client.post('/organizations', json={'name': 'Identity U'},
+                         headers=_h(admin, 'ada.lovelace@identity.edu')).json()['org_id']
+
+    members = client.get(f'/organizations/{org_id}/members',
+                         headers=_h(admin, 'ada.lovelace@identity.edu')).json()['members']
+    founder = members[0]
+    assert founder['email'] == 'ada.lovelace@identity.edu'
+    assert founder['display_name'] == 'Ada Lovelace'
+
+
+def test_cohort_surfaces_students_who_never_showed_up():
+    """The people who did nothing are the point of this view."""
+    prof = _uid()
+    pe = 'prof@cohort.edu'
+    org_id = client.post('/organizations', json={'name': 'Cohort U'},
+                         headers=_h(prof, pe)).json()['org_id']
+    course = client.post(f'/organizations/{org_id}/courses', json={'name': 'M1'},
+                         headers=_h(prof, pe)).json()['workspace_id']
+
+    r = client.post(f'/organizations/{org_id}/invitations/bulk',
+                    json={'emails': 'shows@cohort.edu, ghost@cohort.edu',
+                          'role': 'student', 'workspace_id': course},
+                    headers=_h(prof, pe)).json()
+    tokens = {e['email']: e['token'] for e in r['results'] if e['state'] == 'invited'}
+
+    joiner = _uid()
+    client.post(f"/invitations/{tokens['shows@cohort.edu']}/accept",
+                headers=_h(joiner, 'shows@cohort.edu'))
+    client.post('/debates', json={'workspace_id': course, 'title': 'Draft'},
+                headers=_h(joiner, 'shows@cohort.edu', course))
+
+    co = client.get(f'/organizations/{org_id}/cohort?workspace_id={course}',
+                    headers=_h(prof, pe))
+    assert co.status_code == 200, co.text
+    body = co.json()
+
+    emails = {p['email']: p for p in body['people']}
+    assert emails['shows@cohort.edu']['sessions'] == 1
+    assert emails['ghost@cohort.edu']['not_started'] is True
+    assert emails['ghost@cohort.edu']['invite_state'] == 'pending'
+    assert body['summary']['invited_not_joined'] == 1
+
+
+def test_students_cannot_read_the_cohort():
+    prof, student = _uid(), _uid()
+    org_id = client.post('/organizations', json={'name': 'Private Cohort U'},
+                         headers=_h(prof, 'p@pc.edu')).json()['org_id']
+    tok = client.post(f'/organizations/{org_id}/invitations',
+                      json={'email': 's@pc.edu', 'role': 'student'},
+                      headers=_h(prof, 'p@pc.edu')).json()['token']
+    client.post(f'/invitations/{tok}/accept', headers=_h(student, 's@pc.edu'))
+
+    r = client.get(f'/organizations/{org_id}/cohort', headers=_h(student, 's@pc.edu'))
+    assert r.status_code == 403, r.text

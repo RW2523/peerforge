@@ -57,6 +57,13 @@ class CreateInvitationRequest(BaseModel):
     workspace_id: Optional[str] = None
 
 
+class BulkInviteRequest(BaseModel):
+    # Accepts a pasted roster: newlines, commas or semicolons.
+    emails: str = Field(..., min_length=3, max_length=20000)
+    role: str = Field("student")
+    workspace_id: Optional[str] = None
+
+
 class UpdateMemberRoleRequest(BaseModel):
     role: str
 
@@ -98,6 +105,33 @@ def _assert_seat_available(cursor, org_id: str) -> None:
         )
 
 
+def _name_from_email(email: Optional[str]) -> Optional[str]:
+    """A readable stand-in until the person sets a real name."""
+    if not email or "@" not in email:
+        return None
+    local = email.split("@", 1)[0]
+    return " ".join(part.capitalize() for part in local.replace(".", " ").replace("_", " ").split())
+
+
+def _parse_email_list(raw: str) -> List[str]:
+    """Split a pasted roster and keep plausible addresses, de-duplicated."""
+    import re
+
+    parts = re.split(r"[\s,;]+", raw or "")
+    seen, out = set(), []
+    for part in parts:
+        candidate = part.strip().strip("<>").lower()
+        # Deliberately permissive: the goal is to skip obvious junk in a paste,
+        # not to re-implement address validation.
+        if "@" not in candidate or "." not in candidate.split("@")[-1]:
+            continue
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        out.append(candidate)
+    return out[:500]
+
+
 def _validate_role(role: str) -> str:
     if role not in ROLES:
         raise HTTPException(
@@ -129,10 +163,11 @@ async def create_organization(
             "INSERT INTO tenants (tenant_id, name, slug) VALUES (%s, %s, %s)",
             (org_id, request.name, slug),
         )
+        founder_email = current_user.get("email")
         cursor.execute(
-            """INSERT INTO organization_members (org_id, user_id, org_role)
-               VALUES (%s, %s, 'org_admin')""",
-            (org_id, user_id),
+            """INSERT INTO organization_members (org_id, user_id, org_role, email, display_name)
+               VALUES (%s, %s, 'org_admin', %s, %s)""",
+            (org_id, user_id, founder_email, _name_from_email(founder_email)),
         )
         cursor.execute(
             "INSERT INTO organization_seats (org_id, plan) VALUES (%s, 'trial')",
@@ -160,7 +195,7 @@ async def list_members(
     with get_db_connection() as conn:
         cursor = get_cursor(conn)
         cursor.execute(
-            """SELECT user_id, org_role, created_at
+            """SELECT user_id, org_role, email, display_name, created_at
                FROM organization_members
                WHERE org_id = %s
                ORDER BY created_at ASC""",
@@ -170,6 +205,8 @@ async def list_members(
             {
                 "user_id": str(r["user_id"]),
                 "role": r["org_role"],
+                "email": r["email"],
+                "display_name": r["display_name"] or _name_from_email(r["email"]),
                 "joined_at": r["created_at"].isoformat(),
             }
             for r in cursor.fetchall()
@@ -459,6 +496,124 @@ async def list_invitations(
     }
 
 
+@router.post("/organizations/{org_id}/invitations/bulk", status_code=status.HTTP_201_CREATED)
+async def create_invitations_bulk(
+    org_id: str,
+    request: BulkInviteRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """
+    Invite a whole class at once.
+
+    Reports an outcome per address rather than failing the batch: one bad
+    address in a pasted roster of forty should not discard the other
+    thirty-nine.
+    """
+    actor_role = require_org_role(current_user, org_id, "org_admin", "professor")
+    invited_role = _validate_role(request.role)
+
+    if actor_role == "professor" and invited_role in ("org_admin", "professor"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only an org_admin can invite professors or administrators",
+        )
+
+    addresses = _parse_email_list(request.emails)
+    if not addresses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No email addresses found in that list",
+        )
+
+    results = []
+    with get_db_connection() as conn:
+        cursor = get_cursor(conn)
+
+        if request.workspace_id:
+            cursor.execute(
+                "SELECT 1 FROM workspaces WHERE workspace_id = %s AND tenant_id = %s",
+                (request.workspace_id, org_id),
+            )
+            if not cursor.fetchone():
+                raise HTTPException(
+                    status_code=404, detail="That course is not in this organization"
+                )
+
+        cursor.execute("SELECT name FROM tenants WHERE tenant_id = %s", (org_id,))
+        org_name = (cursor.fetchone() or {}).get("name") or "your institution"
+
+        for email in addresses:
+            try:
+                _assert_seat_available(cursor, org_id)
+            except HTTPException as exc:
+                # Seats ran out partway through; the rest are reported as
+                # skipped rather than silently dropped.
+                results.append({"email": email, "state": "skipped", "detail": exc.detail})
+                continue
+
+            cursor.execute(
+                """SELECT 1 FROM organization_members om
+                   WHERE om.org_id = %s AND LOWER(om.email) = LOWER(%s)""",
+                (org_id, email),
+            )
+            if cursor.fetchone():
+                results.append({"email": email, "state": "already_member", "detail": None})
+                continue
+
+            cursor.execute(
+                """SELECT 1 FROM invitations
+                   WHERE org_id = %s AND LOWER(email) = LOWER(%s)
+                     AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > NOW()""",
+                (org_id, email),
+            )
+            if cursor.fetchone():
+                results.append({"email": email, "state": "already_invited", "detail": None})
+                continue
+
+            token = secrets.token_urlsafe(32)
+            expires_at = datetime.now(timezone.utc) + timedelta(days=INVITE_TTL_DAYS)
+            cursor.execute(
+                """INSERT INTO invitations
+                       (org_id, workspace_id, email, invited_role, token, invited_by, expires_at)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                (org_id, request.workspace_id, email, invited_role, token,
+                 current_user.get("user_id"), expires_at),
+            )
+            results.append({
+                "email": email,
+                "state": "invited",
+                "invite_url": f"{settings.app_base_url.rstrip('/')}/invite/{token}",
+                "token": token,
+                "detail": None,
+            })
+
+        conn.commit()
+
+    # Delivery after commit, as for single invites.
+    delivered = 0
+    for entry in results:
+        if entry["state"] != "invited":
+            continue
+        outcome = send_invitation(
+            email=entry["email"], org_name=org_name, role=invited_role,
+            token=entry["token"], inviter=current_user.get("email"),
+        )
+        entry["email_delivered"] = outcome["delivered"]
+        delivered += 1 if outcome["delivered"] else 0
+
+    counts: Dict[str, int] = {}
+    for entry in results:
+        counts[entry["state"]] = counts.get(entry["state"], 0) + 1
+
+    return {
+        "org_id": org_id,
+        "submitted": len(addresses),
+        "counts": counts,
+        "emails_delivered": delivered,
+        "results": results,
+    }
+
+
 @router.delete("/organizations/{org_id}/invitations/{invite_id}")
 async def revoke_invitation(
     org_id: str,
@@ -504,7 +659,8 @@ async def accept_invitation(
 
 # ── Redemption, shared with first-login provisioning ────────────────────────
 
-def redeem_invitation(cursor, token: str, user_id: str) -> Dict[str, Any]:
+def redeem_invitation(cursor, token: str, user_id: str,
+                      display_name: Optional[str] = None) -> Dict[str, Any]:
     """
     Consume an invitation for `user_id`.
 
@@ -543,12 +699,19 @@ def redeem_invitation(cursor, token: str, user_id: str) -> Dict[str, Any]:
     org_id = str(invite["org_id"])
     _assert_seat_available(cursor, org_id)
 
+    # The invitation address is the only identity we reliably have: the API
+    # has no view onto auth.users, which may belong to another app.
     cursor.execute(
-        """INSERT INTO organization_members (org_id, user_id, org_role)
-           VALUES (%s, %s, %s)
-           ON CONFLICT (org_id, user_id) DO UPDATE SET org_role = EXCLUDED.org_role,
-                                                       updated_at = NOW()""",
-        (org_id, user_id, invite["invited_role"]),
+        """INSERT INTO organization_members (org_id, user_id, org_role, email, display_name)
+           VALUES (%s, %s, %s, %s, %s)
+           ON CONFLICT (org_id, user_id) DO UPDATE
+               SET org_role = EXCLUDED.org_role,
+                   email = COALESCE(organization_members.email, EXCLUDED.email),
+                   display_name = COALESCE(organization_members.display_name,
+                                           EXCLUDED.display_name),
+                   updated_at = NOW()""",
+        (org_id, user_id, invite["invited_role"], invite["email"],
+         display_name or _name_from_email(invite["email"])),
     )
 
     workspace_id = str(invite["workspace_id"]) if invite["workspace_id"] else None
@@ -571,6 +734,145 @@ def redeem_invitation(cursor, token: str, user_id: str) -> Dict[str, Any]:
         "workspace_id": workspace_id,
         "role": invite["invited_role"],
         "accepted": True,
+    }
+
+
+# ── Cohort ──────────────────────────────────────────────────────────────────
+
+@router.get("/organizations/{org_id}/cohort")
+async def cohort_overview(
+    org_id: str,
+    workspace_id: Optional[str] = None,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """
+    Who is progressing and who has not started.
+
+    Scoped to one course when workspace_id is given, otherwise the whole
+    organization. Members with no sessions are included deliberately — the
+    students who have done nothing are the ones a professor most needs to see,
+    and an activity-driven query would omit exactly them.
+    """
+    require_org_role(current_user, org_id, "org_admin", "professor", "ta")
+
+    with get_db_connection() as conn:
+        cursor = get_cursor(conn)
+
+        if workspace_id:
+            cursor.execute(
+                "SELECT name FROM workspaces WHERE workspace_id = %s AND tenant_id = %s",
+                (workspace_id, org_id),
+            )
+            course = cursor.fetchone()
+            if not course:
+                raise HTTPException(
+                    status_code=404, detail="That course is not in this organization"
+                )
+
+        cursor.execute(
+            """
+            WITH scoped_debates AS (
+                SELECT d.debate_id, d.owner_user_id, d.state, d.created_at
+                FROM debates d
+                JOIN workspaces w ON w.workspace_id = d.workspace_id
+                WHERE w.tenant_id = %(org_id)s
+                  AND (%(workspace_id)s::uuid IS NULL OR d.workspace_id = %(workspace_id)s::uuid)
+            ),
+            latest_assessment AS (
+                SELECT DISTINCT ON (a.debate_id)
+                       a.debate_id, a.overall_score, a.generated_at
+                FROM academic_assessments a
+                JOIN scoped_debates sd ON sd.debate_id = a.debate_id
+                ORDER BY a.debate_id, a.generated_at DESC
+            ),
+            first_assessment AS (
+                SELECT DISTINCT ON (a.debate_id)
+                       a.debate_id, a.overall_score
+                FROM academic_assessments a
+                JOIN scoped_debates sd ON sd.debate_id = a.debate_id
+                ORDER BY a.debate_id, a.generated_at ASC
+            )
+            SELECT om.user_id,
+                   om.org_role,
+                   om.email,
+                   om.display_name,
+                   COUNT(sd.debate_id)                                   AS sessions,
+                   COUNT(*) FILTER (WHERE sd.state = 'ended')            AS sessions_completed,
+                   MAX(sd.created_at)                                    AS last_activity,
+                   AVG(la.overall_score)                                 AS latest_score,
+                   AVG(la.overall_score - fa.overall_score)              AS score_delta
+            FROM organization_members om
+            LEFT JOIN scoped_debates sd     ON sd.owner_user_id = om.user_id
+            LEFT JOIN latest_assessment la  ON la.debate_id = sd.debate_id
+            LEFT JOIN first_assessment fa   ON fa.debate_id = sd.debate_id
+            WHERE om.org_id = %(org_id)s
+            GROUP BY om.user_id, om.org_role, om.email, om.display_name
+            ORDER BY COUNT(sd.debate_id) DESC, om.email NULLS LAST
+            """,
+            {"org_id": org_id, "workspace_id": workspace_id},
+        )
+        rows = cursor.fetchall()
+
+    people = []
+    for r in rows:
+        sessions = int(r["sessions"] or 0)
+        people.append({
+            "user_id": str(r["user_id"]),
+            "role": r["org_role"],
+            "email": r["email"],
+            "display_name": r["display_name"] or _name_from_email(r["email"]),
+            "sessions": sessions,
+            "sessions_completed": int(r["sessions_completed"] or 0),
+            "last_activity": r["last_activity"].isoformat() if r["last_activity"] else None,
+            "latest_score": round(float(r["latest_score"]), 1) if r["latest_score"] is not None else None,
+            "score_delta": round(float(r["score_delta"]), 1) if r["score_delta"] is not None else None,
+            "not_started": sessions == 0,
+        })
+
+    # Someone invited who never signed in is the professor's most important
+    # row and has no membership record at all, so they would otherwise be
+    # invisible in exactly the view meant to surface them.
+    with get_db_connection() as conn:
+        cursor = get_cursor(conn)
+        cursor.execute(
+            """SELECT email, invited_role, created_at, expires_at
+               FROM invitations
+               WHERE org_id = %(org_id)s
+                 AND accepted_at IS NULL
+                 AND revoked_at IS NULL
+                 AND (%(workspace_id)s::uuid IS NULL OR workspace_id = %(workspace_id)s::uuid)
+               ORDER BY created_at DESC""",
+            {"org_id": org_id, "workspace_id": workspace_id},
+        )
+        now = datetime.now(timezone.utc)
+        for r in cursor.fetchall():
+            people.append({
+                "user_id": None,
+                "role": r["invited_role"],
+                "email": r["email"],
+                "display_name": _name_from_email(r["email"]),
+                "sessions": 0,
+                "sessions_completed": 0,
+                "last_activity": None,
+                "latest_score": None,
+                "score_delta": None,
+                "not_started": True,
+                "invited_at": r["created_at"].isoformat(),
+                "invite_state": "expired" if r["expires_at"] <= now else "pending",
+            })
+
+    students = [p for p in people if p["role"] == "student"]
+    return {
+        "org_id": org_id,
+        "workspace_id": workspace_id,
+        "people": people,
+        "summary": {
+            "members": sum(1 for p in people if p["user_id"]),
+            "invited_not_joined": sum(1 for p in people if not p["user_id"]),
+            "students": len(students),
+            "students_not_started": sum(1 for p in students if p["not_started"]),
+            "sessions_total": sum(p["sessions"] for p in people),
+        },
     }
 
 

@@ -67,6 +67,11 @@ export default function AppNav() {
               Progress
             </Link>
             <Link
+              href="/cohort"
+              className={`${styles.link} ${isActive('/cohort') ? styles.active : ''}`}
+            >
+              Cohort
+            </Link>            <Link
               href="/organization"
               className={`${styles.link} ${isActive('/organization') ? styles.active : ''}`}
             >
