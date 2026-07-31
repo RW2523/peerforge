@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import Modal from '@/components/ui/Modal';
 import styles from './KeyVault.module.css';
 
 interface KeyVaultProps {
@@ -19,17 +20,8 @@ export default function KeyVault({ isOpen, onClose }: KeyVaultProps) {
   if (!isOpen) return null;
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.header}>
-          <div>
-            <h2>OpenRouter API Key Required</h2>
-            <p className={styles.subtitle}>Configure in Settings</p>
-          </div>
-          <button className={styles.closeBtn} onClick={onClose}>
-            ✕
-          </button>
-        </div>
+    <Modal open={isOpen} onClose={onClose} title="OpenRouter API Key Required">
+      <p className={styles.subtitle}>Configure in Settings</p>
 
         <div className={styles.content}>
           <div className={styles.infoBox}>
@@ -56,7 +48,6 @@ export default function KeyVault({ isOpen, onClose }: KeyVaultProps) {
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

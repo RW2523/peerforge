@@ -1,7 +1,14 @@
 {
-  "extends": "next/core-web-vitals",
+  "extends": ["next/core-web-vitals", "plugin:jsx-a11y/recommended"],
   "rules": {
     "react/no-unescaped-entities": "off",
-    "@next/next/no-page-custom-font": "off"
+    "@next/next/no-page-custom-font": "off",
+    "jsx-a11y/label-has-associated-control": [
+      "error",
+      {
+        "comment": "Labels here wrap their control with the text nested a few levels deep for layout. The default depth of 2 reports those as unlabelled when they are correctly associated.",
+        "depth": 4
+      }
+    ]
   }
 }

@@ -137,7 +137,7 @@ function OperatorContent() {
   };
 
   return (
-    <div className={styles.container}>
+    <div className={styles.container} id="main-content" role="main">
       <header className={styles.header}>
         <h1>PeerForge Operator</h1>
         <p className={styles.subtitle}>Realtime Debate Controls</p>
@@ -149,9 +149,10 @@ function OperatorContent() {
           <h2>Debate Controls</h2>
           
           <div className={styles.section}>
-            <label>Debate ID</label>
+            <label htmlFor="debate-id">Debate ID</label>
             <div className={styles.inputGroup}>
               <input
+                id="debate-id"
                 type="text"
                 value={debateId}
                 onChange={(e) => setDebateId(e.target.value)}
@@ -185,8 +186,8 @@ function OperatorContent() {
           </div>
 
           <div className={styles.section}>
-            <label>Intervention</label>
-            <textarea
+            <label htmlFor="intervention">Intervention</label>
+            <textarea id="intervention"
               value={interventionText}
               onChange={(e) => setInterventionText(e.target.value)}
               placeholder="Type intervention message (use @agent to tag)"

@@ -10,6 +10,7 @@ import {
   type SessionLengthMode,
 } from '@/lib/setupValidation';
 import { EditableListItem } from './EditableListItem';
+import { activateOnKey } from '@/lib/a11y';
 import styles from './SetupSteps.module.css';
 
 interface BasicInfoStepProps {
@@ -350,8 +351,8 @@ export function BasicInfoStep({
     <div className={styles.section}>
       <h2>Research Idea &amp; Scope</h2>
       
-      <label>Project / Paper Title *</label>
-      <input
+      <label htmlFor="project-paper-title">Project / Paper Title *</label>
+      <input id="project-paper-title"
         type="text"
         value={title}
         onChange={(e) => onTitleChange(e.target.value)}
@@ -414,9 +415,10 @@ export function BasicInfoStep({
         </div>
       )}
 
-      <label>Session Agenda (optional)</label>
+      <label htmlFor="session-agenda">Session Agenda (optional)</label>
       <div className={styles.listInput}>
         <input
+          id="session-agenda"
           type="text"
           value={agendaInput}
           onChange={(e) => { setAgendaInput(e.target.value); if (agendaError) setAgendaError(''); }}
@@ -463,9 +465,10 @@ export function BasicInfoStep({
         </ul>
       )}
 
-      <label>Session Objectives (optional)</label>
+      <label htmlFor="session-objectives">Session Objectives (optional)</label>
       <div className={styles.listInput}>
         <input
+          id="session-objectives"
           type="text"
           value={outcomeInput}
           onChange={(e) => { setOutcomeInput(e.target.value); if (outcomeError) setOutcomeError(''); }}
@@ -515,7 +518,7 @@ export function BasicInfoStep({
       {/* YOLO Mode Toggle */}
       <div className={styles.yoloSection}>
         <div className={styles.yoloHeader}>
-          <label className={styles.yoloLabel}>
+          <div className={styles.yoloLabel}>
             <div className={styles.yoloTitle}>
               Auto Mode
               <span className={styles.betaBadge}>AUTO</span>
@@ -523,16 +526,17 @@ export function BasicInfoStep({
             <div className={styles.yoloDescription}>
               Fully autonomous session — panel members run without manual intervention
             </div>
-          </label>
-          <label className={styles.toggleSwitch}>
+          </div>
+          <span className={styles.toggleSwitch}>
             <input
               type="checkbox"
+              aria-label="Auto mode: run the session without manual intervention"
               checked={yoloMode}
               onChange={(e) => onYoloModeChange?.(e.target.checked)}
               disabled={isLoading}
             />
             <span className={styles.slider}></span>
-          </label>
+          </span>
         </div>
         
         {yoloMode && (
@@ -540,8 +544,8 @@ export function BasicInfoStep({
             <div className={styles.yoloInfo}>
               Review will run automatically without manual intervention
             </div>
-            <label>Auto-turn delay (seconds)</label>
-            <input
+            <label htmlFor="auto-turn-delay-seconds">Auto-turn delay (seconds)</label>
+            <input id="auto-turn-delay-seconds"
               type="range"
               min="5"
               max="60"
@@ -556,11 +560,15 @@ export function BasicInfoStep({
       </div>
 
       {/* Review Limit Cards */}
-      <label>Session Length</label>
-      <div className={styles.limitCards}>
-        <div 
+      <span className={styles.groupLabel} id="session-length-label">Session Length</span>
+      <div className={styles.limitCards} role="radiogroup" aria-labelledby="session-length-label">
+        <div
           className={`${styles.limitCard} ${sessionLengthMode === 'rounds' ? styles.limitCardActive : ''}`}
+          role="radio"
+          aria-checked={sessionLengthMode === 'rounds'}
+          tabIndex={sessionLengthMode === 'rounds' ? 0 : -1}
           onClick={selectRoundsMode}
+          onKeyDown={(e) => activateOnKey(e, selectRoundsMode)}
         >
           <div className={styles.cardIcon}>🔄</div>
           <div className={styles.cardTitle}>Rounds-Based</div>
@@ -592,9 +600,13 @@ export function BasicInfoStep({
           )}
         </div>
 
-        <div 
+        <div
           className={`${styles.limitCard} ${sessionLengthMode === 'time' ? styles.limitCardActive : ''}`}
+          role="radio"
+          aria-checked={sessionLengthMode === 'time'}
+          tabIndex={sessionLengthMode === 'time' ? 0 : -1}
           onClick={selectTimeMode}
+          onKeyDown={(e) => activateOnKey(e, selectTimeMode)}
         >
           <div className={styles.cardIcon}>⏱️</div>
           <div className={styles.cardTitle}>Time-Based</div>

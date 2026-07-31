@@ -118,6 +118,8 @@ export function ModelSelector({ value, onChange, placeholder = 'Select a model..
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={styles.searchInput}
+              // The search box is the reason this dropdown was opened.
+              // eslint-disable-next-line jsx-a11y/no-autofocus
               autoFocus
             />
           </div>

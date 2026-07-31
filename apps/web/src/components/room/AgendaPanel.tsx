@@ -145,9 +145,9 @@ export default function AgendaPanel({ debateId }: AgendaPanelProps) {
           />
         </label>
 
-        <label className={styles.label}>
+        <span className={styles.label}>
           Success Criteria (1-3)
-        </label>
+        </span>
         
         <div className={styles.itemsList}>
           {outcomeData.criteria.map((criterion, index) => (

@@ -222,10 +222,17 @@ export default function EventFeed({ events: wsEvents, connectionStatus, onPresen
         </div>
       </div>
 
-      <div 
+      {/* The review unfolds here. Without a live region a screen-reader user
+          hears nothing as reviewers speak — the core surface would be silent.
+          "polite" so it waits for a pause rather than interrupting. */}
+      <div
         ref={feedRef}
         className={styles.feed}
         onScroll={handleScroll}
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        aria-label="Review transcript"
       >
         {displayEvents.length === 0 ? (
           <div className={styles.emptyState}>

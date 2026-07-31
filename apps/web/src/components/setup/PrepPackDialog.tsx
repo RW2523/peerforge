@@ -6,6 +6,7 @@
 'use client';
 
 import { useState } from 'react';
+import Modal from '@/components/ui/Modal';
 import styles from './PrepPackDialog.module.css';
 
 interface PrepPackDialogProps {
@@ -75,8 +76,7 @@ export function PrepPackDialog({
   const webResearchResults = extractWebResearch(content);
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.dialog} onClick={(e) => e.stopPropagation()}>
+    <Modal open onClose={onClose} title="Agent Preparation Report">
         
         {/* Header */}
         <div className={styles.header}>
@@ -307,7 +307,6 @@ export function PrepPackDialog({
 
         </div>
 
-      </div>
-    </div>
+    </Modal>
   );
 }

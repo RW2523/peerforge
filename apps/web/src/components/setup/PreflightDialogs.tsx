@@ -4,6 +4,7 @@
 
 'use client';
 
+import Modal from '@/components/ui/Modal';
 import styles from './SetupSteps.module.css';
 import { useState, useEffect } from 'react';
 
@@ -25,9 +26,7 @@ export function SkipDialog({
   if (!isOpen) return null;
 
   return (
-    <div className={styles.modalOverlay} onClick={onCancel}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <h3>Skip agent preparation</h3>
+    <Modal open={isOpen} onClose={onCancel} title="Skip agent preparation">
         <p style={{ marginTop: '1rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
           Provide a reason for skipping this agent's preparation:
         </p>
@@ -37,7 +36,6 @@ export function SkipDialog({
           placeholder="e.g., Agent model unavailable, network issues, etc."
           className={styles.textarea}
           style={{ marginTop: '1rem', minHeight: '100px' }}
-          autoFocus
         />
         <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
           <button onClick={onCancel} className={styles.btnSecondary}>
@@ -51,8 +49,7 @@ export function SkipDialog({
             Skip agent
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -117,12 +114,7 @@ export function LegacyPrepPackDialog({
   const parsedContent = parseContent(content);
 
   return (
-    <div className={styles.modalOverlay} onClick={onClose}>
-      <div 
-        className={styles.modal} 
-        onClick={(e) => e.stopPropagation()} 
-        style={{ maxWidth: '800px', maxHeight: '85vh', overflow: 'auto' }}
-      >
+    <Modal open onClose={onClose} title="Agent preparation pack">
         {/* Header */}
         <div style={{ 
           borderBottom: '2px solid var(--border)', 
@@ -300,7 +292,6 @@ export function LegacyPrepPackDialog({
             Close
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

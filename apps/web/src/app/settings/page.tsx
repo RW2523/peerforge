@@ -132,7 +132,7 @@ export default function SettingsPage() {
   return (
     <>
       <AppNav />
-      <div className={styles.container}>
+      <div id="main-content" role="main" className={styles.container}>
       <div className={styles.content}>
         <h1>Settings</h1>
         <p className={styles.subtitle}>Enter your OpenRouter API key to enable AI features</p>

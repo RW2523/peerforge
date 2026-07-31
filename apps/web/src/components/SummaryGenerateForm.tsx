@@ -51,16 +51,16 @@ export function SummaryGenerateForm({
   return (
     <div className={styles.container}>
       <h3>Generate Meeting Outputs</h3>
-      <label>OpenRouter API Key (BYOK)</label>
-      <input
+      <label htmlFor="openrouter-api-key-byok">OpenRouter API Key (BYOK)</label>
+      <input id="openrouter-api-key-byok"
         type="password"
         value={openrouterKey}
         onChange={(e) => setOpenrouterKey(e.target.value)}
         placeholder="sk-or-v1-..."
         disabled={isLoading}
       />
-      <label>Model</label>
-      <select
+      <label htmlFor="model">Model</label>
+      <select id="model"
         value={modelId}
         onChange={(e) => setModelId(e.target.value)}
         disabled={isLoading}

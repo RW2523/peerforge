@@ -13,6 +13,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+import Modal from '@/components/ui/Modal';
 import styles from './PdfSourceViewer.module.css';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -85,18 +86,11 @@ export default function PdfSourceViewer({
   );
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={e => e.stopPropagation()}>
-        <header className={styles.head}>
-          <div>
-            <div className={styles.title}>📄 {docTitle}</div>
-            <div className={styles.subtitle}>
-              Verified passage highlighted on the original manuscript
-              {page != null && ` — page ${page}`}
-            </div>
-          </div>
-          <button className={styles.closeBtn} onClick={onClose}>✕</button>
-        </header>
+    <Modal open onClose={onClose} title={docTitle}>
+        <div className={styles.subtitle}>
+          Verified passage highlighted on the original manuscript
+          {page != null && ` — page ${page}`}
+        </div>
 
         <div className={styles.body}>
           {error ? (
@@ -137,7 +131,6 @@ export default function PdfSourceViewer({
             Next →
           </button>
         </footer>
-      </div>
-    </div>
+    </Modal>
   );
 }

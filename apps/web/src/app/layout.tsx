@@ -43,6 +43,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body>
+        <a className="skip-link" href="#main-content">Skip to main content</a>
         <AuthGuard>
           <WorkspaceProvider>{children}</WorkspaceProvider>
         </AuthGuard>

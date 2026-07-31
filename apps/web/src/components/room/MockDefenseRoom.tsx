@@ -559,7 +559,7 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
 
         <div className={styles.answerSection}>
           <div className={styles.answerLabelRow}>
-            <label className={styles.answerLabel}>Your Answer</label>
+            <span className={styles.answerLabel}>Your Answer</span>
             {voiceOn && (
               stt.isSupported ? (
                 <button

@@ -557,11 +557,18 @@ export function MaterialsStep({
       </div>
 
       {showDeleteMainModal && typeof document !== 'undefined' && createPortal(
+        // Backdrop dismissal is a mouse convenience; the dialog's Cancel
+        // button is the keyboard path.
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/click-events-have-key-events
         <div
           className={styles.deleteModalOverlay}
           onClick={handleCloseDeleteMainModal}
           role="presentation"
         >
+          {/* stopPropagation keeps a click inside the dialog from reaching the
+              backdrop's dismiss handler. It is not an interaction of its own,
+              so there is no keyboard equivalent to add. */}
+          {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/click-events-have-key-events */}
           <div
             className={styles.deleteConfirmModal}
             role="dialog"

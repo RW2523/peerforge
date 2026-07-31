@@ -45,7 +45,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className={styles.container}>
+    <div className={styles.container} id="main-content" role="main">
       <div className={styles.card}>
         <div className={styles.loginHeader}>
           <span className={styles.loginIcon}>🎓</span>
@@ -73,8 +73,8 @@ export default function LoginPage() {
         {!useMagicLink ? (
           <form onSubmit={handlePasswordLogin} className={styles.form}>
             <div className={styles.field}>
-              <label>Email</label>
-              <input
+              <label htmlFor="email">Email</label>
+              <input id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -85,8 +85,8 @@ export default function LoginPage() {
             </div>
 
             <div className={styles.field}>
-              <label>Password</label>
-              <input
+              <label htmlFor="password">Password</label>
+              <input id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -103,8 +103,8 @@ export default function LoginPage() {
         ) : (
           <form onSubmit={handleMagicLinkLogin} className={styles.form}>
             <div className={styles.field}>
-              <label>Email</label>
-              <input
+              <label htmlFor="email-2">Email</label>
+              <input id="email-2"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}

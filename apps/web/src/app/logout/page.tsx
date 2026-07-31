@@ -26,7 +26,7 @@ export default function LogoutPage() {
   }, [router]);
 
   return (
-    <div className={styles.container}>
+    <div className={styles.container} id="main-content" role="main">
       <div className={styles.card}>
         <h1>Logging Out</h1>
         <p className={styles.status}>{status}</p>

@@ -2626,3 +2626,14 @@
   margin-top: 8px;
   line-height: 1.4;
 }
+
+.groupLabel {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.limitCard:focus-visible {
+  outline: 2px solid var(--accent-bright, #6366f1);
+  outline-offset: 2px;
+}

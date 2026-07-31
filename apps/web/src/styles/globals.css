@@ -193,3 +193,60 @@ textarea {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--surface-1);
 }
+
+
+/* ── Accessibility foundations ─────────────────────────────────────────────
+   Added in the accessibility pass. Previously there were no focus-visible
+   rules anywhere, and 21 infinite animations with no way to opt out. */
+
+/* Keyboard users could not skip the nav on any page. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 10000;
+  padding: 0.6rem 1rem;
+  background: var(--bg-1, #fff);
+  color: var(--text-0, #0f172a);
+  border: 2px solid var(--accent, #4338ca);
+  border-radius: 0 0 8px 0;
+  font-weight: 600;
+}
+
+.skip-link:focus {
+  left: 0;
+}
+
+/* A visible focus ring everywhere, without bringing back the mouse-click
+   outline that made people remove it in the first place. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent, #4338ca);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* WCAG 2.2.2: motion must be avoidable. Several spinners and pulses ran
+   infinitely with no opt-out. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Visually hidden, still announced. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

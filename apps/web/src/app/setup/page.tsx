@@ -320,7 +320,7 @@ export default function SetupPage() {
   return (
     <>
       <AppNav />
-      <div className={styles.container}>
+      <div id="main-content" role="main" className={styles.container}>
       <header className={styles.header}>
         <h1>New Review Session</h1>
         <p className={styles.subtitle}>Configure your AI review panel</p>

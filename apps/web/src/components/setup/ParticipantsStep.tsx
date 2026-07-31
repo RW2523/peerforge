@@ -196,15 +196,16 @@ export function ParticipantsStep({
               </select>
             )}
             
-            <label className={styles.toggleSwitch}>
+            <span className={styles.toggleSwitch}>
               <input
                 type="checkbox"
+                aria-label="Enable review chair"
                 id="enable-host"
                 checked={enableHost}
                 onChange={(e) => onEnableHostChange(e.target.checked)}
               />
               <span className={styles.slider}></span>
-            </label>
+            </span>
           </div>
         </div>
       </div>
@@ -244,15 +245,16 @@ export function ParticipantsStep({
               </>
             )}
             
-            <label className={styles.toggleSwitch}>
+            <span className={styles.toggleSwitch}>
               <input
                 type="checkbox"
+                aria-label="Enable collaborative document"
                 id="enable-documents"
                 checked={enableDocuments || false}
                 onChange={(e) => onEnableDocumentsChange?.(e.target.checked)}
               />
               <span className={styles.slider}></span>
-            </label>
+            </span>
           </div>
         </div>
       </div>
@@ -464,8 +466,8 @@ export function ParticipantsStep({
                       </div>
                     )}
                     
-                    <label>Name</label>
-                    <input
+                    <label htmlFor={`name-${idx}`}>Name</label>
+                    <input id={`name-${idx}`}
                       type="text"
                       value={participant.name || ''}
                       onChange={(e) => onUpdate(idx, { name: e.target.value })}
@@ -473,23 +475,23 @@ export function ParticipantsStep({
                       disabled={!!participant.agent_id}
                     />
                     
-                    <label>System Prompt</label>
-                    <textarea
+                    <label htmlFor={`system-prompt-${idx}`}>System Prompt</label>
+                    <textarea id={`system-prompt-${idx}`}
                       value={participant.system_prompt || ''}
                       onChange={(e) => onUpdate(idx, { system_prompt: e.target.value })}
                       placeholder="You are..."
                       rows={4}
                     />
                     
-                    <label>Model</label>
+                    <span className={styles.fieldLabel}>Model</span>
                     <ModelSelector
                       value={participant.model_id || ''}
                       onChange={(modelId) => onUpdate(idx, { model_id: modelId })}
                       placeholder="Select AI model..."
                     />
                     
-                    <label>Temperature (0.0 - 2.0)</label>
-                    <input
+                    <label htmlFor={`temperature-0-0-2-0-${idx}`}>Temperature (0.0 - 2.0)</label>
+                    <input id={`temperature-0-0-2-0-${idx}`}
                       type="range"
                       min="0"
                       max="2"
@@ -510,8 +512,8 @@ export function ParticipantsStep({
                       {(participant.model_config?.temperature ?? 0.7).toFixed(1)}
                     </div>
                     
-                    <label>Advanced Config (JSON)</label>
-                    <textarea
+                    <label htmlFor={`advanced-config-json-${idx}`}>Advanced Config (JSON)</label>
+                    <textarea id={`advanced-config-json-${idx}`}
                       value={JSON.stringify(participant.model_config || {temperature: 0.7}, null, 2)}
                       onChange={(e) => {
                         try {

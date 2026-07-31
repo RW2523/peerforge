@@ -53,7 +53,7 @@ export default function ArchitecturePage() {
   return (
     <>
       <AppNav />
-      <div className={styles.container}>
+      <div id="main-content" role="main" className={styles.container}>
         <div className={styles.header}>
           <h1>System Architecture</h1>
           <p className={styles.subtitle}>

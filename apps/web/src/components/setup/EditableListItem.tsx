@@ -45,6 +45,8 @@ export function EditableListItem({
             }}
             maxLength={SETUP_LIMITS.ITEM_MAX}
             disabled={disabled}
+            // Focus follows the user into the editor they just opened.
+            // eslint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
             aria-invalid={!!editError}
             className={styles.itemEditInput}

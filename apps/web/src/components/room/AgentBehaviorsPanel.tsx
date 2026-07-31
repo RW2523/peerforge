@@ -218,6 +218,9 @@ export default function AgentBehaviorsPanel({ debateId, events, sendCommand }: A
       )}
 
       {/* Overlay */}
+      {/* Backdrop dismissal is a mouse convenience; the panel's own close
+          button is the keyboard path, so a key listener here would duplicate it. */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events */}
       {isOpen && <div className={styles.overlay} onClick={() => setIsOpen(false)} />}
 
       {/* Floating Panel */}

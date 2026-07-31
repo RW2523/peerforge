@@ -161,7 +161,7 @@ export default function HistoryPage() {
   return (
     <>
       <AppNav />
-      <div className={styles.historyPage}>
+      <div id="main-content" role="main" className={styles.historyPage}>
         <div className={styles.container}>
           <header className={styles.header}>
             <div>
