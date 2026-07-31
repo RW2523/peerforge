@@ -48,12 +48,18 @@ class AutonomousDebateService:
             conn.commit()
             cursor.close()
         
-        # Start background task
+        from .services.debate_lease import lease
+        if not lease.acquire(debate_id):
+            # Another instance is already driving this session; starting here
+            # would double every turn and its cost.
+            logger.info(f"Not starting {debate_id}: another instance holds the lease")
+            return {"status": "running", "debate_id": debate_id, "driven_elsewhere": True}
+
         task = asyncio.create_task(
             self._run_autonomous_loop(debate_id, openrouter_api_key, auto_turn_delay)
         )
         self.running_debates[debate_id] = task
-        
+
         return {"status": "running", "debate_id": debate_id}
     
     async def pause_autonomous_debate(self, debate_id: str):
@@ -87,7 +93,8 @@ class AutonomousDebateService:
             cursor.close()
         
         # Restart background task if not already running
-        if debate_id not in self.running_debates and result:
+        from .services.debate_lease import lease
+        if debate_id not in self.running_debates and result and lease.acquire(debate_id):
             auto_turn_delay = result.get('auto_turn_delay_seconds', 10)
             logger.info(f"🔄 Restarting autonomous loop for debate {debate_id}")
             task = asyncio.create_task(
@@ -116,6 +123,13 @@ class AutonomousDebateService:
                     continue
                 
                 if status != 'running':
+                    break
+
+                from .services.debate_lease import lease
+                if not lease.renew(debate_id):
+                    # Lost the claim — another instance has taken over, or this
+                    # one stalled long enough for the lease to expire.
+                    logger.warning(f"Lease lost for {debate_id}; stopping this loop")
                     break
                 
                 # Check if debate should end
@@ -147,6 +161,8 @@ class AutonomousDebateService:
             logger.error(f"❌ Autonomous loop crashed: {e}")
             self._set_status(debate_id, 'paused')
         finally:
+            from .services.debate_lease import lease
+            lease.release(debate_id)
             if debate_id in self.running_debates:
                 del self.running_debates[debate_id]
     

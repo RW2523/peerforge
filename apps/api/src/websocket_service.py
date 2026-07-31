@@ -57,9 +57,22 @@ class ConnectionManager:
             logger.info(f"WS disconnected: debate={debate_id}")
     
     async def broadcast_to_debate(self, debate_id: str, message: Dict[str, Any]):
-        """Broadcast a message to all connections in a debate room."""
+        """
+        Send to everyone in a review session, on this instance and any other.
+
+        Local sockets first so the originating instance is never slower than
+        the rest, then fan out. A client attached to a different process would
+        otherwise never see this message at all.
+        """
+        await self._send_local(debate_id, message)
+        from .services.broadcast_bus import bus
+        await bus.publish(debate_id, message)
+
+    async def _send_local(self, debate_id: str, message: Dict[str, Any]):
+        """Deliver to sockets held by this process."""
         if debate_id not in self.active_connections:
-            logger.warning(f"⚠️ No active connections for debate {debate_id}")
+            # Expected on an instance holding none of this session's clients.
+            logger.debug(f"No local connections for debate {debate_id}")
             return
         
         conn_count = len(self.active_connections[debate_id])

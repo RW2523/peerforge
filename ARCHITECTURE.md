@@ -128,9 +128,11 @@ plain `npm install` restores it.
 
 Stated because they are true, not because they are urgent.
 
-- **Single instance.** Running autonomous debates live in a process dictionary
-  and WebSocket connections in process memory. A second API instance would not
-  see either. Fixing it means Redis pub/sub for fan-out.
+- **Multi-instance needs Redis.** Broadcasts fan out over a Redis channel and
+  autonomous debates are owned through a renewable lease, so two API processes
+  no longer show divergent transcripts or double-drive a session. Without Redis
+  both degrade to local-only, which is correct for one instance and is what
+  `GET /readiness` reports.
 - **Seats count every role alike**, so a professor consumes a student seat.
 - **Async side effects are skipped on the HTTP turn path.** Document writing
   and autonomous behaviours require an event loop that only the WebSocket

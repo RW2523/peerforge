@@ -173,6 +173,26 @@ async def inject_account_openrouter_key(request, call_next):
         pass
     return await call_next(request)
 
+@app.on_event("startup")
+async def start_broadcast_bus():
+    """Join the cross-instance fan-out so relayed messages reach local sockets."""
+    from .services.broadcast_bus import bus
+    from .websocket_service import ws_service
+
+    await bus.start(ws_service.manager._send_local)
+    if bus.degraded:
+        logger.warning(
+            "Running local-only broadcast: a second API instance would not see "
+            "these messages. Check REDIS_URL before scaling out."
+        )
+
+
+@app.on_event("shutdown")
+async def stop_broadcast_bus():
+    from .services.broadcast_bus import bus
+    await bus.stop()
+
+
 # Document WebSocket endpoint
 from .websocket.document_hub import handle_document_websocket
 
