@@ -155,3 +155,58 @@ export const updateSeats = (orgId: string, seatsPurchased: number, plan?: string
     method: 'PUT',
     body: JSON.stringify({ seats_purchased: seatsPurchased, plan: plan || null }),
   });
+
+// ── Conversational setup ────────────────────────────────────────────────────
+
+export interface PanelProposalMember {
+  name: string;
+  role: string;
+  focus?: string;
+}
+
+export interface SetupProposal {
+  title: string;
+  problem_statement: string;
+  panel: PanelProposalMember[];
+  rounds: number;
+}
+
+export interface ConverseResult {
+  reply: string;
+  ready: boolean;
+  proposal: SetupProposal | null;
+  grounded: boolean;
+  passages_used: number;
+}
+
+export const converseSetup = async (
+  debateId: string,
+  message: string,
+  history: { role: string; content: string }[],
+  openrouterKey: string,
+  modelId?: string
+): Promise<ConverseResult> => {
+  const base = await headers();
+  const response = await fetch(`${API_URL}/debates/${debateId}/setup/converse`, {
+    method: 'POST',
+    headers: { ...base, 'X-OpenRouter-Key': openrouterKey },
+    body: JSON.stringify({ message, history, model_id: modelId || null }),
+  });
+  if (!response.ok) {
+    let detail = `Setup request failed (${response.status})`;
+    try {
+      const body = await response.json();
+      if (typeof body?.detail === 'string') detail = body.detail;
+    } catch {
+      /* keep the status-based message */
+    }
+    throw new Error(detail);
+  }
+  return response.json();
+};
+
+export const applySetup = (debateId: string, proposal: SetupProposal, modelId?: string) =>
+  request<{ debate_id: string; participant_ids: string[]; ready_to_start: boolean }>(
+    `/debates/${debateId}/setup/apply`,
+    { method: 'POST', body: JSON.stringify({ ...proposal, model_id: modelId || null }) }
+  );

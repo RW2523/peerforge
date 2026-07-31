@@ -37,10 +37,16 @@ export default function AppNav() {
               Home
             </Link>
             <Link
-              href="/setup"
-              className={`${styles.link} ${isActive('/setup') ? styles.active : ''}`}
+              href="/setup/chat"
+              className={`${styles.link} ${isActive('/setup/chat') ? styles.active : ''}`}
             >
               New Session
+            </Link>
+            <Link
+              href="/setup"
+              className={`${styles.link} ${isActive('/setup') && !isActive('/setup/chat') ? styles.active : ''}`}
+            >
+              Advanced Setup
             </Link>
             <Link
               href="/room"
