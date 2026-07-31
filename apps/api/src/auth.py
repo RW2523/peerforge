@@ -339,6 +339,23 @@ DEV_WORKSPACE_ID = '00000000-0000-0000-0000-000000000101'
 DEV_TENANT_ID = '00000000-0000-0000-0000-000000000001'
 
 
+def _dev_organizations() -> List[Dict[str, Any]]:
+    """Organizations the local dev user actually belongs to, plus the demo tenant."""
+    try:
+        found = get_organizations_for_user(DEV_USER_ID)
+    except Exception:
+        found = []
+
+    if any(o['org_id'] == DEV_TENANT_ID for o in found):
+        return found
+    return found + [{
+        'org_id': DEV_TENANT_ID,
+        'org_role': 'org_admin',
+        'name': 'Local Dev',
+        'slug': 'local-dev',
+    }]
+
+
 def get_current_user(
     authorization: str = Header(None),
     x_workspace_id: Optional[str] = Header(None),
@@ -364,6 +381,13 @@ def get_current_user(
             'name': 'Local Dev',
             'tenant_id': DEV_TENANT_ID,
         }]
+        # Organizations are read from the database, unlike the workspace list:
+        # the dev user can create one, and a fixed list locked them straight
+        # back out of the organization they had just founded. Workspaces stay
+        # fixed here because resolving them would auto-provision a personal
+        # one and move the dev user out of the demo workspace.
+        dev_orgs = _dev_organizations()
+
         active = _select_active_workspace(dev_memberships, x_workspace_id)
         return {
             'user_id': DEV_USER_ID,
@@ -372,12 +396,7 @@ def get_current_user(
             'workspaces': dev_memberships,
             'workspace_ids': [DEV_WORKSPACE_ID],
             'workspace_role': active['role'],
-            'organizations': [{
-                'org_id': DEV_TENANT_ID,
-                'org_role': 'org_admin',
-                'name': 'Local Dev',
-                'slug': 'local-dev',
-            }],
+            'organizations': dev_orgs,
         }
 
     if not authorization:

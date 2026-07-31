@@ -82,12 +82,31 @@ def _slugify(name: str) -> str:
     return (base or "org")[:80]
 
 
+# Which roles consume a purchased seat. Education software is normally priced
+# per student, with teaching staff included — counting a professor against a
+# student allocation means an institution pays to employ its own faculty.
+# This is a pricing decision as much as a technical one; change it here.
+BILLABLE_ROLES = ("student",)
+
+
 def _seats_used(cursor, org_id: str) -> int:
-    """Counted live rather than stored, so the number cannot drift."""
+    """Billable members, counted live so the number cannot drift."""
     cursor.execute(
-        "SELECT COUNT(*) AS n FROM organization_members WHERE org_id = %s", (org_id,)
+        """SELECT COUNT(*) AS n FROM organization_members
+           WHERE org_id = %s AND org_role = ANY(%s)""",
+        (org_id, list(BILLABLE_ROLES)),
     )
     return cursor.fetchone()["n"]
+
+
+def _seat_breakdown(cursor, org_id: str) -> Dict[str, int]:
+    """Members per role, so an admin can see what is and is not billed."""
+    cursor.execute(
+        """SELECT org_role, COUNT(*) AS n FROM organization_members
+           WHERE org_id = %s GROUP BY org_role""",
+        (org_id,),
+    )
+    return {r["org_role"]: r["n"] for r in cursor.fetchall()}
 
 
 def _assert_seat_available(cursor, org_id: str) -> None:
@@ -895,6 +914,7 @@ async def get_seats(
         )
         row = cursor.fetchone()
         used = _seats_used(cursor, org_id)
+        breakdown = _seat_breakdown(cursor, org_id)
 
     purchased = row["seats_purchased"] if row else 0
     return {
@@ -902,6 +922,8 @@ async def get_seats(
         "plan": row["plan"] if row else "trial",
         "seats_purchased": purchased,
         "seats_used": used,
+        "billable_roles": list(BILLABLE_ROLES),
+        "members_by_role": breakdown,
         "seats_available": max(0, purchased - used) if purchased else None,
         "period_end": row["period_end"].isoformat() if row and row["period_end"] else None,
     }

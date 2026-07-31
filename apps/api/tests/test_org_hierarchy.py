@@ -143,32 +143,72 @@ def test_outsider_cannot_read_a_roster():
     assert r.status_code == 403, r.text
 
 
+def _join(org_id, admin, email, role='student', workspace_id=None):
+    """Invite and accept, returning the acceptance response."""
+    payload = {'email': email, 'role': role}
+    if workspace_id:
+        payload['workspace_id'] = workspace_id
+    tok = client.post(f'/organizations/{org_id}/invitations', json=payload,
+                      headers=_h(admin)).json()['token']
+    return client.post(f'/invitations/{tok}/accept', headers=_h(_uid(), email))
+
+
 def test_seat_limit_blocks_further_invitations():
+    """Seats are consumed by students; the founding admin is staff."""
     admin = _uid()
     org_id = client.post('/organizations', json={'name': 'Two Seat College'},
-                         headers=_h(admin)).json()['org_id']
+                         headers=_h(admin, 'admin@twoseat.edu')).json()['org_id']
 
-    r = client.put(f'/organizations/{org_id}/seats',
-                   json={'seats_purchased': 2, 'plan': 'starter'}, headers=_h(admin))
-    assert r.status_code == 200, r.text
+    assert client.put(f'/organizations/{org_id}/seats',
+                      json={'seats_purchased': 2, 'plan': 'starter'},
+                      headers=_h(admin)).status_code == 200
 
-    first = _uid()
-    first_email = f'first-{first[:8]}@university.edu'
-    tok = client.post(f'/organizations/{org_id}/invitations',
-                      json={'email': first_email, 'role': 'student'},
-                      headers=_h(admin)).json()['token']
-    assert client.post(f'/invitations/{tok}/accept',
-                       headers=_h(first, first_email)).status_code == 200
+    for n in (1, 2):
+        assert _join(org_id, admin, f'student{n}@twoseat.edu').status_code == 200
 
-    r = client.get(f'/organizations/{org_id}/seats', headers=_h(admin))
-    assert r.json()['seats_used'] == 2
-    assert r.json()['seats_available'] == 0
+    r = client.get(f'/organizations/{org_id}/seats', headers=_h(admin)).json()
+    assert r['seats_used'] == 2, r
+    assert r['seats_available'] == 0
 
     r = client.post(f'/organizations/{org_id}/invitations',
-                    json={'email': 'third@university.edu', 'role': 'student'},
+                    json={'email': 'third@twoseat.edu', 'role': 'student'},
                     headers=_h(admin))
     assert r.status_code == 409, r.text
     assert 'seat' in r.json()['detail'].lower()
+
+
+def test_teaching_staff_do_not_consume_student_seats():
+    """An institution must not pay a student seat to employ its own faculty."""
+    admin = _uid()
+    org_id = client.post('/organizations', json={'name': 'Staff Free U'},
+                         headers=_h(admin, 'admin@stafffree.edu')).json()['org_id']
+    client.put(f'/organizations/{org_id}/seats', json={'seats_purchased': 1},
+               headers=_h(admin))
+
+    # A professor and a TA join; neither is billable.
+    assert _join(org_id, admin, 'prof@stafffree.edu', 'professor').status_code == 200
+    assert _join(org_id, admin, 'ta@stafffree.edu', 'ta').status_code == 200
+
+    seats = client.get(f'/organizations/{org_id}/seats', headers=_h(admin)).json()
+    assert seats['seats_used'] == 0, seats
+    assert seats['seats_available'] == 1
+
+    # The one purchased seat is still available for an actual student.
+    assert _join(org_id, admin, 'student@stafffree.edu').status_code == 200
+    seats = client.get(f'/organizations/{org_id}/seats', headers=_h(admin)).json()
+    assert seats['seats_used'] == 1
+    assert seats['members_by_role'].get('professor') == 1
+
+
+def test_seat_response_shows_what_is_billed():
+    """An admin can see which roles count, not just a total."""
+    admin = _uid()
+    org_id = client.post('/organizations', json={'name': 'Transparent U'},
+                         headers=_h(admin, 'admin@transparent.edu')).json()['org_id']
+
+    seats = client.get(f'/organizations/{org_id}/seats', headers=_h(admin)).json()
+    assert seats['billable_roles'] == ['student']
+    assert seats['members_by_role'].get('org_admin') == 1
 
 
 def test_invitation_cannot_be_reused_or_revoked_then_used():
@@ -283,10 +323,14 @@ def test_bulk_enrolment_stops_at_the_seat_limit():
     client.put(f'/organizations/{org_id}/seats', json={'seats_purchased': 1},
                headers=_h(admin, 'a@tight.edu'))
 
+    # One seat, and the admin does not occupy it — so the first student is
+    # invited and the second is skipped once that seat is claimed.
+    _join(org_id, admin, 'taken@tight.edu')
+
     r = client.post(f'/organizations/{org_id}/invitations/bulk',
                     json={'emails': 'x@tight.edu, y@tight.edu', 'role': 'student'},
                     headers=_h(admin, 'a@tight.edu'))
-    assert r.json()['counts'].get('skipped') == 2
+    assert r.json()['counts'].get('skipped') == 2, r.json()
 
 
 def test_roster_shows_identity_not_uuids():
