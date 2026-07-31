@@ -17,11 +17,11 @@
     "@tiptap/starter-kit": "^2.27.2",
     "buffer": "^6.0.3",
     "mermaid": "^11.12.3",
-    "next": "15.5.12",
+    "next": "^15.5.22",
     "qrcode.react": "^4.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-pdf": "^7.7.3",
+    "react-pdf": "^10.4.1",
     "y-protocols": "^1.0.7",
     "y-websocket": "^3.0.0",
     "yjs": "^13.6.29"
@@ -34,5 +34,9 @@
     "eslint-config-next": "15.5.12",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "typescript": "^5"
+  },
+  "overrides": {
+    "postcss": "^8.5.25",
+    "sharp": "^0.35.3"
   }
 }
