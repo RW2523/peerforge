@@ -93,13 +93,13 @@ async def websocket_debate_room(
         "timestamp": "ISO8601"
     }
     """
-    print(f"\n🔌 WebSocket endpoint ENTERED: debate_id={debate_id}")
+    logger.info(f"\n🔌 WebSocket endpoint ENTERED: debate_id={debate_id}")
     logger.info(f"🔌 WebSocket endpoint ENTERED: debate_id={debate_id}")
     
     try:
         # Extract query params
         query_params = dict(websocket.query_params)
-        print(f"📝 Query params: {list(query_params.keys())}")
+        logger.debug(f"📝 Query params: {list(query_params.keys())}")
         
         # Auth: mirrors HTTP behavior — open in dev (require_auth=false),
         # JWT required via ?token= query param otherwise.
@@ -136,13 +136,13 @@ async def websocket_debate_room(
             user_id = DEV_USER_ID
             workspace_id = '00000000-0000-0000-0000-000000000101'
 
-        print(f"✅ Attempting to connect WebSocket...")
+        logger.info(f"✅ Attempting to connect WebSocket...")
         logger.info(f"✅ Attempting to connect WebSocket...")
         
         # Accept connection FIRST
         await ws_service.manager.connect(websocket, debate_id, user_id, workspace_id)
         
-        print(f"✅ WebSocket connected successfully!")
+        logger.info(f"✅ WebSocket connected successfully!")
         logger.info(f"✅ WebSocket connected successfully!")
         
         try:
@@ -167,11 +167,12 @@ async def websocket_debate_room(
             ws_service.manager.disconnect(websocket)
     
     except Exception as e:
-        print(f"❌ WEBSOCKET ENDPOINT ERROR: {e}")
+        logger.error(f"❌ WEBSOCKET ENDPOINT ERROR: {e}")
         logger.error(f"❌ WEBSOCKET ENDPOINT ERROR: {e}")
         import traceback
         traceback.print_exc()
         try:
             await websocket.close(code=1011, reason=str(e))
-        except:
-            pass
+        except Exception:
+            # The socket is already gone; there is nothing left to report on it.
+            logger.debug("Could not close an already-closed socket", exc_info=True)

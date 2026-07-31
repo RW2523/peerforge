@@ -5,6 +5,9 @@ from typing import List, Dict, Any
 import psycopg2.extras
 from .openrouter_client import OpenRouterClient
 from .database import get_db_connection, get_cursor
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class DebateEngine:
@@ -246,7 +249,7 @@ Format: {{"summary": "...", "minutes_of_meeting": "...", "action_items": ["item1
             if not isinstance(outputs, dict):
                 raise ValueError(f"expected an object, got {type(outputs).__name__}")
         except ValueError as exc:
-            print(f"    [synthesis] Could not parse synthesis JSON ({exc}) — using raw text")
+            logger.info(f"    [synthesis] Could not parse synthesis JSON ({exc}) — using raw text")
             outputs = {
                 'summary': response['content'][:500],
                 'minutes_of_meeting': response['content'],

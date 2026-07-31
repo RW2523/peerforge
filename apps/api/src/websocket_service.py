@@ -59,20 +59,20 @@ class ConnectionManager:
     async def broadcast_to_debate(self, debate_id: str, message: Dict[str, Any]):
         """Broadcast a message to all connections in a debate room."""
         if debate_id not in self.active_connections:
-            print(f"⚠️ No active connections for debate {debate_id}")
+            logger.warning(f"⚠️ No active connections for debate {debate_id}")
             return
         
         conn_count = len(self.active_connections[debate_id])
         msg_type = message.get('type', 'unknown')
-        print(f"📤 Broadcasting {msg_type} to {conn_count} connection(s) for debate {debate_id}")
+        logger.info(f"📤 Broadcasting {msg_type} to {conn_count} connection(s) for debate {debate_id}")
         
         disconnected = []
         for websocket in self.active_connections[debate_id]:
             try:
                 await websocket.send_json(message)
-                print(f"  ✅ Sent {msg_type} to websocket")
+                logger.info(f"  ✅ Sent {msg_type} to websocket")
             except Exception as e:
-                print(f"  ❌ Failed to send {msg_type}: {e}")
+                logger.error(f"  ❌ Failed to send {msg_type}: {e}")
                 logger.error(f"Failed to send to websocket: {e}")
                 disconnected.append(websocket)
         

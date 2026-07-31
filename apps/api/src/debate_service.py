@@ -6,6 +6,9 @@ from typing import Optional, Dict, Any
 import psycopg2.extras
 from .database import get_db_connection, get_cursor
 from .state_machine import DebateState, DebateStateMachine, StateTransitionError
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _encode_debate_cursor(created_at: datetime, debate_id: Any) -> str:
@@ -112,16 +115,16 @@ class DebateService:
         # ── Eval log: debate created ───────────────────────────────────
         try:
             from .services.eval_logger import get_logger
-            logger = get_logger(debate_id)
-            logger.log_setup(
+            eval_log = get_logger(debate_id)
+            eval_log.log_setup(
                 title=title,
                 problem_statement=(policy_config or {}).get('problem_statement', ''),
                 participants=[],
                 policy_config=policy_config,
             )
-            logger.log_lifecycle("created")
+            eval_log.log_lifecycle("created")
         except Exception as _log_exc:
-            print(f"[eval_logger] create_debate log failed: {_log_exc}")
+            logger.error(f"[eval_logger] create_debate log failed: {_log_exc}")
         # ─────────────────────────────────────────────────────────────
 
         return result
@@ -206,7 +209,7 @@ class DebateService:
         # ── Eval log: debate started + capture full setup snapshot ────
         try:
             from .services.eval_logger import get_logger
-            logger = get_logger(debate_id)
+            eval_log = get_logger(debate_id)
             # Enrich setup with participants & materials from DB
             with get_db_connection() as _conn:
                 _cur = get_cursor(_conn)
@@ -227,7 +230,7 @@ class DebateService:
                 """, (debate_id,))
                 materials_snap = [dict(r) for r in _cur.fetchall()]
             policy = started_debate.get('policy_config') or {}
-            logger.log_setup(
+            eval_log.log_setup(
                 title=started_debate.get('title', ''),
                 problem_statement=policy.get('problem_statement', ''),
                 participants=participants_snap,
@@ -236,9 +239,9 @@ class DebateService:
                 desired_outcomes=policy.get('desired_outcomes', []),
                 policy_config=policy,
             )
-            logger.log_lifecycle("started")
+            eval_log.log_lifecycle("started")
         except Exception as _log_exc:
-            print(f"[eval_logger] start_debate log failed: {_log_exc}")
+            logger.error(f"[eval_logger] start_debate log failed: {_log_exc}")
         # ─────────────────────────────────────────────────────────────
 
         return started_debate
@@ -419,7 +422,7 @@ class DebateService:
             from .services.eval_logger import get_logger
             get_logger(debate_id).log_lifecycle("ended")
         except Exception as _log_exc:
-            print(f"[eval_logger] end_debate log failed: {_log_exc}")
+            logger.error(f"[eval_logger] end_debate log failed: {_log_exc}")
         # ─────────────────────────────────────────────────────────────
 
         return self.get_debate(debate_id)

@@ -25,6 +25,9 @@ from src.tasks.material_processing import process_material
 from src.auth import require_auth
 from src.tasks.material_processing import generate_debate_embeddings, chunk_inline_material
 from src.database import get_db_connection, get_cursor
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -81,7 +84,7 @@ def _purge_storage_keys(file_keys: List[str]) -> None:
         try:
             storage_client.delete_file(file_key)
         except Exception as exc:
-            print(f"Storage delete failed (non-fatal) for {file_key}: {exc}")
+            logger.info(f"Storage delete failed (non-fatal) for {file_key}: {exc}")
 
 
 class InlineMaterial(BaseModel):
@@ -165,7 +168,7 @@ async def add_inline_materials(
                 descriptor = f"Reference link: {title or ''}\n{url}".strip()
                 total_chunks += chunk_inline_material(debate_id, material_id, descriptor, "supplementary", resolved_key)
         except Exception as exc:
-            print(f"Inline material chunking failed (non-fatal) for {material_id}: {exc}")
+            logger.info(f"Inline material chunking failed (non-fatal) for {material_id}: {exc}")
 
     return {
         "debate_id": debate_id,

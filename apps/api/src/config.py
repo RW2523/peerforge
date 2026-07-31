@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = ""
     require_auth: bool = True
 
+    # Logging. "json" for a log aggregator, "text" for a terminal.
+    log_level: str = "INFO"
+    log_format: str = "text"
+
     # Connection pool. The max is a steady-state cap, not a hard ceiling:
     # exhaustion falls back to a direct connection rather than blocking.
     db_pool_min: int = 2

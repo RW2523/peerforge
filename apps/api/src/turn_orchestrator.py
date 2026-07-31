@@ -25,6 +25,9 @@ from .services.reasoning_modes import get_persona_model, mode_from_policy
 # consistency with the canonical base prompts.
 
 from .services.persona_prompts import resolve_role as _resolve_role_for_lane
+import logging
+
+logger = logging.getLogger(__name__)
 
 _PERSONA_LANE: Dict[str, str] = {
     "advisor": (
@@ -289,13 +292,13 @@ class TurnOrchestrator:
                                 override_idx = i
                                 break
             except Exception as _route_exc:
-                print(f"   ⚠️ Mention routing skipped: {_route_exc}")
+                logger.warning(f"   ⚠️ Mention routing skipped: {_route_exc}")
                 override_idx = None
 
             # Determine next participant (mention override, else round-robin)
             if override_idx is not None:
                 next_participant_idx = override_idx
-                print(f"   🎯 Mention routing → participant index {override_idx}")
+                logger.info(f"   🎯 Mention routing → participant index {override_idx}")
             else:
                 next_participant_idx = current_turn_index % len(participants)
             next_participant = participants[next_participant_idx]
@@ -307,14 +310,14 @@ class TurnOrchestrator:
             ]
             selected_name = (next_participant['agent_config'] or {}).get('name') or next_participant['role_name']
             
-            print(f"\n🎯 TURN SELECTION DEBUG:")
-            print(f"   Debate ID: {debate_id}")
-            print(f"   Total participants: {len(participants)}")
-            print(f"   Participant order: {participant_names_debug}")
-            print(f"   Current turn index: {current_turn_index}")
-            print(f"   Selected participant index: {next_participant_idx}")
-            print(f"   Selected participant: {selected_name}")
-            print(f"   Total turns taken: {total_turns}\n")
+            logger.debug(f"\n🎯 TURN SELECTION DEBUG:")
+            logger.info(f"   Debate ID: {debate_id}")
+            logger.info(f"   Total participants: {len(participants)}")
+            logger.info(f"   Participant order: {participant_names_debug}")
+            logger.info(f"   Current turn index: {current_turn_index}")
+            logger.info(f"   Selected participant index: {next_participant_idx}")
+            logger.info(f"   Selected participant: {selected_name}")
+            logger.info(f"   Total turns taken: {total_turns}\n")
             
             # Get debate history for context (most recent 50 events - ORDER BY DESC then reverse)
             # This is faster with an index on (debate_id, sequence_number DESC)
@@ -345,19 +348,19 @@ class TurnOrchestrator:
                 # Try matching persona name from agent_name or role_name
                 _role = next_participant.get('role_name', '') or agent_name
                 model_id = get_persona_model(_role, _mode)
-                print(f"⚡ Reasoning mode '{_mode}' → model: {model_id} for {agent_name}")
+                logger.info(f"⚡ Reasoning mode '{_mode}' → model: {model_id} for {agent_name}")
             
             system_prompt = agent_config.get('system_prompt', '')
             
             # Debug: Print agent name extraction
-            print(f"🔍 AGENT CONFIG DEBUG:")
-            print(f"   Participant ID: {next_participant['participant_id']}")
-            print(f"   Role name from DB: {next_participant['role_name']}")
-            print(f"   Agent config keys: {list(agent_config.keys())}")
-            print(f"   Agent config 'name': {agent_config.get('name')}")
-            print(f"   Agent config 'model_id': {repr(agent_config.get('model_id'))}")
-            print(f"   FINAL agent_name: {agent_name}")
-            print(f"   FINAL model_id: {model_id}\n")
+            logger.debug(f"🔍 AGENT CONFIG DEBUG:")
+            logger.info(f"   Participant ID: {next_participant['participant_id']}")
+            logger.info(f"   Role name from DB: {next_participant['role_name']}")
+            logger.info(f"   Agent config keys: {list(agent_config.keys())}")
+            logger.info(f"   Agent config 'name': {agent_config.get('name')}")
+            logger.info(f"   Agent config 'model_id': {repr(agent_config.get('model_id'))}")
+            logger.info(f"   FINAL agent_name: {agent_name}")
+            logger.info(f"   FINAL model_id: {model_id}\n")
             
             # Get prep pack for this agent
             cursor.execute("""
@@ -566,11 +569,11 @@ Current panel: {participant_list}
                         recent_human_messages.append(msg)
             
             if recent_human_messages:
-                print(f"\n🎙️ INTERVENTION DETECTED in agent prompt:")
-                print(f"   Agent: {agent_name}")
-                print(f"   Interventions to include: {len(recent_human_messages)}")
+                logger.info(f"\n🎙️ INTERVENTION DETECTED in agent prompt:")
+                logger.info(f"   Agent: {agent_name}")
+                logger.info(f"   Interventions to include: {len(recent_human_messages)}")
                 for msg in recent_human_messages:
-                    print(f"     - {msg[:100]}")
+                    logger.info(f"     - {msg[:100]}")
                 print()
                 
                 # Add moderator guidance as context (not as primary focus)
@@ -897,7 +900,7 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
             # Load source materials once per turn — shared across pipeline stages
             _material_ctx = self._load_material_context(debate_id)
             if _material_ctx:
-                print(f"    [materials] Loaded material context ({len(_material_ctx)} chars) for {agent_name}")
+                logger.info(f"    [materials] Loaded material context ({len(_material_ctx)} chars) for {agent_name}")
                 # Inject into legacy prompt messages as well
                 messages.append({
                     "role": "system",
@@ -907,7 +910,7 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
                     ),
                 })
             else:
-                print(f"    [materials] No source materials found for this session")
+                logger.info(f"    [materials] No source materials found for this session")
 
             # All valid participant names for hallucination prevention
             _all_participant_names = [
@@ -917,7 +920,7 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
 
             # Generate agent response using Constitutional AI pipeline or legacy approach
             if self.use_constitutional_pipeline:
-                print(f"\n[pipeline] Constitutional AI for {agent_name}")
+                logger.info(f"\n[pipeline] Constitutional AI for {agent_name}")
                 agent_message = self._generate_with_constitutional_pipeline(
                     debate_id=debate_id,
                     agent_name=agent_name,
@@ -949,7 +952,7 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
                 }
             else:
                 # Legacy: Single LLM call
-                print(f"\n📞 LEGACY SINGLE LLM CALL for {agent_name}")
+                logger.info(f"\n📞 LEGACY SINGLE LLM CALL for {agent_name}")
                 response = self.openrouter_client.chat_completion(
                     model=model_id,
                     messages=messages,
@@ -984,9 +987,9 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
                         
                         # If >70% word overlap with different agent's message, log warning (don't reject, just warn)
                         if overlap_ratio > 0.7:
-                            print(f"⚠️ REPETITION WARNING: {overlap_ratio*100:.1f}% overlap with {recent_name}")
-                            print(f"   Current: {agent_message[:80]}...")
-                            print(f"   Recent:  {recent_msg[:80]}...")
+                            logger.warning(f"⚠️ REPETITION WARNING: {overlap_ratio*100:.1f}% overlap with {recent_name}")
+                            logger.info(f"   Current: {agent_message[:80]}...")
+                            logger.info(f"   Recent:  {recent_msg[:80]}...")
                             # Log but don't reject - let it through (user can see the issue)
             
             # Get next sequence number (scoped to this debate)
@@ -1010,7 +1013,7 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
                 grounding = ground_message(debate_id, agent_message)
                 turn_citations = grounding.get('citations', [])
             except Exception as _ground_exc:
-                print(f"⚠️ Turn grounding failed (non-fatal): {_ground_exc}")
+                logger.warning(f"⚠️ Turn grounding failed (non-fatal): {_ground_exc}")
 
             # Persist event
             event_id = str(uuid.uuid4())
@@ -1049,7 +1052,7 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
                     content=agent_message,
                 )
             except Exception as _log_exc:
-                print(f"[eval_logger] log_turn failed: {_log_exc}")
+                logger.error(f"[eval_logger] log_turn failed: {_log_exc}")
             # ─────────────────────────────────────────────────────────
 
             # Update turn index in policy_config
@@ -1060,10 +1063,10 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
             policy_config['total_turns_taken'] = new_total_turns
             policy_config['last_participant_id'] = next_participant['participant_id']
             
-            print(f"📝 UPDATING POLICY CONFIG:")
-            print(f"   Old turn index: {current_turn_index} -> New: {new_turn_index}")
-            print(f"   Old total turns: {total_turns} -> New: {new_total_turns}")
-            print(f"   Last participant: {next_participant['participant_id']}\n")
+            logger.debug(f"📝 UPDATING POLICY CONFIG:")
+            logger.info(f"   Old turn index: {current_turn_index} -> New: {new_turn_index}")
+            logger.info(f"   Old total turns: {total_turns} -> New: {new_total_turns}")
+            logger.info(f"   Last participant: {next_participant['participant_id']}\n")
             
             cursor.execute("""
                 UPDATE debates
@@ -1075,9 +1078,9 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
                 debate_id
             ))
             
-            print(f"✅ Database UPDATE executed, committing transaction...\n")
+            logger.info(f"✅ Database UPDATE executed, committing transaction...\n")
             conn.commit()
-            print(f"✅ Transaction committed successfully!\n")
+            logger.info(f"✅ Transaction committed successfully!\n")
             
             result = {
                 'event_id': event_id,
@@ -1092,7 +1095,7 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
             }
             
             # 📄 Document Integration: Write to assigned sections (async, non-blocking)
-            print(f"    📝 Scheduling async document writing for {agent_name}...")
+            logger.debug(f"    📝 Scheduling async document writing for {agent_name}...")
             try:
                 # run_coroutine_threadsafe is the correct way to schedule a coroutine
                 # from a thread-pool thread (asyncio.to_thread context).
@@ -1109,16 +1112,16 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
                         ),
                         main_loop
                     )
-                    print(f"    📝 Document writing scheduled")
+                    logger.debug(f"    📝 Document writing scheduled")
                 else:
-                    print(f"    ⚠️ No running event loop — document writing skipped")
+                    logger.warning(f"    ⚠️ No running event loop — document writing skipped")
             except Exception as e:
-                print(f"    ⚠️ Failed to schedule document writing: {e}")
+                logger.error(f"    ⚠️ Failed to schedule document writing: {e}")
             
             # Post-turn autonomous behaviors (private DMs, coalitions, strategic actions)
             should_trigger_autonomy = True
             if should_trigger_autonomy:
-                print(f"    🎭 Triggering autonomous behaviors for {agent_name}...")
+                logger.info(f"    🎭 Triggering autonomous behaviors for {agent_name}...")
                 try:
                     # We are inside asyncio.to_thread — use run_coroutine_threadsafe
                     # to schedule coroutines on the main event loop.
@@ -1135,16 +1138,16 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
                         def _on_done(f):
                             try:
                                 f.result()
-                                print(f"       ✅ Autonomous behaviors completed for {agent_name}")
+                                logger.info(f"       ✅ Autonomous behaviors completed for {agent_name}")
                             except Exception as exc:
-                                print(f"       ❌ Autonomous behaviors failed for {agent_name}: {exc}")
+                                logger.error(f"       ❌ Autonomous behaviors failed for {agent_name}: {exc}")
 
                         future.add_done_callback(_on_done)
-                        print(f"       ✅ Autonomous behaviors scheduled")
+                        logger.info(f"       ✅ Autonomous behaviors scheduled")
                     else:
-                        print(f"       ⚠️ No running event loop — autonomous behaviors skipped")
+                        logger.warning(f"       ⚠️ No running event loop — autonomous behaviors skipped")
                 except Exception as e:
-                    print(f"       ❌ Autonomy trigger failed: {e}")
+                    logger.error(f"       ❌ Autonomy trigger failed: {e}")
                     import traceback
                     traceback.print_exc()
             
@@ -1218,7 +1221,7 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
                 conn.commit()
                 return event_id
             except Exception as e:
-                print(f"❌ Failed to persist {event_type}: {e}")
+                logger.error(f"❌ Failed to persist {event_type}: {e}")
                 conn.rollback()
                 return None
             finally:
@@ -1237,7 +1240,7 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
         Async document writing - runs in background, doesn't block turn response
         """
         try:
-            print(f"\n📝 [ASYNC] Document writing started for {agent_name}")
+            logger.debug(f"\n📝 [ASYNC] Document writing started for {agent_name}")
             # Run the blocking document writing in executor to not block event loop
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(
@@ -1250,9 +1253,9 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
                 model_id,
                 system_prompt
             )
-            print(f"✅ [ASYNC] Document writing completed for {agent_name}\n")
+            logger.info(f"✅ [ASYNC] Document writing completed for {agent_name}\n")
         except Exception as e:
-            print(f"⚠️ [ASYNC] Document writing error: {e}")
+            logger.error(f"⚠️ [ASYNC] Document writing error: {e}")
     
     async def _async_autonomous_behaviors(
         self,
@@ -1266,10 +1269,10 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
         """
         Async autonomous behaviors - runs in background, doesn't block turn response
         """
-        print(f"\n🎭 [ASYNC] Autonomous behaviors STARTED for {agent_name}")
-        print(f"   Debate ID: {debate_id[:8]}...")
-        print(f"   Current Seq: {current_seq}")
-        print(f"   Participants: {[p.get('participant_name', 'Unknown') for p in participants]}")
+        logger.info(f"\n🎭 [ASYNC] Autonomous behaviors STARTED for {agent_name}")
+        logger.info(f"   Debate ID: {debate_id[:8]}...")
+        logger.info(f"   Current Seq: {current_seq}")
+        logger.info(f"   Participants: {[p.get('participant_name', 'Unknown') for p in participants]}")
         
         try:
             from .websocket_service import websocket_manager
@@ -1280,7 +1283,7 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
             
             # Strategic actions (interrupts, votes, proposals) - 40% chance
             if random.random() < 0.4:
-                print(f"   🎯 Checking for strategic actions by {agent_name}...")
+                logger.info(f"   🎯 Checking for strategic actions by {agent_name}...")
                 
                 policy_config = {}
                 with get_db_connection() as conn:
@@ -1323,11 +1326,11 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
                             'payload': content
                         }
                         await websocket_manager.broadcast_to_debate(debate_id, event)
-                        print(f"    🎯✅ Strategic action sent: {tactical_move.get('move')} by {agent_name}")
+                        logger.info(f"    🎯✅ Strategic action sent: {tactical_move.get('move')} by {agent_name}")
             
             # Coalition formation (60% chance - more aggressive)
             if random.random() < 0.6:
-                print(f"   🤝 Checking for coalition formation by {agent_name}...")
+                logger.info(f"   🤝 Checking for coalition formation by {agent_name}...")
                 coalition = autonomy_service.analyze_and_form_coalitions(
                     debate_id, agent_name, participants, history_events, desired_outcomes
                 )
@@ -1403,24 +1406,24 @@ Your question (15 words max):"""
                                 'payload': content
                             }
                             await websocket_manager.broadcast_to_debate(debate_id, event)
-                            print(f"    ❓ Question to Host: {agent_name} → Host: {question[:60]}...")
+                            logger.info(f"    ❓ Question to Host: {agent_name} → Host: {question[:60]}...")
                 except Exception as e:
-                    print(f"    ⚠️ Failed to generate host question: {e}")
+                    logger.error(f"    ⚠️ Failed to generate host question: {e}")
             
             # Private messaging (CRITICAL - agents must talk!)
-            print(f"\n   🔊 PRIVATE MESSAGING CHECK for {agent_name}:")
-            print(f"      Participants count: {len(participants)}")
+            logger.info(f"\n   🔊 PRIVATE MESSAGING CHECK for {agent_name}:")
+            logger.info(f"      Participants count: {len(participants)}")
             
             # 80% chance for private messaging (very aggressive)
             if len(participants) >= 2 and random.random() < 0.8:
-                print(f"   📨 ✅ 2+ participants, attempting private messaging...")
+                logger.info(f"   📨 ✅ 2+ participants, attempting private messaging...")
                 other_agents = [
                     (p.get('agent_config') or {}).get('name') or p.get('role_name')
                     for p in participants
                     if ((p.get('agent_config') or {}).get('name') or p.get('role_name')) != agent_name
                 ]
                 
-                print(f"      Other agents available: {other_agents}")
+                logger.info(f"      Other agents available: {other_agents}")
                 
                 if other_agents:
                     # Check for previous DM from target to current agent (unreplied)
@@ -1455,11 +1458,11 @@ Your question (15 words max):"""
                                 # We have an unreplied DM! Reply to it
                                 target = result['sender']
                                 previous_dm = result['message']
-                                print(f"    🔔 Found unreplied DM from {target} to {agent_name}")
+                                logger.info(f"    🔔 Found unreplied DM from {target} to {agent_name}")
                             else:
                                 # No unreplied DMs, pick a random target for new conversation
                                 target = random.choice(other_agents)
-                                print(f"    ✉️  No unreplied DMs, starting new conversation with {target}")
+                                logger.info(f"    ✉️  No unreplied DMs, starting new conversation with {target}")
                         finally:
                             cursor.close()
                     
@@ -1470,17 +1473,17 @@ Your question (15 words max):"""
                     ])
                     
                     # Generate message (reply if previous_dm exists, otherwise initial)
-                    print(f"      🤖 Calling LLM to generate DM from {agent_name} to {target}...")
-                    print(f"         Model: openai/gpt-oss-20b:free")
-                    print(f"         Is Reply: {bool(previous_dm)}")
+                    logger.info(f"      🤖 Calling LLM to generate DM from {agent_name} to {target}...")
+                    logger.info(f"         Model: openai/gpt-oss-20b:free")
+                    logger.info(f"         Is Reply: {bool(previous_dm)}")
                     
                     try:
                         message = autonomy_service.generate_private_message(
                             debate_id, agent_name, target, context, desired_outcomes, previous_dm
                         )
-                        print(f"      ✅ LLM returned message: {message[:80] if message else 'None'}...")
+                        logger.info(f"      ✅ LLM returned message: {message[:80] if message else 'None'}...")
                     except Exception as e:
-                        print(f"      ❌ LLM call FAILED: {e}")
+                        logger.error(f"      ❌ LLM call FAILED: {e}")
                         message = None
                     
                     if message:
@@ -1505,17 +1508,17 @@ Your question (15 words max):"""
                                 'payload': content
                             }
                             await websocket_manager.broadcast_to_debate(debate_id, event)
-                            print(f"    ✅✅✅ DM SUCCESSFULLY SENT: {agent_name} → {target} {'(REPLY)' if previous_dm else '(NEW)'}")
-                            print(f"           Message: {message}")
+                            logger.info(f"    ✅✅✅ DM SUCCESSFULLY SENT: {agent_name} → {target} {'(REPLY)' if previous_dm else '(NEW)'}")
+                            logger.info(f"           Message: {message}")
                     else:
-                        print(f"      ❌ Message generation returned None/empty - FAILED")
+                        logger.error(f"      ❌ Message generation returned None/empty - FAILED")
             else:
-                print(f"   ❌ Not enough participants for DMs (need 2+, have {len(participants)})")
+                logger.error(f"   ❌ Not enough participants for DMs (need 2+, have {len(participants)})")
             
-            print(f"✅ [ASYNC] Autonomous behaviors COMPLETED for {agent_name}\n")
+            logger.info(f"✅ [ASYNC] Autonomous behaviors COMPLETED for {agent_name}\n")
             
         except Exception as e:
-            print(f"❌ [ASYNC] Autonomous behaviors ERROR: {e}")
+            logger.error(f"❌ [ASYNC] Autonomous behaviors ERROR: {e}")
             import traceback
             traceback.print_exc()
     
@@ -1531,11 +1534,11 @@ Your question (15 words max):"""
         """
         Write agent content to assigned document sections
         """
-        print(f"\n📝 DOCUMENT WRITE TRIGGERED:")
-        print(f"   Agent: {agent_name}")
-        print(f"   Agent ID: {agent_id}")
-        print(f"   Debate: {debate_id}")
-        print(f"   Message length: {len(agent_message)} chars\n")
+        logger.debug(f"\n📝 DOCUMENT WRITE TRIGGERED:")
+        logger.info(f"   Agent: {agent_name}")
+        logger.info(f"   Agent ID: {agent_id}")
+        logger.info(f"   Debate: {debate_id}")
+        logger.info(f"   Message length: {len(agent_message)} chars\n")
         
         try:
             with get_db_connection() as conn:
@@ -1551,7 +1554,7 @@ Your question (15 words max):"""
                 
                 document = cursor.fetchone()
                 if not document:
-                    print(f"📄 No active document found for debate {debate_id}")
+                    logger.info(f"📄 No active document found for debate {debate_id}")
                     return
                 
                 document_id = document['document_id']
@@ -1580,10 +1583,10 @@ Your question (15 words max):"""
                 
                 sections = cursor.fetchall()
                 if not sections:
-                    print(f"📄 No sections assigned to {agent_name} in document {document_id}")
+                    logger.info(f"📄 No sections assigned to {agent_name} in document {document_id}")
                     return
                 
-                print(f"\n📄 DOCUMENT WRITING: {agent_name} has {len(sections)} assigned section(s)")
+                logger.info(f"\n📄 DOCUMENT WRITING: {agent_name} has {len(sections)} assigned section(s)")
                 
                 # Write to each assigned section
                 for section in sections:
@@ -1593,7 +1596,7 @@ Your question (15 words max):"""
                     word_limit = section['word_limit']
                     current_status = section['status']
                     
-                    print(f"   Writing to: {section_title} (type: {section_type}, limit: {word_limit} words)")
+                    logger.info(f"   Writing to: {section_title} (type: {section_type}, limit: {word_limit} words)")
                     
                     # Generate section-specific content
                     content = self._generate_section_content(
@@ -1630,7 +1633,7 @@ Your question (15 words max):"""
                         WHERE section_id = %s
                     """, (content, new_status, word_count, new_status, section_id))
                     
-                    print(f"   ✅ Updated section: {word_count} words, status: {new_status}")
+                    logger.info(f"   ✅ Updated section: {word_count} words, status: {new_status}")
                 
                 # Update document status if all sections are completed
                 cursor.execute("""
@@ -1648,7 +1651,7 @@ Your question (15 words max):"""
                             completed_at = NOW()
                         WHERE document_id = %s
                     """, (document_id,))
-                    print(f"   🎉 Document {document_id} marked as COMPLETED!")
+                    logger.info(f"   🎉 Document {document_id} marked as COMPLETED!")
                 else:
                     cursor.execute("""
                         UPDATE documents
@@ -1657,10 +1660,10 @@ Your question (15 words max):"""
                     """, (document_id,))
                 
                 conn.commit()
-                print(f"📄 Document sections updated successfully\n")
+                logger.info(f"📄 Document sections updated successfully\n")
                 
         except Exception as e:
-            print(f"⚠️ Document writing error: {e}")
+            logger.error(f"⚠️ Document writing error: {e}")
     
     def _generate_section_content(
         self,
@@ -1733,7 +1736,7 @@ Requirements:
             return content
             
         except Exception as e:
-            print(f"⚠️ Section content generation error: {e}")
+            logger.error(f"⚠️ Section content generation error: {e}")
             return ""
     
     # ── Material context loader ──────────────────────────────────────────────
@@ -1801,7 +1804,7 @@ Requirements:
                 return "\n\n".join(parts)
 
         except Exception as exc:
-            print(f"    [material_context] Failed to load materials: {exc}")
+            logger.error(f"    [material_context] Failed to load materials: {exc}")
             return ""
 
     def _generate_with_constitutional_pipeline(
@@ -1861,12 +1864,12 @@ Requirements:
 
             # Start thinking session
             turn_num = turn_info.get('turn_number', 0)
-            print(f"\n[thinking] Starting session for {agent_name}")
+            logger.info(f"\n[thinking] Starting session for {agent_name}")
             session_id = self.thinking_service.start_thinking_session(debate_id, agent_name, turn_num)
-            print(f"    Session ID: {session_id}")
+            logger.info(f"    Session ID: {session_id}")
 
             # ── STAGE 1: REASONING ───────────────────────────────────────
-            print(f"  Stage 1: Reasoning (with material context + validation)...")
+            logger.info(f"  Stage 1: Reasoning (with material context + validation)...")
             self.thinking_service.emit_thinking_step(debate_id, agent_name, "reasoning", {
                 "stage": "Stage 1: Reasoning",
                 "status": "Evaluating stance and analysing recent messages...",
@@ -1891,9 +1894,9 @@ Requirements:
                 material_context=material_context,
                 model_id=model_id,
             )
-            print(f"    Stance: {reasoning['current_stance'][:60]}...")
-            print(f"    Confidence: {reasoning['confidence']}")
-            print(f"    Changed: {reasoning['stance_changed']}")
+            logger.info(f"    Stance: {reasoning['current_stance'][:60]}...")
+            logger.info(f"    Confidence: {reasoning['confidence']}")
+            logger.info(f"    Changed: {reasoning['stance_changed']}")
             
             self.thinking_service.emit_thinking_step(debate_id, agent_name, "reasoning_complete", {
                 "stage": "Stage 1: Complete",
@@ -1907,7 +1910,7 @@ Requirements:
             })
             
             # STAGE 2: RESPONSE GENERATION
-            print(f"  Stage 2: Generating response...")
+            logger.info(f"  Stage 2: Generating response...")
             self.thinking_service.emit_thinking_step(debate_id, agent_name, "generating", {
                 "stage": "Stage 2: Generating Response",
                 "status": "Crafting message based on reasoning...",
@@ -1934,7 +1937,7 @@ Requirements:
                 valid_participant_names=all_participant_names,
                 model_id=model_id,
             )
-            print(f"    Generated {len(agent_message)} chars")
+            logger.info(f"    Generated {len(agent_message)} chars")
             
             self.thinking_service.emit_thinking_step(debate_id, agent_name, "generating_complete", {
                 "stage": "Stage 2: Complete",
@@ -1947,7 +1950,7 @@ Requirements:
             })
             
             # STAGE 3: CONSTITUTIONAL VALIDATION
-            print(f"  Stage 3: Validating...")
+            logger.info(f"  Stage 3: Validating...")
             
             # Get recent messages from OTHER agents (for repetition check)
             recent_other_messages = []
@@ -1983,9 +1986,9 @@ Requirements:
             )
             
             if not validation["valid"]:
-                print(f"    ⚠️ Constitutional violations:")
+                logger.warning(f"    ⚠️ Constitutional violations:")
                 for violation in validation["violations"]:
-                    print(f"      - {violation['rule']}: {violation['details']}")
+                    logger.info(f"      - {violation['rule']}: {violation['details']}")
                 
                 self.thinking_service.emit_thinking_step(debate_id, agent_name, "validation_issues", {
                     "stage": "Stage 3: Issues Found",
@@ -1995,7 +1998,7 @@ Requirements:
                 
                 # Use corrected message if available
                 if validation["corrected_message"]:
-                    print(f"    ✅ Auto-corrected")
+                    logger.info(f"    ✅ Auto-corrected")
                     agent_message = validation["corrected_message"]
                     self.thinking_service.emit_thinking_step(debate_id, agent_name, "auto_corrected", {
                         "stage": "Stage 3: Auto-Corrected",
@@ -2003,7 +2006,7 @@ Requirements:
                         "details": ["Applied automatic corrections", "Message ready to send"]
                     })
                 elif validation["needs_regeneration"]:
-                    print(f"    🔄 Needs regeneration - using constrained retry")
+                    logger.info(f"    🔄 Needs regeneration - using constrained retry")
                     self.thinking_service.emit_thinking_step(debate_id, agent_name, "regenerating", {
                         "stage": "Stage 3: Regenerating",
                         "status": "Creating new message with stricter constraints...",
@@ -2050,7 +2053,7 @@ Requirements:
                     )
                     agent_message = response['content']
             else:
-                print(f"    ✅ Validation passed")
+                logger.info(f"    ✅ Validation passed")
                 self.thinking_service.emit_thinking_step(debate_id, agent_name, "validation_complete", {
                     "stage": "Stage 3: Complete",
                     "status": "✅ All checks passed",
@@ -2068,8 +2071,8 @@ Requirements:
             return agent_message
             
         except Exception as e:
-            print(f"  ⚠️ Constitutional pipeline error: {e}")
-            print(f"  📞 Falling back to legacy approach")
+            logger.error(f"  ⚠️ Constitutional pipeline error: {e}")
+            logger.info(f"  📞 Falling back to legacy approach")
             # Fallback to legacy single LLM call
             response = self.openrouter_client.chat_completion(
                 model=model_id,

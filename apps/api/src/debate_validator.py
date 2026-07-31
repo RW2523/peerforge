@@ -7,6 +7,9 @@ import re
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class DebateValidator:
@@ -308,11 +311,11 @@ Now analyze the given debate topic:"""
                 content = content.split('```')[1].split('```')[0].strip()
             
             dimensions = json.loads(content)
-            print(f"✅ Extracted {len(dimensions)} debate dimensions")
+            logger.info(f"✅ Extracted {len(dimensions)} debate dimensions")
             return dimensions
             
         except Exception as e:
-            print(f"⚠️ Failed to extract dimensions: {e}")
+            logger.error(f"⚠️ Failed to extract dimensions: {e}")
             # Fallback to generic dimensions
             return {
                 "approach": {
@@ -358,7 +361,7 @@ Now analyze the given debate topic:"""
             agent['assigned_position'] = position_desc
             agent['assigned_stances'] = assigned_stances
             
-            print(f"  ✅ {agent['participant_name']}: {list(assigned_stances.values())}")
+            logger.info(f"  ✅ {agent['participant_name']}: {list(assigned_stances.values())}")
         
         return agents
     

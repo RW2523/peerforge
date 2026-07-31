@@ -111,7 +111,10 @@ async def _fetch_author_papers(name: str, affiliation: str, topic_hint: str,
                     authored.append(p)
                     seen.add(p.dedup_key)
         except Exception:
-            pass
+            logger.warning(
+                "Supplementary publication lookup failed for %s; "
+                "continuing with what was already found", surname, exc_info=True,
+            )
     authored.sort(key=lambda p: (p.citation_count, p.year or 0), reverse=True)
     return authored[:want]
 

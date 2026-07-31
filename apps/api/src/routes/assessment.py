@@ -19,6 +19,10 @@ from ..services.academic_assessment import (
 )
 from ..services.certificate import build_certificate
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["assessment"])
 
 
@@ -302,7 +306,10 @@ async def verify_certificate(certificate_id: str):
             live_available = True
             evidence_unchanged = live["anchor"]["hash"] == row["anchor_hash"]
     except Exception:
-        pass
+        logger.warning(
+            "Could not compute the live anchor for %s; reporting it as unavailable",
+            row["debate_id"], exc_info=True,
+        )
 
     return {
         "certificate_id": certificate_id,

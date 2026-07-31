@@ -9,6 +9,9 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from .database import get_db_connection, get_cursor
 from .openrouter_client import OpenRouterClient
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class AgentAutonomyService:
@@ -96,12 +99,12 @@ class AgentAutonomyService:
             decision = json.loads(response['content'])
             
             if decision.get('action') != 'none':
-                print(f"    🎯 STRATEGIC ACTION by {agent_name}: {decision.get('action')}")
+                logger.info(f"    🎯 STRATEGIC ACTION by {agent_name}: {decision.get('action')}")
                 return decision
             else:
-                print(f"    ℹ️  {agent_name} chose no strategic action")
+                logger.info(f"    ℹ️  {agent_name} chose no strategic action")
         except Exception as e:
-            print(f"    ⚠️ Strategic decision failed: {e}")
+            logger.error(f"    ⚠️ Strategic decision failed: {e}")
         
         return None
     
@@ -186,12 +189,12 @@ class AgentAutonomyService:
                     'type': coalition_type
                 }
                 emoji = '🤝' if coalition_type == 'alliance' else '⚔️'
-                print(f"    {emoji} {coalition_type.upper()} formed by {current_agent_name}: {coalition}")
+                logger.info(f"    {emoji} {coalition_type.upper()} formed by {current_agent_name}: {coalition}")
                 return coalition
             else:
-                print(f"    ℹ️  {current_agent_name} chose NOT to form coalition this turn")
+                logger.info(f"    ℹ️  {current_agent_name} chose NOT to form coalition this turn")
         except Exception as e:
-            print(f"    ⚠️ Coalition analysis failed: {e}")
+            logger.error(f"    ⚠️ Coalition analysis failed: {e}")
         
         return None
     
@@ -248,10 +251,10 @@ Respond with ONLY the message (15-40 words):**"""
             )
             
             message = response['content'].strip().strip('"\'')[:280]  # Cap at 280 chars, remove quotes
-            print(f"    💬 Private message: {from_agent} → {to_agent}: {message[:60]}...")
+            logger.info(f"    💬 Private message: {from_agent} → {to_agent}: {message[:60]}...")
             return message
         except Exception as e:
-            print(f"    ⚠️ Private message generation failed: {e}")
+            logger.error(f"    ⚠️ Private message generation failed: {e}")
             return None
     
     def plan_subtasks(
@@ -297,5 +300,5 @@ Be specific and actionable. Keep it brief."""
             
             return tasks[:3]  # Max 3 tasks
         except Exception as e:
-            print(f"    ⚠️ Sub-task planning failed: {e}")
+            logger.error(f"    ⚠️ Sub-task planning failed: {e}")
             return []

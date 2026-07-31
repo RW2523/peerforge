@@ -14,6 +14,9 @@ from typing import Dict, Any, List
 import asyncio
 from .database import get_db_connection, get_cursor
 import psycopg2.extras
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class AgentThinkingService:
@@ -76,7 +79,7 @@ class AgentThinkingService:
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         
-        print(f"🧠 Emitting thinking step: {thinking_type} - {thinking_data.get('stage', '')}")
+        logger.info(f"🧠 Emitting thinking step: {thinking_type} - {thinking_data.get('stage', '')}")
         
         # Add to current session
         if self.current_thinking_session:
@@ -135,11 +138,11 @@ class AgentThinkingService:
                 }
             }
             
-            print(f"📡 Broadcasting thinking to debate {debate_id}: {step.get('stage')}")
+            logger.info(f"📡 Broadcasting thinking to debate {debate_id}: {step.get('stage')}")
             
             # Check active connections
             active_count = len(websocket_manager.active_connections.get(debate_id, []))
-            print(f"   Active WebSocket connections for debate: {active_count}")
+            logger.info(f"   Active WebSocket connections for debate: {active_count}")
             
             # Broadcast via WebSocket using the event loop from the WS handler
             if self._websocket_manager and self._event_loop:
@@ -149,14 +152,14 @@ class AgentThinkingService:
                         self._event_loop
                     )
                     future.result(timeout=5.0)
-                    print(f"✅ Thinking broadcast via WebSocket")
+                    logger.info(f"✅ Thinking broadcast via WebSocket")
                 except Exception as e:
-                    print(f"⚠️ Thinking broadcast failed: {e}")
+                    logger.error(f"⚠️ Thinking broadcast failed: {e}")
             else:
-                print(f"⚠️ No broadcast context set (manager={self._websocket_manager is not None}, loop={self._event_loop is not None})")
+                logger.warning(f"⚠️ No broadcast context set (manager={self._websocket_manager is not None}, loop={self._event_loop is not None})")
                 
         except Exception as e:
-            print(f"❌ Thinking broadcast error: {e}")
+            logger.error(f"❌ Thinking broadcast error: {e}")
             import traceback
             traceback.print_exc()
     
@@ -202,7 +205,7 @@ class AgentThinkingService:
                 return next_seq  # Return sequence_number for WebSocket broadcast
 
         except Exception as e:
-            print(f"⚠️ Thinking persistence error: {e}")
+            logger.error(f"⚠️ Thinking persistence error: {e}")
             return None
     
     def _persist_thinking_session(self, session: Dict[str, Any]):
@@ -243,10 +246,10 @@ class AgentThinkingService:
                 ))
                 
                 conn.commit()
-                print(f"💾 Thinking session saved: {len(session['steps'])} steps")
+                logger.info(f"💾 Thinking session saved: {len(session['steps'])} steps")
                 
         except Exception as e:
-            print(f"⚠️ Thinking session persistence error: {e}")
+            logger.error(f"⚠️ Thinking session persistence error: {e}")
     
     def get_thinking_history(
         self,
@@ -303,5 +306,5 @@ class AgentThinkingService:
                 ]
                 
         except Exception as e:
-            print(f"⚠️ Error fetching thinking history: {e}")
+            logger.error(f"⚠️ Error fetching thinking history: {e}")
             return []

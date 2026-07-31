@@ -6,6 +6,9 @@ from datetime import datetime, timezone
 import psycopg2.extras
 from .database import get_db_connection, get_cursor
 from .openrouter_client import OpenRouterClient
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class SummaryService:
@@ -106,7 +109,7 @@ class SummaryService:
                 usage=response.get('usage', {}),
             )
         except Exception as _log_exc:
-            print(f"[eval_logger] log_summary failed: {_log_exc}")
+            logger.error(f"[eval_logger] log_summary failed: {_log_exc}")
         # ─────────────────────────────────────────────────────────────
 
         return outputs
@@ -275,9 +278,9 @@ START WITH {{ AND END WITH }}"""
             parsed = json.loads(candidate)
             if _has_required(parsed):
                 return _extract(parsed)
-            print(f"[summary] JSON parsed but missing required keys: {list(parsed.keys())}")
+            logger.info(f"[summary] JSON parsed but missing required keys: {list(parsed.keys())}")
         except json.JSONDecodeError as exc:
-            print(f"[summary] Strategy 1 (strip+parse) failed: {exc}")
+            logger.error(f"[summary] Strategy 1 (strip+parse) failed: {exc}")
 
         # ── Strategy 2: extract first {...} block ────────────────────────
         try:
@@ -287,7 +290,7 @@ START WITH {{ AND END WITH }}"""
                 if _has_required(parsed):
                     return _extract(parsed)
         except json.JSONDecodeError as exc:
-            print(f"[summary] Strategy 2 (extract block) failed: {exc}")
+            logger.error(f"[summary] Strategy 2 (extract block) failed: {exc}")
 
         # ── Strategy 3: repair + parse ───────────────────────────────────
         try:
@@ -296,10 +299,10 @@ START WITH {{ AND END WITH }}"""
                 repaired = _repair(candidate)
                 parsed = json.loads(repaired)
                 if _has_required(parsed):
-                    print("[summary] Strategy 3 (repair) succeeded")
+                    logger.info("[summary] Strategy 3 (repair) succeeded")
                     return _extract(parsed)
         except Exception as exc:
-            print(f"[summary] Strategy 3 (repair) failed: {exc}")
+            logger.error(f"[summary] Strategy 3 (repair) failed: {exc}")
 
         # ── Strategy 4: targeted key extraction ─────────────────────────
         # Pull individual string values for each required key
@@ -311,7 +314,7 @@ START WITH {{ AND END WITH }}"""
         summary_val = _pull_value('summary', content)
         minutes_val = _pull_value('minutes', content)
         if summary_val and minutes_val:
-            print("[summary] Strategy 4 (key extraction) partially succeeded")
+            logger.info("[summary] Strategy 4 (key extraction) partially succeeded")
             return {
                 'summary': summary_val,
                 'minutes': minutes_val,

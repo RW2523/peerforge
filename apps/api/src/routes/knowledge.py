@@ -6,6 +6,9 @@ Endpoints for accessing agent knowledge units (prep packs, etc.)
 from fastapi import APIRouter, HTTPException, Header
 from ..database import get_db_connection, get_cursor
 from ..auth import require_auth
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agent-knowledge", tags=["knowledge"])
 
@@ -59,7 +62,7 @@ async def get_knowledge_unit(
         except HTTPException:
             raise
         except Exception as e:
-            print(f"Error fetching knowledge unit: {e}")
+            logger.error(f"Error fetching knowledge unit: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to fetch knowledge unit: {str(e)}")
         finally:
             cursor.close()

@@ -16,6 +16,9 @@ from src.utils.text_extraction import TextExtractor
 from src.utils.chunking import TextChunker
 from src.database import get_db_connection
 from src.services.memory_retrieval import get_query_embedding
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Embedding model used for document chunks
 EMBEDDINGS_MODEL = "openai/text-embedding-3-small"
@@ -148,9 +151,9 @@ def _embed_chunks_batch(
                 if idx < len(results):
                     results[idx] = item.get("embedding")
         else:
-            print(f"Embedding API error {response.status_code}: {response.text[:200]}")
+            logger.info(f"Embedding API error {response.status_code}: {response.text[:200]}")
     except Exception as exc:
-        print(f"Embedding batch failed: {exc}")
+        logger.error(f"Embedding batch failed: {exc}")
 
     return results
 
@@ -269,7 +272,7 @@ def chunk_inline_material(
             try:
                 _generate_and_store_embeddings(conn, chunk_ids, chunk_texts, resolved_key)
             except Exception as exc:
-                print(f"Inline material embedding failed (non-fatal): {exc}")
+                logger.info(f"Inline material embedding failed (non-fatal): {exc}")
                 conn.rollback()  # discard any partial embedding UPDATEs
 
         # Mark the material processed so the UI shows it as ready.
@@ -280,7 +283,7 @@ def chunk_inline_material(
             )
             conn.commit()
         except Exception as exc:
-            print(f"Failed to mark material {material_id} complete: {exc}")
+            logger.error(f"Failed to mark material {material_id} complete: {exc}")
             conn.rollback()
 
     return len(chunk_ids)
@@ -347,7 +350,7 @@ def process_material(
             resolved_key = openrouter_key or _get_openrouter_key_for_debate(cursor, debate_id)
             if not resolved_key:
                 raise Exception("Audio transcription requires an OpenRouter API key")
-            print(f"Transcribing audio material {material_id} ({mime_type})")
+            logger.info(f"Transcribing audio material {material_id} ({mime_type})")
             transcript = _transcribe_audio(file_data, mime_type, resolved_key)
             if not transcript.strip():
                 raise Exception("Transcription produced no text")
@@ -434,9 +437,9 @@ def process_material(
         embeddings_generated = 0
 
         if resolved_key:
-            print(f"Generating embeddings for {len(chunk_ids)} chunks (material {material_id})")
+            logger.info(f"Generating embeddings for {len(chunk_ids)} chunks (material {material_id})")
             embeddings_generated = _generate_and_store_embeddings(conn, chunk_ids, chunk_texts, resolved_key)
-            print(f"Embedded {embeddings_generated}/{len(chunk_ids)} chunks")
+            logger.info(f"Embedded {embeddings_generated}/{len(chunk_ids)} chunks")
         else:
             print(
                 f"No OpenRouter key available — skipping embeddings for material {material_id}. "
@@ -479,7 +482,7 @@ def process_material(
 
     except Exception as e:
         error_msg = str(e)
-        print(f"Error processing material {material_id}: {error_msg}")
+        logger.error(f"Error processing material {material_id}: {error_msg}")
 
         if conn:
             try:
@@ -493,7 +496,7 @@ def process_material(
                 )
                 conn.commit()
             except Exception as update_error:
-                print(f"Failed to update error status: {update_error}")
+                logger.error(f"Failed to update error status: {update_error}")
 
         raise
 
@@ -530,21 +533,21 @@ def generate_debate_embeddings(self, debate_id: str, openrouter_key: str):
         rows = cursor.fetchall()
 
         if not rows:
-            print(f"No unembedded chunks for debate {debate_id}")
+            logger.info(f"No unembedded chunks for debate {debate_id}")
             return {"debate_id": debate_id, "embedded": 0, "skipped": 0}
 
         chunk_ids = [str(r[0]) for r in rows]
         chunk_texts = [r[1] for r in rows]
 
-        print(f"Backfill: embedding {len(chunk_ids)} chunks for debate {debate_id}")
+        logger.info(f"Backfill: embedding {len(chunk_ids)} chunks for debate {debate_id}")
         embedded = _generate_and_store_embeddings(conn, chunk_ids, chunk_texts, openrouter_key)
         failed = len(chunk_ids) - embedded
 
-        print(f"Backfill complete: {embedded} embedded, {failed} failed")
+        logger.info(f"Backfill complete: {embedded} embedded, {failed} failed")
         return {"debate_id": debate_id, "embedded": embedded, "failed": failed}
 
     except Exception as exc:
-        print(f"generate_debate_embeddings failed for {debate_id}: {exc}")
+        logger.info(f"generate_debate_embeddings failed for {debate_id}: {exc}")
         raise
 
     finally:

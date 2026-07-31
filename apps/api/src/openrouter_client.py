@@ -4,6 +4,9 @@ import time
 from typing import Dict, Any, Optional
 from tenacity import retry, stop_after_attempt, wait_exponential
 from .config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class OpenRouterError(Exception):
@@ -137,7 +140,7 @@ class OpenRouterClient:
                             participant=_participant,
                         )
                     except Exception as _log_exc:
-                        print(f"[eval_logger] log_llm_call failed: {_log_exc}")
+                        logger.error(f"[eval_logger] log_llm_call failed: {_log_exc}")
                 # ─────────────────────────────────────────────────────────
 
                 return result
@@ -159,7 +162,8 @@ class OpenRouterClient:
                         error="OpenRouter error — see API logs",
                     )
                 except Exception:
-                    pass
+                    logger.debug("Eval log write failed while handling an API error",
+                                 exc_info=True)
             raise
         except httpx.TimeoutException:
             raise OpenRouterError(f"OpenRouter request timed out after {self.timeout}s")

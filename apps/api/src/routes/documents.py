@@ -16,6 +16,10 @@ from ..schemas.documents import (
     DocumentListResponse,
 )
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
@@ -98,7 +102,7 @@ async def create_document(
                     auto_idx += 1
             document = service.get_document(doc_id)
         except Exception as _assign_exc:
-            print(f"⚠️ Document section auto-assignment failed (non-fatal): {_assign_exc}")
+            logger.warning(f"⚠️ Document section auto-assignment failed (non-fatal): {_assign_exc}")
 
         return DocumentResponse(**document)
         

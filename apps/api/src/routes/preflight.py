@@ -15,6 +15,9 @@ from src.auth import get_current_user, check_workspace_access
 from src.database import get_cursor
 from src.tasks.preflight import orchestrate_preflight
 from src.services.memory_retrieval import get_query_embedding
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -179,7 +182,7 @@ def start_preflight(
                 WHERE debate_id = %s
             """, (Json(policy_config), debate_id))
             conn.commit()
-            print(f"✅ OpenRouter key stored in policy_config for preflight generation")
+            logger.info(f"✅ OpenRouter key stored in policy_config for preflight generation")
         
         # Create participant run entries with query embeddings (BYOK-safe)
         participant_runs = []
@@ -230,9 +233,9 @@ def start_preflight(
             try:
                 from src.tasks.material_processing import generate_debate_embeddings
                 generate_debate_embeddings.delay(debate_id, x_openrouter_key)
-                print(f"✅ Embedding backfill queued for debate {debate_id}")
+                logger.info(f"✅ Embedding backfill queued for debate {debate_id}")
             except Exception as embed_err:
-                print(f"⚠️  Could not queue embedding backfill: {embed_err}")
+                logger.warning(f"⚠️  Could not queue embedding backfill: {embed_err}")
 
         # Import threading to run preflight in background
         import threading
@@ -241,18 +244,18 @@ def start_preflight(
         # Start preflight in background thread (non-blocking)
         def run_preflight_background():
             try:
-                print(f"🔄 Starting preflight in background: run_id={run_id}, debate_id={debate_id}")
+                logger.info(f"🔄 Starting preflight in background: run_id={run_id}, debate_id={debate_id}")
                 orchestrate_preflight_impl(run_id, debate_id)
-                print(f"✅ Preflight completed: run_id={run_id}")
+                logger.info(f"✅ Preflight completed: run_id={run_id}")
             except Exception as e:
-                print(f"❌ Background preflight failed: {e}")
+                logger.error(f"❌ Background preflight failed: {e}")
                 import traceback
                 traceback.print_exc()
         
         # Launch background thread
         thread = threading.Thread(target=run_preflight_background, daemon=True)
         thread.start()
-        print(f"✅ Preflight started in background thread, returning immediately")
+        logger.info(f"✅ Preflight started in background thread, returning immediately")
         
         # Return immediately with initial status (frontend will poll for updates)
         return PreflightStartResponse(
@@ -267,8 +270,8 @@ def start_preflight(
         raise
     except Exception as e:
         import traceback
-        print(f"❌ Preflight route error: {e}")
-        print(f"❌ Error type: {type(e)}")
+        logger.error(f"❌ Preflight route error: {e}")
+        logger.error(f"❌ Error type: {type(e)}")
         traceback.print_exc()
         conn.rollback()
         raise HTTPException(

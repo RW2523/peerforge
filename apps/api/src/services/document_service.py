@@ -148,11 +148,11 @@ class DocumentService:
             sections = [dict(row) for row in cursor.fetchall()]
             
             # DEBUG: Check if content is in sections
-            print(f"\n📋 DEBUG get_document sections:")
+            logger.debug(f"\n📋 DEBUG get_document sections:")
             for idx, s in enumerate(sections):
                 has_content = 'content' in s and s['content'] is not None
                 content_len = len(s.get('content', '')) if has_content else 0
-                print(f"  Section {idx}: {s.get('section_title')} - content: {has_content} ({content_len} chars)")
+                logger.info(f"  Section {idx}: {s.get('section_title')} - content: {has_content} ({content_len} chars)")
             print()
             
             # Calculate metadata

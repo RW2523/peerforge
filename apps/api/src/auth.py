@@ -3,6 +3,9 @@ import jwt
 from typing import Optional, Dict, Any, List
 from fastapi import HTTPException, status, Header
 from .config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 async def get_current_user_ws(token: str) -> Dict[str, Any]:
@@ -278,7 +281,7 @@ def _accept_pending_invitation(conn, cursor, user_id: str, email: Optional[str])
         conn.commit()
     except Exception as exc:
         conn.rollback()
-        print(f"[auth] Could not redeem invitation for {email}: {exc}")
+        logger.info(f"[auth] Could not redeem invitation for {email}: {exc}")
         return None
 
     cursor.execute("""

@@ -1,7 +1,14 @@
 """PeerForge API entry point"""
-from fastapi import FastAPI, WebSocket
+import logging
+import time
+
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
+from .logging_setup import bind_request_id, configure_logging, new_request_id, request_id_var
+
+configure_logging(settings.log_level, settings.log_format)
+logger = logging.getLogger("peerforge.api")
 from .routes import (
     health, agents, debates, turns, setup, summary, events, openrouter,
     personas, materials, memory, preflight, embeddings,
@@ -87,6 +94,43 @@ app.include_router(conversational_setup_router, tags=["conversational-setup"])
 
 from .routes.readiness import router as readiness_router
 app.include_router(readiness_router, tags=["readiness"])
+
+
+@app.middleware("http")
+async def request_context(request: Request, call_next):
+    """
+    Tag every request so its log lines can be found together.
+
+    Honours an inbound X-Request-Id, so a trace started at a proxy or by the
+    browser survives into these logs instead of restarting here.
+    """
+    request_id = request.headers.get("x-request-id") or new_request_id()
+    token = bind_request_id(request_id)
+    started = time.perf_counter()
+
+    try:
+        response = await call_next(request)
+    except Exception:
+        # Log before FastAPI turns it into a 500, while the id is still bound.
+        logger.exception(
+            "Unhandled error: %s %s", request.method, request.url.path
+        )
+        request_id_var.reset(token)
+        raise
+
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    # Server errors and slow requests are the ones worth reading later.
+    level = logging.ERROR if response.status_code >= 500 else (
+        logging.WARNING if elapsed_ms > 5000 else logging.INFO
+    )
+    logger.log(
+        level,
+        "%s %s -> %s in %.0fms",
+        request.method, request.url.path, response.status_code, elapsed_ms,
+    )
+    response.headers["X-Request-Id"] = request_id
+    request_id_var.reset(token)
+    return response
 
 
 # ── Account key resolution ───────────────────────────────────────────────────

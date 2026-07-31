@@ -79,14 +79,14 @@ class WebSocketCommandHandlers:
     
     async def handle_next_turn(self, websocket: WebSocket, debate_id: str, user_id: str, request_id: str, payload: Dict, create_envelope_fn, create_ack_fn, create_error_fn):
         """Handle control.next_turn — ACK immediately, execute turn as background task."""
-        print(f"\n🎮 WEBSOCKET COMMAND: control.next_turn received")
-        print(f"   Debate ID: {debate_id}")
-        print(f"   User ID: {user_id}")
-        print(f"   Request ID: {request_id}")
+        logger.info(f"\n🎮 WEBSOCKET COMMAND: control.next_turn received")
+        logger.info(f"   Debate ID: {debate_id}")
+        logger.info(f"   User ID: {user_id}")
+        logger.info(f"   Request ID: {request_id}")
 
         openrouter_key = payload.get('openrouter_key')
         if not openrouter_key:
-            print("❌ ERROR: No OpenRouter key in payload!")
+            logger.error("❌ ERROR: No OpenRouter key in payload!")
             await self.manager.send_to_client(
                 websocket, create_error_fn(request_id, 'control.next_turn', 'OpenRouter API key required')
             )
@@ -94,7 +94,7 @@ class WebSocketCommandHandlers:
 
         # Prevent concurrent turns for the same debate
         if debate_id in self._turns_in_progress:
-            print(f"⚠️  Turn already in progress for debate {debate_id}")
+            logger.warning(f"⚠️  Turn already in progress for debate {debate_id}")
             await self.manager.send_to_client(
                 websocket,
                 create_error_fn(request_id, 'control.next_turn', 'Turn already in progress — wait for the current agent to finish')
@@ -105,7 +105,7 @@ class WebSocketCommandHandlers:
 
         # ACK immediately so the WebSocket receive loop is unblocked for heartbeats/other commands
         await self.manager.send_to_client(websocket, create_ack_fn(request_id, 'control.next_turn'))
-        print(f"✅ ACK sent; scheduling background turn for debate {debate_id}\n")
+        logger.info(f"✅ ACK sent; scheduling background turn for debate {debate_id}\n")
 
         # Run the actual LLM turn as a background task
         asyncio.create_task(
@@ -126,7 +126,7 @@ class WebSocketCommandHandlers:
                 return orchestrator.trigger_next_turn(debate_id)
 
             result = await asyncio.to_thread(run_turn)
-            print(f"✅ Background turn completed for debate {debate_id}")
+            logger.info(f"✅ Background turn completed for debate {debate_id}")
 
             # Broadcast with field names matching the DB schema so historical + real-time are consistent:
             #   text       — message body (matches events.content->>'text')
@@ -148,10 +148,10 @@ class WebSocketCommandHandlers:
                 sender_id=result['participant_id']
             )
             await self.manager.broadcast_to_debate(debate_id, envelope)
-            print(f"✅ agent_message broadcast complete for debate {debate_id}\n")
+            logger.info(f"✅ agent_message broadcast complete for debate {debate_id}\n")
 
         except Exception as e:
-            print(f"❌ Background turn error for debate {debate_id}: {e}")
+            logger.error(f"❌ Background turn error for debate {debate_id}: {e}")
             import traceback
             traceback.print_exc()
             # Broadcast an error event so the room UI can react
@@ -217,11 +217,11 @@ class WebSocketCommandHandlers:
     
     async def handle_intervene(self, websocket: WebSocket, debate_id: str, user_id: str, request_id: str, payload: Dict, persist_event_fn, create_envelope_fn, create_ack_fn, create_error_fn):
         """Handle intervene command."""
-        print(f"\n🎙️ INTERVENTION RECEIVED:")
-        print(f"   Debate ID: {debate_id}")
-        print(f"   User ID: {user_id}")
-        print(f"   Message: {payload.get('message', '')[:100]}")
-        print(f"   Tagged agents: {payload.get('tagged_agents', [])}\n")
+        logger.info(f"\n🎙️ INTERVENTION RECEIVED:")
+        logger.info(f"   Debate ID: {debate_id}")
+        logger.info(f"   User ID: {user_id}")
+        logger.info(f"   Message: {payload.get('message', '')[:100]}")
+        logger.info(f"   Tagged agents: {payload.get('tagged_agents', [])}\n")
         
         try:
             message_text = payload.get('message')
@@ -236,7 +236,7 @@ class WebSocketCommandHandlers:
                 'action': 'intervene'
             }, sender_id=user_id)
             
-            print(f"✅ Intervention persisted as human_message with event_id: {event_data.get('event_id') if event_data else 'FAILED'}\n")
+            logger.info(f"✅ Intervention persisted as human_message with event_id: {event_data.get('event_id') if event_data else 'FAILED'}\n")
             
             if event_data:
                 # Broadcast as 'human_message' type for consistency
@@ -254,11 +254,11 @@ class WebSocketCommandHandlers:
                     sender_id=user_id
                 )
                 await self.manager.broadcast_to_debate(debate_id, envelope)
-                print(f"✅ Intervention broadcasted to all debate participants\n")
+                logger.info(f"✅ Intervention broadcasted to all debate participants\n")
             
             await self.manager.send_to_client(websocket, create_ack_fn(request_id, 'intervene'))
         except Exception as e:
-            print(f"❌ ERROR handling intervention: {e}")
+            logger.error(f"❌ ERROR handling intervention: {e}")
             import traceback
             traceback.print_exc()
             await self.manager.send_to_client(websocket, create_error_fn(request_id, 'intervene', str(e)))

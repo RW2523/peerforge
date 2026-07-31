@@ -12,6 +12,9 @@ import psycopg2.extras
 from .agent_service import AgentService
 from .database import get_db_connection, get_cursor
 from .debate_service import DebateService
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class MeetingSetupError(ValueError):
@@ -216,7 +219,7 @@ class MeetingSetupService:
                     descriptor = f"Reference link: {m.get('title') or ''}\n{m.get('url')}".strip()
                     chunk_inline_material(debate_id, material_id, descriptor, category="supplementary")
             except Exception as exc:
-                print(f"Inline material chunking failed (non-fatal) for {material_id}: {exc}")
+                logger.info(f"Inline material chunking failed (non-fatal) for {material_id}: {exc}")
 
         return ids
 

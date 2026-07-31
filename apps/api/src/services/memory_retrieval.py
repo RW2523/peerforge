@@ -13,6 +13,9 @@ from psycopg2.extras import Json
 from src.config import settings
 from src.database import get_cursor
 from src.schemas.memory import MemoryChunkResult, MemoryRetrievalResponse
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
@@ -86,7 +89,7 @@ def get_query_embedding(
             
             return None
     except Exception as e:
-        print(f"Failed to generate query embedding: {e}")
+        logger.error(f"Failed to generate query embedding: {e}")
         return None
 
 
@@ -222,7 +225,7 @@ def retrieve_allowed_chunks(
             # Generate query embedding
             actual_query_embedding = get_query_embedding(query, openrouter_key, embeddings_model_id)
             if actual_query_embedding is None:
-                print(f"memory_retrieval: query embedding failed (model={embeddings_model_id}) — falling back to keyword search")
+                logger.info(f"memory_retrieval: query embedding failed (model={embeddings_model_id}) — falling back to keyword search")
         
         if actual_query_embedding:
             retrieval_method = 'semantic'
@@ -279,7 +282,7 @@ def retrieve_allowed_chunks(
                             'score': similarity,
                         })
                     else:
-                        print(f"memory_retrieval: chunk {row['chunk_id']} marked complete but has no usable vector — skipping")
+                        logger.info(f"memory_retrieval: chunk {row['chunk_id']} marked complete but has no usable vector — skipping")
 
                 # Sort by similarity (descending) and take top_k
                 scored_chunks.sort(key=lambda x: x['score'], reverse=True)

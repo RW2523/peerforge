@@ -14,6 +14,9 @@ import re
 from typing import Any, Dict, List, Optional
 
 from .openrouter_client import OpenRouterClient
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Used only when a participant has no model configured.
 DEFAULT_REASONING_MODEL = "openai/gpt-4o-mini"
@@ -95,7 +98,7 @@ class AgentReasoningEngine:
 
         regenerated = False
         if not is_valid:
-            print(f"    [reasoning] Validation failed for {agent_name}: {failure_reason}")
+            logger.info(f"    [reasoning] Validation failed for {agent_name}: {failure_reason}")
             regenerated_prompt = self._build_reasoning_prompt(
                 agent_name=agent_name,
                 agent_role=agent_role,
@@ -120,7 +123,7 @@ class AgentReasoningEngine:
         # regenerated for a validation failure, the reasoning is fresh — skip
         # the extra repetition regeneration to keep live turns responsive.
         if not regenerated and reasoning.get("am_i_repeating") == "repeat":
-            print(f"    [reasoning] Repetition detected for {agent_name} — regenerating")
+            logger.info(f"    [reasoning] Repetition detected for {agent_name} — regenerating")
             repeat_prompt = self._build_reasoning_prompt(
                 agent_name=agent_name,
                 agent_role=agent_role,
@@ -198,9 +201,9 @@ class AgentReasoningEngine:
             return reasoning
 
         except (json.JSONDecodeError, ValueError) as exc:
-            print(f"    [reasoning] Parse error for {agent_name}: {exc}")
+            logger.info(f"    [reasoning] Parse error for {agent_name}: {exc}")
         except Exception as exc:
-            print(f"    [reasoning] Engine error for {agent_name}: {exc}")
+            logger.info(f"    [reasoning] Engine error for {agent_name}: {exc}")
 
         return {
             "current_stance": "maintain previous analytical position",

@@ -7,6 +7,9 @@ from ..debate_service import DebateService
 from ..turn_orchestrator import TurnOrchestrator
 from ..host_orchestrator import HostOrchestrator
 from ..openrouter_client import OpenRouterAuthError
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -147,7 +150,7 @@ async def conclude_debate_with_host(
                 system_prompt='',
             )
         except Exception as _doc_exc:
-            print(f"⚠️ Host document section write failed (non-fatal): {_doc_exc}")
+            logger.warning(f"⚠️ Host document section write failed (non-fatal): {_doc_exc}")
 
         # Broadcast host conclusion via WebSocket to all clients in the room
         from src.websocket_service import ws_service

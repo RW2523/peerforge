@@ -1,3 +1,6 @@
+import logging
+
+logger = logging.getLogger(__name__)
 """
 Debate Evaluation Logger
 ========================
@@ -340,7 +343,7 @@ class DebateEvalLogger:
                 mutate_fn(doc)
                 self._write(doc)
         except Exception as exc:  # noqa: BLE001
-            print(f"[eval_logger] WARNING: could not update log for {self.debate_id}: {exc}")
+            logger.info(f"[eval_logger] WARNING: could not update log for {self.debate_id}: {exc}")
 
     @staticmethod
     def _set_setup(doc, title, problem_statement, participants,

@@ -11,6 +11,9 @@ import re
 from typing import Any, Dict, List, Optional
 
 from .openrouter_client import OpenRouterClient
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Used only when a participant has no model configured.
 DEFAULT_RESPONSE_MODEL = "openai/gpt-4o-mini"
@@ -283,7 +286,7 @@ class AgentResponseGenerator:
             # Returning stitched-together reasoning internals here would be
             # indistinguishable from a real review: the caller persists it,
             # broadcasts it, and spends one of the user's rounds on it.
-            print(f"    [response_gen] Error for {agent_name}: {exc}")
+            logger.error(f"    [response_gen] Error for {agent_name}: {exc}")
             raise ResponseGenerationError(
                 f"Response generation failed for {agent_name}: {exc}"
             ) from exc

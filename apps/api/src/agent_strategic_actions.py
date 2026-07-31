@@ -5,6 +5,9 @@ Agents can interrupt, propose votes, challenge structure, etc.
 
 from typing import Dict, List, Any, Optional
 from .openrouter_client import OpenRouterClient
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class AgentStrategicPlanner:
@@ -56,7 +59,7 @@ If no strong reason to interrupt: {{"should_interrupt": false}}
             import json
             return json.loads(response['content'])
         except Exception as e:
-            print(f"    ⚠️ Interrupt decision failed: {e}")
+            logger.error(f"    ⚠️ Interrupt decision failed: {e}")
             return None
     
     def decide_strategic_action(
@@ -113,6 +116,6 @@ Be selective. Only propose if truly helpful. Respond in JSON:"""
             if decision.get('move') != 'none':
                 return decision
         except Exception as e:
-            print(f"    ⚠️ Tactical move failed: {e}")
+            logger.error(f"    ⚠️ Tactical move failed: {e}")
         
         return None

@@ -13,6 +13,9 @@ from psycopg2.extras import Json
 from src.config import settings
 from src.database import get_cursor
 from src.services.memory_retrieval import retrieve_allowed_chunks
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Web search via Tavily (uses the key from settings.tavily_api_key)
 try:
@@ -43,7 +46,7 @@ def orchestrate_preflight_impl(run_id: str, debate_id: str):
     
     Fans out to prepare_participant_preflight for each participant
     """
-    print(f"🚀 Starting preflight orchestration: run_id={run_id}, debate_id={debate_id}")
+    logger.info(f"🚀 Starting preflight orchestration: run_id={run_id}, debate_id={debate_id}")
     
     conn = psycopg2.connect(settings.database_url)
     cursor = get_cursor(conn)
@@ -56,7 +59,7 @@ def orchestrate_preflight_impl(run_id: str, debate_id: str):
             WHERE run_id = %s
         """, (run_id,))
         conn.commit()
-        print(f"✅ Updated preflight run status to 'running'")
+        logger.info(f"✅ Updated preflight run status to 'running'")
         
         # Get all participants for this run
         cursor.execute("""
@@ -85,20 +88,20 @@ def orchestrate_preflight_impl(run_id: str, debate_id: str):
         def _prep(run):
             participant_id = run['participant_id']
             try:
-                print(f"  → Processing participant {participant_id}...")
+                logger.info(f"  → Processing participant {participant_id}...")
                 prepare_participant_preflight(
                     participant_run_id=run['participant_run_id'],
                     participant_id=participant_id,
                     debate_id=debate_id,
                 )
-                print(f"  ✅ Participant {participant_id} prepared successfully")
+                logger.info(f"  ✅ Participant {participant_id} prepared successfully")
             except Exception as e:
-                print(f"  ❌ Error preparing participant {participant_id}: {e}")
+                logger.error(f"  ❌ Error preparing participant {participant_id}: {e}")
                 import traceback
                 traceback.print_exc()
                 # Continue with other participants
 
-        print(f"📋 Processing {len(participant_runs)} participants (parallel)...")
+        logger.info(f"📋 Processing {len(participant_runs)} participants (parallel)...")
         max_workers = min(len(participant_runs), 4)
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = [pool.submit(_prep, run) for run in participant_runs]
@@ -114,7 +117,7 @@ def orchestrate_preflight_impl(run_id: str, debate_id: str):
         """, (run_id,))
         
         status_counts = {row['status']: row['count'] for row in cursor.fetchall()}
-        print(f"📊 Participant status summary: {status_counts}")
+        logger.debug(f"📊 Participant status summary: {status_counts}")
         
         # Determine overall run status
         if status_counts.get('failed', 0) > 0 or status_counts.get('running', 0) > 0:
@@ -122,7 +125,7 @@ def orchestrate_preflight_impl(run_id: str, debate_id: str):
         else:
             final_status = 'completed'
         
-        print(f"🏁 Preflight orchestration complete: status={final_status}")
+        logger.info(f"🏁 Preflight orchestration complete: status={final_status}")
         
         cursor.execute("""
             UPDATE preflight_runs
@@ -154,7 +157,7 @@ def prepare_participant_preflight(participant_run_id: str, participant_id: str, 
     3. Generate prep pack via OpenRouter
     4. Persist as agent_knowledge_units
     """
-    print(f"    🔄 Preparing participant: run_id={participant_run_id}, participant={participant_id}")
+    logger.info(f"    🔄 Preparing participant: run_id={participant_run_id}, participant={participant_id}")
     
     conn = psycopg2.connect(settings.database_url)
     cursor = get_cursor(conn)
@@ -167,7 +170,7 @@ def prepare_participant_preflight(participant_run_id: str, participant_id: str, 
             WHERE participant_run_id = %s
         """, (participant_run_id,))
         conn.commit()
-        print(f"    ✓ Status updated to 'running'")
+        logger.info(f"    ✓ Status updated to 'running'")
         
         # Broadcast progress event via WebSocket
         _broadcast_preflight_progress(debate_id, participant_id, 'running', 'Reading materials and context')
@@ -229,12 +232,12 @@ def prepare_participant_preflight(participant_run_id: str, participant_id: str, 
                     Json(model_config) if model_config else None
                 ))
                 conn.commit()
-                print(f"    ✓ Created temporary agent record for inline participant")
+                logger.info(f"    ✓ Created temporary agent record for inline participant")
             
             agent_id = participant_id
         
         effective_agent_id = agent_id
-        print(f"    ✓ Agent identity: id={effective_agent_id}")
+        logger.info(f"    ✓ Agent identity: id={effective_agent_id}")
         
         # Update participant run with agent_id
         cursor.execute("""
@@ -245,7 +248,7 @@ def prepare_participant_preflight(participant_run_id: str, participant_id: str, 
         conn.commit()
         
         # 2. Gather context using semantic retrieval (TICKET-13C, TICKET-13C.1)
-        print(f"    🔍 Gathering context...")
+        logger.debug(f"    🔍 Gathering context...")
         problem_statement = policy_config.get('problem_statement', '') if policy_config else ''
         
         # Get pre-computed query embedding from participant_run metadata (BYOK-safe)
@@ -276,9 +279,9 @@ def prepare_participant_preflight(participant_run_id: str, participant_id: str, 
             all_chunks = memory_retrieval_result.chunks
             grant_ids_used = memory_retrieval_result.grant_ids_used
             retrieval_method = memory_retrieval_result.retrieval_method
-            print(f"    ✓ Retrieved {len(all_chunks)} chunks via {retrieval_method}")
+            logger.info(f"    ✓ Retrieved {len(all_chunks)} chunks via {retrieval_method}")
         except Exception as e:
-            print(f"    ⚠️  Memory retrieval failed: {e}")
+            logger.error(f"    ⚠️  Memory retrieval failed: {e}")
             all_chunks = []
             grant_ids_used = []
             retrieval_method = 'error'
@@ -309,8 +312,8 @@ def prepare_participant_preflight(participant_run_id: str, participant_id: str, 
 
                 # Build a concise, search-friendly query from the problem statement
                 search_query = problem_statement[:300].strip()
-                print(f"    🔍 Tavily web search for preflight")
-                print(f"    📝 Query: {search_query[:150]}")
+                logger.debug(f"    🔍 Tavily web search for preflight")
+                logger.debug(f"    📝 Query: {search_query[:150]}")
 
                 tavily = _TavilyClient(api_key=tavily_key)
                 response = tavily.search(
@@ -339,18 +342,18 @@ def prepare_participant_preflight(participant_run_id: str, participant_id: str, 
                             "snippet": content,
                             "url":     url,
                         })
-                    print(f"    ✅ Tavily returned {len(results)} results")
-                    print(f"    🔗 First 3 URLs: {', '.join(web_search_urls[:3])}")
+                    logger.info(f"    ✅ Tavily returned {len(results)} results")
+                    logger.info(f"    🔗 First 3 URLs: {', '.join(web_search_urls[:3])}")
                 else:
-                    print(f"    ℹ️ Tavily returned no results")
+                    logger.info(f"    ℹ️ Tavily returned no results")
 
             except Exception as e:
                 import traceback
-                print(f"    ⚠️ Web search failed: {e}")
+                logger.error(f"    ⚠️ Web search failed: {e}")
                 traceback.print_exc()
                 web_research_results = ""
         elif not tavily_key:
-            print(f"    ⚠️ TAVILY_API_KEY not set — skipping web research")
+            logger.warning(f"    ⚠️ TAVILY_API_KEY not set — skipping web research")
         
         # 3b. Build role-specific prep prompt using the persona_prompts module
         from src.services.persona_prompts import get_preflight_prep_prompt, resolve_role
@@ -386,7 +389,7 @@ def prepare_participant_preflight(participant_run_id: str, participant_id: str, 
         
         if not openrouter_key:
             # For V1, create a placeholder prep pack (no real OpenRouter call)
-            print(f"    📝 Generating placeholder prep pack (no OpenRouter key)")
+            logger.debug(f"    📝 Generating placeholder prep pack (no OpenRouter key)")
             prep_pack_content = f"""**Preparation Memo**
 
 **Role**: {system_prompt[:100] if system_prompt else 'Strategic advisor'}
@@ -405,7 +408,7 @@ This is a placeholder prep pack generated without OpenRouter key. In production,
 
 **Status**: Generated successfully with {len(material_chunks)} material chunks and {len(imported_chunks)} imported memory chunks."""
         else:
-            print(f"    🤖 Calling OpenRouter for prep pack generation...")
+            logger.info(f"    🤖 Calling OpenRouter for prep pack generation...")
             # Real OpenRouter call
             try:
                 client = OpenRouterClient(api_key=openrouter_key)
@@ -430,7 +433,7 @@ This is a placeholder prep pack generated without OpenRouter key. In production,
                 enhanced_config['max_tokens'] = 2000  # Allow longer prep packs
                 enhanced_config['temperature'] = 0.8  # Higher for more personality in prep
                 
-                print(f"    🎭 Using persona: {role_description[:50]}...")
+                logger.info(f"    🎭 Using persona: {role_description[:50]}...")
                 
                 response = client.chat_completion(
                     model=model_id,
@@ -446,7 +449,7 @@ This is a placeholder prep pack generated without OpenRouter key. In production,
                 prep_pack_content = response.get('content', '')
                 
                 if not prep_pack_content or len(prep_pack_content.strip()) == 0:
-                    print(f"    ⚠️ OpenRouter returned empty content! Creating fallback prep pack...")
+                    logger.warning(f"    ⚠️ OpenRouter returned empty content! Creating fallback prep pack...")
                     prep_pack_content = f"""**Preparation Memo** (Fallback - OpenRouter returned empty response)
 
 **Current Date**: {current_date_str}
@@ -460,19 +463,19 @@ This is a placeholder prep pack generated without OpenRouter key. In production,
 
 **Status**: OpenRouter returned an empty response. Web research data was collected but LLM failed to generate prep pack."""
                 else:
-                    print(f"    ✅ Generated prep pack: {len(prep_pack_content)} chars")
+                    logger.info(f"    ✅ Generated prep pack: {len(prep_pack_content)} chars")
                     
                     # Log if web research was included
                     if web_search_urls:
-                        print(f"    📊 Web research was available ({len(web_search_urls)} URLs)")
+                        logger.debug(f"    📊 Web research was available ({len(web_search_urls)} URLs)")
                         # Check if URLs are actually cited in content
                         citations_found = sum(1 for url in web_search_urls[:3] if url in prep_pack_content)
                         if citations_found == 0:
-                            print(f"    ⚠️ WARNING: No web sources were cited in the prep pack content!")
+                            logger.warning(f"    ⚠️ WARNING: No web sources were cited in the prep pack content!")
                         else:
-                            print(f"    ✓ {citations_found} sources cited in prep pack")
+                            logger.info(f"    ✓ {citations_found} sources cited in prep pack")
             except Exception as e:
-                print(f"    ❌ OpenRouter error: {str(e)}")
+                logger.error(f"    ❌ OpenRouter error: {str(e)}")
                 prep_pack_content = f"Error calling OpenRouter: {str(e)}\n\nFallback prep pack with {len(material_chunks)} materials and {len(imported_chunks)} imported chunks."
         
         # 5. Persist prep pack as agent_knowledge_units (TICKET-13C: include retrieval metadata)
@@ -517,7 +520,7 @@ This is a placeholder prep pack generated without OpenRouter key. In production,
         ))
         
         prep_pack_knowledge_id = cursor.fetchone()['knowledge_id']
-        print(f"    ✓ Prep pack persisted: knowledge_id={prep_pack_knowledge_id}")
+        logger.info(f"    ✓ Prep pack persisted: knowledge_id={prep_pack_knowledge_id}")
 
         # ── Eval log: record preflight prep pack ──────────────────────
         try:
@@ -529,7 +532,7 @@ This is a placeholder prep pack generated without OpenRouter key. In production,
                 prep_pack=prep_pack_content,
             )
         except Exception as _log_exc:
-            print(f"[eval_logger] log_preflight_participant failed: {_log_exc}")
+            logger.error(f"[eval_logger] log_preflight_participant failed: {_log_exc}")
         # ─────────────────────────────────────────────────────────────
         
         # 6. Update participant run to success (TICKET-13C: include retrieval metadata)
@@ -553,7 +556,7 @@ This is a placeholder prep pack generated without OpenRouter key. In production,
             participant_run_id
         ))
         conn.commit()
-        print(f"    ✅ Participant preparation complete!")
+        logger.info(f"    ✅ Participant preparation complete!")
         
         # Broadcast completion event
         _broadcast_preflight_progress(debate_id, participant_id, 'success', 'Preparation complete')
@@ -573,7 +576,7 @@ This is a placeholder prep pack generated without OpenRouter key. In production,
             # Broadcast failure event
             _broadcast_preflight_progress(debate_id, participant_id, 'failed', f'Error: {str(e)[:100]}')
         except Exception as update_error:
-            print(f"    ⚠️  Failed to update participant status: {update_error}")
+            logger.error(f"    ⚠️  Failed to update participant status: {update_error}")
         raise
     finally:
         cursor.close()
@@ -602,7 +605,7 @@ def _broadcast_preflight_progress(debate_id: str, participant_id: str, status: s
         else:
             loop.run_until_complete(websocket_manager.broadcast_to_debate(debate_id, event))
     except Exception as e:
-        print(f"    ⚠️  Failed to broadcast progress: {e}")
+        logger.error(f"    ⚠️  Failed to broadcast progress: {e}")
 
 
 # Create Celery task wrapper if Celery is available

@@ -7,6 +7,9 @@ from typing import Dict, List, Any, Optional
 from .debate_validator import DebateValidator, DebatePositionAssigner
 from .database import get_db_connection, get_cursor
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class DebateEnhancer:
@@ -36,9 +39,9 @@ class DebateEnhancer:
         Extracts dimensions and assigns diverse positions to agents.
         """
         
-        print(f"\n🎯 INITIALIZING DEBATE POSITIONS")
-        print(f"   Debate: {debate_title}")
-        print(f"   Participants: {len(participants)}")
+        logger.info(f"\n🎯 INITIALIZING DEBATE POSITIONS")
+        logger.info(f"   Debate: {debate_title}")
+        logger.info(f"   Participants: {len(participants)}")
         
         # Extract debate dimensions
         dimensions = self.position_assigner.extract_debate_dimensions(
@@ -63,7 +66,7 @@ class DebateEnhancer:
         # Persist to database
         self._persist_positions(debate_id, dimensions, self.agent_positions[debate_id])
         
-        print(f"✅ Positions initialized for {len(participants)} agents\n")
+        logger.info(f"✅ Positions initialized for {len(participants)} agents\n")
         
         return participants_with_positions
     
@@ -112,9 +115,9 @@ class DebateEnhancer:
             }
         
         # Message rejected
-        print(f"\n⚠️ MESSAGE REJECTED - {agent_name} (Round {round_number})")
+        logger.warning(f"\n⚠️ MESSAGE REJECTED - {agent_name} (Round {round_number})")
         for rejection in validation_result['rejections']:
-            print(f"   {rejection}")
+            logger.info(f"   {rejection}")
         
         # Check if we should retry
         should_retry = retry_count < max_retries
@@ -160,7 +163,7 @@ class DebateEnhancer:
                     for r in results
                 ]
         except Exception as e:
-            print(f"⚠️ Failed to get debate history: {e}")
+            logger.error(f"⚠️ Failed to get debate history: {e}")
             return []
     
     def _get_agent_messages(self, debate_id: str, agent_name: str, limit: int = 5) -> List[str]:
@@ -181,7 +184,7 @@ class DebateEnhancer:
                 results = cursor.fetchall()
                 return [r['content'].get('text', '') for r in results]
         except Exception as e:
-            print(f"⚠️ Failed to get agent messages: {e}")
+            logger.error(f"⚠️ Failed to get agent messages: {e}")
             return []
     
     def _persist_positions(
@@ -210,10 +213,10 @@ class DebateEnhancer:
                 ))
                 
                 conn.commit()
-                print(f"✅ Positions persisted to database")
+                logger.info(f"✅ Positions persisted to database")
                 
         except Exception as e:
-            print(f"⚠️ Failed to persist positions: {e}")
+            logger.error(f"⚠️ Failed to persist positions: {e}")
     
     def generate_enhanced_prompt(
         self,

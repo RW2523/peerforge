@@ -9,6 +9,9 @@ from typing import Optional, Dict, Any
 from .database import get_db_connection, get_cursor
 from .turn_orchestrator import TurnOrchestrator
 from .summary_service import SummaryService
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Termination bounds. Every autonomous turn issues paid LLM calls, so the loop
 # must terminate even when a debate was created with no policy at all.
@@ -86,12 +89,12 @@ class AutonomousDebateService:
         # Restart background task if not already running
         if debate_id not in self.running_debates and result:
             auto_turn_delay = result.get('auto_turn_delay_seconds', 10)
-            print(f"🔄 Restarting autonomous loop for debate {debate_id}")
+            logger.info(f"🔄 Restarting autonomous loop for debate {debate_id}")
             task = asyncio.create_task(
                 self._run_autonomous_loop(debate_id, openrouter_api_key, auto_turn_delay)
             )
             self.running_debates[debate_id] = task
-            print(f"✅ Autonomous loop restarted")
+            logger.info(f"✅ Autonomous loop restarted")
     
     async def _run_autonomous_loop(
         self,
@@ -123,15 +126,15 @@ class AutonomousDebateService:
                 # Trigger next turn
                 try:
                     result = orchestrator.trigger_next_turn(debate_id)
-                    print(f"🤖 Auto-turn completed: {result.get('agent_name')}")
+                    logger.info(f"🤖 Auto-turn completed: {result.get('agent_name')}")
                     consecutive_failures = 0
                 except Exception as e:
                     consecutive_failures += 1
-                    print(f"❌ Auto-turn failed ({consecutive_failures}/{MAX_CONSECUTIVE_FAILURES}): {e}")
+                    logger.error(f"❌ Auto-turn failed ({consecutive_failures}/{MAX_CONSECUTIVE_FAILURES}): {e}")
                     if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
                         # A provider outage or a misconfigured debate would
                         # otherwise retry forever, paying for each attempt.
-                        print(f"⛔ Pausing {debate_id} after {consecutive_failures} consecutive failures")
+                        logger.error(f"⛔ Pausing {debate_id} after {consecutive_failures} consecutive failures")
                         self._set_status(debate_id, 'paused')
                         break
                     await asyncio.sleep(delay_seconds * consecutive_failures)
@@ -141,7 +144,7 @@ class AutonomousDebateService:
                 await asyncio.sleep(delay_seconds)
                 
         except Exception as e:
-            print(f"❌ Autonomous loop crashed: {e}")
+            logger.error(f"❌ Autonomous loop crashed: {e}")
             self._set_status(debate_id, 'paused')
         finally:
             if debate_id in self.running_debates:
@@ -183,7 +186,7 @@ class AutonomousDebateService:
             cursor.close()
             
             if not result:
-                print(f"⚠️ No debate found for {debate_id}")
+                logger.warning(f"⚠️ No debate found for {debate_id}")
                 return True
             
             policy = result['policy_config'] or {}
@@ -200,7 +203,7 @@ class AutonomousDebateService:
             # Absolute ceiling: even a misconfigured policy cannot spend without
             # bound, because every turn issues paid LLM calls.
             if turn_count >= MAX_TURNS_HARD_CEILING:
-                print(f"⛔ Ending due to hard turn ceiling: {turn_count} >= {MAX_TURNS_HARD_CEILING}")
+                logger.error(f"⛔ Ending due to hard turn ceiling: {turn_count} >= {MAX_TURNS_HARD_CEILING}")
                 return True
 
             # Check max_rounds. Falls back to a default so that a debate created
@@ -208,9 +211,9 @@ class AutonomousDebateService:
             max_rounds = policy.get('max_rounds') or DEFAULT_MAX_ROUNDS
             if max_rounds and participant_count > 0:
                 current_round = (turn_count // participant_count) + 1
-                print(f"📊 Round check: {current_round}/{max_rounds} (turns={turn_count}, participants={participant_count})")
+                logger.debug(f"📊 Round check: {current_round}/{max_rounds} (turns={turn_count}, participants={participant_count})")
                 if current_round > max_rounds:
-                    print(f"⛔ Ending due to max_rounds: {current_round} > {max_rounds}")
+                    logger.error(f"⛔ Ending due to max_rounds: {current_round} > {max_rounds}")
                     return True
             
             # Check timebox
@@ -222,12 +225,12 @@ class AutonomousDebateService:
                 if started.tzinfo is None:
                     started = started.replace(tzinfo=timezone.utc)
                 elapsed = (now - started).total_seconds() / 60
-                print(f"⏱️ Timebox check: {elapsed:.1f}/{timebox_minutes} minutes")
+                logger.info(f"⏱️ Timebox check: {elapsed:.1f}/{timebox_minutes} minutes")
                 if elapsed >= timebox_minutes:
-                    print(f"⛔ Ending due to timebox: {elapsed:.1f} >= {timebox_minutes}")
+                    logger.error(f"⛔ Ending due to timebox: {elapsed:.1f} >= {timebox_minutes}")
                     return True
             
-            print(f"✅ Debate should continue")
+            logger.info(f"✅ Debate should continue")
             return False
     
     async def _conclude_debate(self, debate_id: str, openrouter_api_key: str):
@@ -237,7 +240,7 @@ class AutonomousDebateService:
         to summarise a running debate, so the old order silently produced
         auto-mode sessions without summaries.
         """
-        print(f"🏁 Auto-concluding debate: {debate_id}")
+        logger.info(f"🏁 Auto-concluding debate: {debate_id}")
 
         # Update status first
         with get_db_connection() as conn:
@@ -259,11 +262,11 @@ class AutonomousDebateService:
                 debate_id=debate_id,
                 openrouter_api_key=openrouter_api_key
             )
-            print(f"📄 Summary generated: {len(summary.get('summary', ''))} chars")
+            logger.info(f"📄 Summary generated: {len(summary.get('summary', ''))} chars")
         except Exception as e:
-            print(f"⚠️ Summary generation failed: {e}")
+            logger.error(f"⚠️ Summary generation failed: {e}")
 
-        print(f"✅ Debate concluded: {debate_id}")
+        logger.info(f"✅ Debate concluded: {debate_id}")
     
     def _set_status(self, debate_id: str, status: str):
         """Set autonomous status"""
