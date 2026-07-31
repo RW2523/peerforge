@@ -147,7 +147,12 @@ def _round_instruction(current_round: int, max_rounds: int) -> str:
             "You MUST challenge, rebut, or meaningfully qualify at least one specific claim "
             "made by another reviewer. Name them directly (@ExactName). "
             "Explain exactly what evidence or reasoning contradicts their point. "
-            "Then advance your own analysis to a new aspect not yet discussed."
+            "Then advance your own analysis to a new aspect not yet discussed.\n"
+            # "Qualify" was being satisfied by opening with agreement and then
+            # pivoting, so every reviewer began by endorsing the last one.
+            "Do NOT open by agreeing with or endorsing another reviewer. Never begin "
+            "with phrases like 'X is right', 'X is correct', or 'X makes a good point'. "
+            "Open with your own substantive point or with the disagreement itself."
         )
 
 

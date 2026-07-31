@@ -186,6 +186,54 @@ async def issue_certificate(
     }
 
 
+@router.get("/debates/{debate_id}/quality")
+async def transcript_quality(
+    debate_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    How this panel behaved, measured from its own transcript.
+
+    Not a judgement of whether the review was good — that needs a reader. It
+    detects the ways this panel is known to fail: every reviewer opening by
+    endorsing the last, lanes collapsing so the critique repeats, prompt
+    scaffolding echoed verbatim, and placeholder names leaking into output.
+    """
+    authorize_debate(debate_id, current_user)
+
+    from ..database import get_cursor, get_db_connection
+    from ..services.transcript_quality import Thresholds, analyse, turns_from_events
+
+    with get_db_connection() as conn:
+        cur = get_cursor(conn)
+        cur.execute(
+            """SELECT event_type, content FROM events
+               WHERE debate_id = %s AND event_type = 'agent_message'
+               ORDER BY sequence_number ASC""",
+            (debate_id,),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+
+    report = analyse(turns_from_events(rows))
+    thresholds = Thresholds()
+    concerns = report.failures(thresholds)
+
+    return {
+        "debate_id": debate_id,
+        "turns": report.turns,
+        "metrics": {
+            "opener_template_rate": round(report.opener_template_rate, 3),
+            "self_similarity": round(report.self_similarity, 3),
+            "role_differentiation": round(report.role_differentiation, 3),
+            "placeholder_rate": round(report.placeholder_rate, 3),
+            "grounding_rate": round(report.grounding_rate, 3),
+        },
+        "repeated_phrases": report.repeated_phrases,
+        "concerns": concerns,
+        "healthy": not concerns,
+    }
+
+
 @router.get("/workspaces/{workspace_id}/readiness-overview")
 async def readiness_overview(
     workspace_id: str,
