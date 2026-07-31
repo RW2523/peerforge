@@ -13,8 +13,8 @@ Hey! Here's everything you need to get Arinar running on your machine.
 
 ### 1. Clone & Enter Project
 ```bash
-git clone https://github.com/vprasanna7/arinar-2026.git
-cd arinar-2026/arinar-v2
+git clone https://github.com/RW2523/peerforge.git
+cd peerforge
 ```
 
 ### 2. Start Database
