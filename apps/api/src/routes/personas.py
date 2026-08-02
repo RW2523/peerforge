@@ -2,6 +2,7 @@
 from fastapi import Depends, APIRouter, HTTPException, status, Header
 
 from src.auth import get_current_user
+from src.config import resolve_openrouter_key
 from typing import Any, Dict, Optional
 import httpx
 from ..persona_service import generate_persona_draft, validate_persona
@@ -40,6 +41,7 @@ async def generate_draft(
         401: Invalid API key
         500: Generation failed
     """
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     if not x_openrouter_key:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

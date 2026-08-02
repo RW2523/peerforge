@@ -11,7 +11,7 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, H
 from pydantic import BaseModel
 from psycopg2.extras import Json
 
-from src.config import settings
+from src.config import settings, resolve_openrouter_key
 from src.schemas.materials import (
     MaterialUploadResponse,
     MaterialsStatusResponse,
@@ -114,6 +114,7 @@ async def add_inline_materials(
     existing inline (kind in text/link) materials for the debate.
     """
     authorize_debate(debate_id, current_user)
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     resolved_key = x_openrouter_key or settings.openrouter_api_key
 
     with get_db_connection() as conn:
@@ -207,6 +208,7 @@ async def upload_materials(
         MaterialUploadResponse with material IDs and job IDs
     """
     authorize_debate(debate_id, current_user)
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
 
@@ -548,6 +550,7 @@ async def trigger_embedding_generation(
     Requires X-OpenRouter-Key header (BYOK).
     """
     authorize_debate(debate_id, current_user)
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     resolved_key = x_openrouter_key or settings.openrouter_api_key
     if not resolved_key:
         raise HTTPException(

@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
 from ..auth import authorize_debate, get_current_user
+from ..config import resolve_openrouter_key
 from ..database import get_cursor, get_db_connection
 from ..meeting_setup_service import MeetingSetupService
 from ..services.conversational_setup import REVIEWER_ROLES, converse
@@ -56,6 +57,7 @@ async def setup_converse(
 ):
     """One turn of setup dialogue, grounded in the session's uploaded material."""
     authorize_debate(debate_id, current_user)
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
 
     if not x_openrouter_key:
         raise HTTPException(

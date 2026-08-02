@@ -6,13 +6,13 @@ OpenRouter BYOK, client-driven, no server-side key storage
 import uuid
 import shutil
 from datetime import datetime
-from typing import Any, Dict
+from typing import Optional, Any, Dict
 import psycopg2
 import httpx
 from psycopg2.extras import Json
 from fastapi import APIRouter, HTTPException, Depends, Header
 
-from src.config import settings
+from src.config import settings, resolve_openrouter_key
 from src.auth import authorize_debate, get_current_user
 
 router = APIRouter()
@@ -34,7 +34,7 @@ DEFAULT_OCR_MODEL = "qwen/qwen-2.5-72b-instruct"
 async def generate_embeddings(
     debate_id: str,
     material_id: str,
-    x_openrouter_key: str = Header(None, alias="X-OpenRouter-Key"),
+    x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
@@ -53,6 +53,7 @@ async def generate_embeddings(
         Status and chunk counts
     """
     authorize_debate(debate_id, current_user)
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     if not x_openrouter_key:
         raise HTTPException(
             status_code=400,

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel, Field
 from typing import Any, Dict, Optional
 from ..auth import authorize_debate, get_current_user
+from ..config import resolve_openrouter_key
 from ..autonomous_debate_service import autonomous_service
 
 router = APIRouter(prefix="/api/debates", tags=["autonomous"])
@@ -25,6 +26,7 @@ async def start_autonomous(
 ):
     """Start autonomous YOLO debate"""
     authorize_debate(debate_id, current_user)
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     
     # Get API key from header (BYOK model)
     api_key = x_openrouter_key
@@ -63,6 +65,7 @@ async def resume_autonomous(
 ):
     """Resume autonomous debate"""
     authorize_debate(debate_id, current_user)
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     # Get API key from header (needed to restart background task)
     api_key = x_openrouter_key
     

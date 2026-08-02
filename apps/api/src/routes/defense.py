@@ -24,6 +24,7 @@ from fastapi import APIRouter, HTTPException, Header, Depends, status
 from pydantic import BaseModel, Field
 
 from ..auth import get_current_user, check_workspace_access
+from ..config import resolve_openrouter_key
 from ..debate_service import DebateService
 from ..services.research_analyzer import analyze_research, get_research_profile
 from ..services.question_generator import generate_questions, get_questions
@@ -50,6 +51,7 @@ def _get_debate_or_404(debate_id: str):
 
 
 def _require_key(x_openrouter_key: Optional[str]) -> str:
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     if not x_openrouter_key:
         raise HTTPException(
             status_code=400,
@@ -104,6 +106,7 @@ async def trigger_research_analysis(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Analyse uploaded research materials and build a structured profile."""
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     key = _require_key(x_openrouter_key)
     debate = _get_debate_or_404(debate_id)
     check_workspace_access(current_user, debate["workspace_id"])
@@ -157,6 +160,7 @@ async def suggest_committee_personas(
     Returns personas with names, roles, expertise, and model assignments
     based on the chosen reasoning mode.
     """
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     key = _require_key(x_openrouter_key)
     debate = _get_debate_or_404(debate_id)
     check_workspace_access(current_user, debate["workspace_id"])
@@ -195,6 +199,7 @@ async def trigger_question_generation(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Generate panel-style review questions from the research profile."""
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     key = _require_key(x_openrouter_key)
     debate = _get_debate_or_404(debate_id)
     check_workspace_access(current_user, debate["workspace_id"])
@@ -252,6 +257,7 @@ async def demo_ungrounded_citation(
     ask a generic chatbot "where's your source?". The model's answer (usually
     a confidently fabricated page/quote, sometimes an admission) is shown
     side-by-side with PeerForge's hash-verified line."""
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     key = _require_key(x_openrouter_key)
     debate = _get_debate_or_404(debate_id)
     check_workspace_access(current_user, debate["workspace_id"])
@@ -313,6 +319,7 @@ async def submit_answer(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Submit a student answer and receive a 6-axis AI evaluation."""
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     key = _require_key(x_openrouter_key)
     debate = _get_debate_or_404(debate_id)
     check_workspace_access(current_user, debate["workspace_id"])
@@ -357,6 +364,7 @@ async def trigger_readiness_report(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Generate the readiness report from all evaluated answers."""
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     key = _require_key(x_openrouter_key)
     debate = _get_debate_or_404(debate_id)
     check_workspace_access(current_user, debate["workspace_id"])

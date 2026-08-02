@@ -62,6 +62,28 @@ def force_test_auth_mode(monkeypatch):
     settings.require_auth = original
 
 
+@pytest.fixture(autouse=True)
+def no_server_openrouter_key(monkeypatch):
+    """
+    Hide any server-configured OpenRouter key from the test suite.
+
+    Routes fall back to `settings.openrouter_api_key` when the caller sends no
+    header. With a real key in .env.local that turned "no key supplied" tests
+    into live, billed calls against the developer's own credits — one run cost
+    real money and took ten seconds before this existed.
+
+    A test that wants to exercise the fallback should set the value itself.
+    """
+    monkeypatch.setattr(settings, "openrouter_api_key", "")
+
+
+@pytest.fixture
+def server_openrouter_key(monkeypatch):
+    """Opt back in to a server-side key, without reaching the network."""
+    monkeypatch.setattr(settings, "openrouter_api_key", "sk-or-v1-server-side-test-key")
+    return "sk-or-v1-server-side-test-key"
+
+
 @pytest.fixture
 def demo_workspace_id() -> str:
     return "00000000-0000-0000-0000-000000000101"

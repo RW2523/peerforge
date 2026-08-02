@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, status, Header
 from typing import Optional, Dict, Any
 import httpx
 from ..openrouter_models_service import fetch_openrouter_models
+from ..config import resolve_openrouter_key
 from ..schemas.openrouter import ModelListResponse, OpenRouterModel
 import logging
 
@@ -32,6 +33,7 @@ async def list_openrouter_models(
         401: OpenRouter authentication failed
         500: OpenRouter API error
     """
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     if not x_openrouter_key:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -94,6 +96,9 @@ async def get_openrouter_account(
         401: Invalid API key
         500: OpenRouter API error
     """
+    # Deliberately NOT resolved against the server key: this endpoint reports
+    # whose key it is and how much credit remains. Falling back would hand the
+    # deployment owner's balance and usage to any caller who asked.
     if not x_openrouter_key:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -103,10 +108,12 @@ async def get_openrouter_account(
     api_key = x_openrouter_key.strip()
     management_key = x_openrouter_management_key.strip() if x_openrouter_management_key else None
     
-    # Debug logging
-    logger.info(f"🔑 Account request received:")
-    logger.info(f"  API Key: {api_key[:20]}... (len={len(api_key)})")
-    logger.info(f"  Management Key: {management_key[:20] if management_key else 'None'}... (len={len(management_key) if management_key else 0})")
+    # Lengths only. The first 20 characters of an OpenRouter key were being
+    # written to the log at INFO, which puts a usable prefix in every log sink.
+    logger.info(
+        "Account request received (api key len=%d, management key %s)",
+        len(api_key), f"len={len(management_key)}" if management_key else "absent",
+    )
     
     if not api_key:
         raise HTTPException(

@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from typing import Literal
 
 from ..auth import get_current_user, check_workspace_access, authorize_debate
+from ..config import resolve_openrouter_key
 from ..services.academic_assessment import (
     generate_assessment,
     get_latest_assessment,
@@ -41,6 +42,7 @@ async def create_assessment(
 ):
     """Generate the ten-dimension academic assessment from all session evidence."""
     authorize_debate(debate_id, current_user)
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     if not x_openrouter_key:
         raise HTTPException(
             status_code=400,

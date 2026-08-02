@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException, status, Depends, Query, Header
 from typing import Dict, Any, Optional, List
 from ..auth import get_current_user, check_workspace_access
-from ..config import settings
+from ..config import settings, resolve_openrouter_key
 from ..debate_engine import DebateEngine
 from ..debate_service import DebateService
 from ..openrouter_client import OpenRouterAuthError, OpenRouterError
@@ -298,6 +298,7 @@ async def start_debate(
         404: Debate not found
         500: Internal server error
     """
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     service = DebateService()
     debate = service.get_debate(debate_id)
     

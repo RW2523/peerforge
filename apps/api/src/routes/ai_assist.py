@@ -2,6 +2,7 @@
 from fastapi import Depends, APIRouter, HTTPException, status, Header
 
 from src.auth import get_current_user
+from src.config import resolve_openrouter_key
 from pydantic import BaseModel
 from typing import Any, Dict, Optional
 import httpx
@@ -36,6 +37,7 @@ async def health_check(
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key")
 ):
     """Quick health check for OpenRouter API key"""
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     if not x_openrouter_key:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -103,6 +105,7 @@ async def improve_problem_statement(
     Improve a problem statement for debate using AI.
     Uses cost-effective Claude Haiku model.
     """
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     if not x_openrouter_key:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -111,7 +114,9 @@ async def improve_problem_statement(
     
     # Quick validation - key should start with sk-or-
     if not x_openrouter_key.startswith('sk-or-'):
-        logger.warning(f"Invalid API key format: {x_openrouter_key[:10]}...")
+        # The prefix alone is enough to correlate a key across logs; the
+        # length is all that is needed to diagnose a malformed one.
+        logger.warning("Invalid API key format (len=%d)", len(x_openrouter_key))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid OpenRouter API key format. Keys should start with 'sk-or-'. Get a key at openrouter.ai"
@@ -412,6 +417,7 @@ async def suggest_panel(
     templates for the review panel. Returns the top-N template ids with a
     one-sentence reason each, grounded in the research topic.
     """
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     if not x_openrouter_key:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

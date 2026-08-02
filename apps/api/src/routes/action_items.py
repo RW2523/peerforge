@@ -17,6 +17,7 @@ from fastapi import APIRouter, HTTPException, Header, Depends
 from pydantic import BaseModel
 
 from ..database import get_db_connection, get_cursor
+from ..config import resolve_openrouter_key
 from ..auth import require_auth
 from ..openrouter_client import OpenRouterClient
 from ..meeting_setup_service import MeetingSetupService
@@ -131,6 +132,7 @@ async def extract_action_items(
     workspace_id: str = Depends(require_auth),
 ):
     """Extract action items from a transcript material and store them."""
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     if not x_openrouter_key:
         raise HTTPException(status_code=400, detail="OpenRouter API key required (X-OpenRouter-Key)")
 
@@ -325,6 +327,7 @@ async def debate_action_item(
     workspace_id: str = Depends(require_auth),
 ):
     """Spawn a short autonomous panel discussion to decide this action item."""
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     if not x_openrouter_key:
         raise HTTPException(status_code=400, detail="OpenRouter API key required (X-OpenRouter-Key)")
 

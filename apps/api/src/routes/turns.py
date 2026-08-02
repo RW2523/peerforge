@@ -1,8 +1,9 @@
 """Turn orchestration endpoints"""
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, status, Depends, Header
-from typing import Dict, Any
+from typing import Optional, Dict, Any
 from ..auth import get_current_user, check_workspace_access
+from ..config import resolve_openrouter_key
 from ..debate_service import DebateService
 from ..turn_orchestrator import TurnOrchestrator
 from ..host_orchestrator import HostOrchestrator
@@ -17,7 +18,7 @@ router = APIRouter()
 @router.post("/debates/{debate_id}/turn/next")
 async def trigger_next_turn(
     debate_id: str,
-    x_openrouter_key: str = Header(..., alias="X-OpenRouter-Key"),
+    x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
@@ -41,6 +42,7 @@ async def trigger_next_turn(
         404: Debate not found
         500: Internal server error
     """
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     service = DebateService()
     debate = service.get_debate(debate_id)
     
@@ -97,7 +99,7 @@ async def trigger_next_turn(
 @router.post("/debates/{debate_id}/conclude")
 async def conclude_debate_with_host(
     debate_id: str,
-    x_openrouter_key: str = Header(..., alias="X-OpenRouter-Key"),
+    x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
@@ -120,6 +122,7 @@ async def conclude_debate_with_host(
         403: Forbidden
         404: Debate not found
     """
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     service = DebateService()
     debate = service.get_debate(debate_id)
     

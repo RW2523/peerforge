@@ -140,9 +140,16 @@ class AutonomousDebateService:
                     await self._conclude_debate(debate_id, openrouter_api_key)
                     break
                 
-                # Trigger next turn
+                # Trigger next turn.
+                # Off the event loop: trigger_next_turn is synchronous and
+                # spends tens of seconds inside LLM HTTP calls and DB writes.
+                # Called directly, it froze the whole API for the duration of
+                # every turn - measured at 281s for a GET /debates, with
+                # /health itself timing out, for as long as any session ran.
                 try:
-                    result = orchestrator.trigger_next_turn(debate_id)
+                    result = await asyncio.to_thread(
+                        orchestrator.trigger_next_turn, debate_id
+                    )
                     logger.info(f"🤖 Auto-turn completed: {result.get('agent_name')}")
                     consecutive_failures = 0
                 except Exception as e:

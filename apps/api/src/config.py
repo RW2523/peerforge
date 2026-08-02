@@ -1,4 +1,6 @@
 """Application configuration"""
+from typing import Optional
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -91,3 +93,27 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def resolve_openrouter_key(header_key: Optional[str] = None) -> Optional[str]:
+    """
+    The OpenRouter key to bill this request to.
+
+    A key sent by the caller always wins, so bring-your-own-key still works and
+    a user's own credits are spent on their own work. When no header is sent,
+    fall back to the server's configured key.
+
+    Most routes used to require the header outright, which meant setting
+    OPENROUTER_API_KEY on the server silently did nothing for them: only
+    materials and a couple of others honoured it, so the same deployment
+    answered some requests and refused others with "API key required".
+
+    Note the consequence of a server key: every caller who can reach these
+    routes can spend it. On a deployment with REQUIRE_AUTH=false that means
+    anyone at all, so pair a server key with authentication.
+    """
+    caller = (header_key or "").strip()
+    if caller:
+        return caller
+    configured = (settings.openrouter_api_key or "").strip()
+    return configured or None

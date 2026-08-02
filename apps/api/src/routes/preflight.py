@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
-from src.config import settings
+from src.config import settings, resolve_openrouter_key
 from src.auth import get_current_user, check_workspace_access
 from src.database import get_cursor
 from src.tasks.preflight import orchestrate_preflight
@@ -114,6 +114,7 @@ def start_preflight(
     
     Protected: Requires valid JWT and workspace access
     """
+    x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     # Check workspace access
     debate_workspace = get_debate_workspace(debate_id)
     check_workspace_access(current_user, debate_workspace)
