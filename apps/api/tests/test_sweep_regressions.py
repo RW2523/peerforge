@@ -205,3 +205,59 @@ def test_the_citation_metric_does_not_claim_to_verify_citations():
              text='As stated in Section 9.7, the authors prove the theorem.'),
     ])
     assert report.citation_form_rate == 1.0
+
+
+# ── Fabrication ─────────────────────────────────────────────────────────────
+
+def test_a_session_with_no_turns_cannot_be_summarised():
+    """
+    With an empty transcript the prompt carries only a title, and the model
+    obliges by inventing the rest. A started-and-ended session with no
+    reviewers speaking produced two thousand characters of minutes naming
+    methodological concerns and "the panel's overall verdict … major revision".
+
+    For a peer-review tool that is the worst output available: an
+    official-looking record of a review nobody performed.
+    """
+    debate_id = _debate('Untitled Session')
+    client.post(f'/debates/{debate_id}/participants', json={'participants': [
+        {'name': 'Dr A', 'role_description': 'methodology professor',
+         'model_id': 'openai/gpt-4o-mini', 'system_prompt': 'Assess the method.'},
+    ]})
+    client.post(f'/debates/{debate_id}/start')
+    client.post(f'/debates/{debate_id}/end')
+
+    with get_db_connection() as conn:
+        cur = get_cursor(conn)
+        cur.execute(
+            "SELECT COUNT(*) AS n FROM events WHERE debate_id = %s AND event_type = 'agent_message'",
+            (debate_id,),
+        )
+        assert cur.fetchone()['n'] == 0, 'precondition: nobody spoke'
+
+    r = client.post(f'/debates/{debate_id}/summarize',
+                    json={'model_id': 'openai/gpt-4o-mini'})
+    assert r.status_code == 400, f'-> {r.status_code} {r.text[:200]}'
+    assert 'no reviewer turns' in r.json()['detail']
+
+
+def test_prior_claims_survive_a_speaker_name_with_a_full_stop():
+    """
+    The avoidance list is what stops reviewer three restating reviewer one.
+
+    It was built by splitting on sentence punctuation, and every speaker is
+    "Prof. X:" or "Dr. Y:" — so the extracted "claim" was the string "Prof."
+    and the instruction told the next reviewer to avoid nothing.
+    """
+    from src.agent_response_generator import _already_raised
+
+    raised = _already_raised([
+        {'role': 'assistant',
+         'content': 'Prof. Halvorsen: The claim is undermined by the absence of '
+                    'inter-rater reliability statistics, since two of three raters '
+                    'were co-authors.'},
+        {'role': 'user', 'content': '[Moderator note: keep going]'},
+    ])
+    assert len(raised) == 1
+    assert 'inter-rater reliability' in raised[0], raised
+    assert raised[0] not in ('Prof.', 'Dr.')

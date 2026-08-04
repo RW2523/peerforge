@@ -136,9 +136,13 @@ def _already_raised(conversation_history: Optional[List[Dict[str, str]]]) -> Lis
         text = (turn.get("content") or "").strip()
         if not text:
             continue
-        # The first sentence carries the point; the rest is its justification.
-        first = re.split(r"(?<=[.!?])\s", text, maxsplit=1)[0]
-        out.append(first[:160])
+        # History arrives as "Dr. Okonjo: <the review>". Drop the speaker, then
+        # take a span rather than a "first sentence" — splitting on sentence
+        # punctuation cut at the period in "Prof." and "Dr.", so this list read
+        # literally "Prof.; Dr." and told the next reviewer nothing at all.
+        claim = text.split(": ", 1)[1] if ": " in text[:40] else text
+        claim = " ".join(claim.split())
+        out.append(claim[:220])
     return out
 
 

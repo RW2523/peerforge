@@ -25,6 +25,14 @@ class SummaryService:
     def __init__(self, openrouter_client: Optional[OpenRouterClient] = None):
         self.client = openrouter_client
     
+    def has_transcript(self, debate_id: str) -> bool:
+        """Whether anyone actually spoke in this session."""
+        events = self._get_events(debate_id) or []
+        return any(
+            (e.get('event_type') or e.get('type')) in ('agent_message', 'human_message')
+            for e in events
+        )
+
     def generate_summary(
         self,
         debate_id: str,
@@ -55,7 +63,25 @@ class SummaryService:
             raise ValueError(f"Debate must be ended to generate summary (current state: {debate['state']})")
         
         events = self._get_events(debate_id)
-        
+
+        # Refuse to summarise a review that did not happen.
+        #
+        # With no reviewer turns the prompt carries only a title, and the model
+        # obliges by inventing the rest: a session with zero discussion and no
+        # materials produced two thousand characters of minutes naming
+        # methodological concerns and "the panel's overall verdict … major
+        # revision". For a peer-review tool that is the worst possible output —
+        # an official-looking record of a review nobody performed.
+        spoken = [
+            e for e in events
+            if (e.get('event_type') or e.get('type')) in ('agent_message', 'human_message')
+        ]
+        if not spoken:
+            raise ValueError(
+                "This session has no reviewer turns, so there is nothing to "
+                "summarise. Run at least one turn first."
+            )
+
         # Build context from events
         context = self._build_context(debate, events)
         

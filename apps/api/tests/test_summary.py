@@ -42,6 +42,31 @@ def mock_openrouter_response():
     }
 
 
+def _seed_a_turn(debate_id: str) -> None:
+    """
+    Give the session something to summarise.
+
+    Summarising a session with no reviewer turns is now refused: with nothing in
+    the transcript the model invented an entire peer review, verdict included.
+    These tests were asserting that behaviour by accident.
+    """
+    import json as _json
+    from src.database import get_db_connection, get_cursor
+    with get_db_connection() as conn:
+        cur = get_cursor(conn)
+        cur.execute(
+            """INSERT INTO events (event_id, debate_id, event_type, sequence_number,
+                                   created_at, content, sender_type)
+               VALUES (gen_random_uuid(), %s, 'agent_message', 1, NOW(), %s, 'agent')""",
+            (debate_id, _json.dumps({
+                "agent_name": "Dr Ada",
+                "text": "The baseline comparison is missing and no significance test is reported.",
+            })),
+        )
+        conn.commit()
+
+
+
 @patch('src.summary_service.OpenRouterClient')
 def test_generate_summary_happy_path(mock_openrouter_class, mock_openrouter_response):
     """Test successful summary generation for ended debate"""
@@ -59,7 +84,8 @@ def test_generate_summary_happy_path(mock_openrouter_class, mock_openrouter_resp
     # Transition to ended state
     service.start_debate(debate_id)
     service.end_debate(debate_id)
-    
+    _seed_a_turn(debate_id)
+
     # Mock OpenRouter client
     mock_client = MagicMock()
     mock_client.chat_completion.return_value = mock_openrouter_response
@@ -115,7 +141,8 @@ def test_get_summary_after_generation(mock_openrouter_class, mock_openrouter_res
     debate_id = debate['debate_id']
     service.start_debate(debate_id)
     service.end_debate(debate_id)
-    
+    _seed_a_turn(debate_id)
+
     # Mock OpenRouter and generate
     mock_client = MagicMock()
     mock_client.chat_completion.return_value = mock_openrouter_response
@@ -154,7 +181,10 @@ def test_summarize_missing_openrouter_key():
     debate_id = debate['debate_id']
     service.start_debate(debate_id)
     service.end_debate(debate_id)
-    
+    # A session with no turns is refused before the key is even considered, so
+    # seed one to reach the case this test is actually about.
+    _seed_a_turn(debate_id)
+
     response = client.post(
         f"/debates/{debate_id}/summarize",
         json={"model_id": "anthropic/claude-3.5-sonnet"}  # Missing openrouter_api_key

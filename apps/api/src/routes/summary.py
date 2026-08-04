@@ -56,6 +56,15 @@ async def generate_summary(
             detail=f"Debate must be in 'ended' state to generate summary. Current state: {debate['state']}"
         )
     
+    # Asked before the key, deliberately: demanding a key for a request that
+    # would be refused anyway sends the operator hunting the wrong problem.
+    if not SummaryService().has_transcript(debate_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This session has no reviewer turns, so there is nothing to "
+                   "summarise. Run at least one turn first.",
+        )
+
     resolved_key = resolve_openrouter_key(request.openrouter_api_key)
     if not resolved_key:
         raise HTTPException(
@@ -96,6 +105,10 @@ async def generate_summary(
             model_used=saved_summary.get('model_used')
         )
     
+    except ValueError as e:
+        # "nothing to summarise" and "wrong state" are the caller's situation,
+        # not a server fault, and were being reported as 500s.
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except OpenRouterAuthError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
