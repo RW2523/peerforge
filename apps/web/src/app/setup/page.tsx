@@ -165,6 +165,7 @@ export default function SetupPage() {
   const {
     isLoading,
     createdDebateId,
+    ensureDebateId,
     createdParticipantIds,
     setCreatedParticipantIds,
     handleCreateDebate: createDebate,
@@ -391,6 +392,7 @@ export default function SetupPage() {
           {step === 2 && (
             <MaterialsStep
               debateId={createdDebateId || undefined}
+              ensureDebateId={ensureDebateId}
               materials={materials}
               onAdd={handleAddMaterial}
               onUpdate={handleUpdateMaterial}

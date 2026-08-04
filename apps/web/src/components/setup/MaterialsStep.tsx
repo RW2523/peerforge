@@ -7,6 +7,15 @@ import styles from './SetupSteps.module.css';
 
 interface MaterialsStepProps {
   debateId?: string;
+  /**
+   * Creates the session if it does not exist yet, returning its id.
+   *
+   * Uploads live on a session, but the session is only created at the final
+   * step. Without this, every control on this page was fully interactive and
+   * did nothing at all: handleUpload returned on its first line because
+   * debateId was null, with no request, no error and no feedback.
+   */
+  ensureDebateId?: () => Promise<string | null>;
   materials: api.SetupMaterial[];
   onAdd: (kind: 'text' | 'link' | 'file_placeholder') => void;
   onUpdate: (idx: number, updates: Partial<api.SetupMaterial>) => void;
@@ -32,6 +41,7 @@ const getStatusBadge = (status: string, kind?: string) => {
 
 export function MaterialsStep({
   debateId,
+  ensureDebateId,
   materials,
   onAdd,
   onUpdate,
@@ -115,12 +125,19 @@ export function MaterialsStep({
     isPrimary: boolean,
     inputRef: React.RefObject<HTMLInputElement | null>
   ) => {
-    if (!files || files.length === 0 || !debateId) return;
+    if (!files || files.length === 0) return;
     setUploading(category);
     setUploadError(null);
     try {
+      const id = debateId || (ensureDebateId ? await ensureDebateId() : null);
+      if (!id) {
+        throw new Error(
+          'Could not start a session to attach this file to. Add a title and ' +
+          'abstract on the first step, then try again.'
+        );
+      }
       const openrouterKey = keyStore.getKey();
-      await api.uploadMaterials(debateId, Array.from(files), openrouterKey, category, isPrimary);
+      await api.uploadMaterials(id, Array.from(files), openrouterKey, category, isPrimary);
       await refreshStatus();
       const interval = setInterval(refreshStatus, 3000);
       setPollInterval(interval);

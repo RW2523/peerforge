@@ -2,7 +2,7 @@
  * Hook for debate setup actions (create, launch)
  * Extracted from setup/page.tsx for maintainability
  */
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { keyStore } from '@/lib/openrouterKeyStore';
 import { useRouter } from 'next/navigation';
 import * as api from '@/lib/api';
@@ -36,6 +36,8 @@ interface UseDebateSetupActionsOptions {
 interface UseDebateSetupActionsReturn {
   isLoading: boolean;
   createdDebateId: string | null;
+  /** The session id, creating a minimal one if the wizard has not yet. */
+  ensureDebateId: () => Promise<string | null>;
   createdParticipantIds: string[];
   setCreatedParticipantIds: (ids: string[]) => void;
   handleCreateDebate: () => Promise<{ debateId: string; participantIds: string[] } | null>;
@@ -255,9 +257,33 @@ export function useDebateSetupActions(
     }
   };
 
+  /**
+   * The session id, creating a minimal one if the wizard has not reached the
+   * step that normally creates it.
+   *
+   * Materials attach to a session, but the session was only created at the
+   * final step, so the whole Knowledge Base page was inert until then — its
+   * upload handlers returned on their first line because there was no id.
+   */
+  const ensureDebateId = useCallback(async (): Promise<string | null> => {
+    if (createdDebateId) return createdDebateId;
+    if (!options.workspaceId) return null;
+    try {
+      const debate = await api.createDebate(
+        options.workspaceId,
+        (options.title || '').trim() || 'Untitled review session'
+      );
+      setCreatedDebateId(debate.debate_id);
+      return debate.debate_id;
+    } catch {
+      return null;
+    }
+  }, [createdDebateId, options.workspaceId, options.title]);
+
   return {
     isLoading,
     createdDebateId,
+    ensureDebateId,
     createdParticipantIds,
     setCreatedParticipantIds,
     handleCreateDebate,
