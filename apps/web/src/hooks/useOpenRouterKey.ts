@@ -25,9 +25,18 @@ export function useOpenRouterKey() {
   const [managementPersistence, setManagementPersistence] = useState<KeyPersistence | null>(null);
 
   // Re-renders when server-key availability lands, so controls disabled on
-  // first paint become usable without the user reloading.
+  // first paint become usable without the user reloading. The snapshot is
+  // hasKey() rather than hasServerKey() so the "not asked yet" case is handled
+  // in one place — treating unknown as absent flashed "API Key Required" on a
+  // deployment that has one.
+  const subscribe = useCallback((cb: () => void) => keyStore.subscribe(cb), []);
+  const canGenerate = useSyncExternalStore(
+    subscribe,
+    () => keyStore.hasKey(),
+    () => true
+  );
   const serverKeyAvailable = useSyncExternalStore(
-    useCallback((cb: () => void) => keyStore.subscribe(cb), []),
+    subscribe,
     () => keyStore.hasServerKey(),
     () => false
   );
@@ -74,7 +83,7 @@ export function useOpenRouterKey() {
   // "Can we generate", which is true when the server holds a key even though
   // this browser holds none. hasBrowserKey is the narrower question Settings
   // asks when describing what the user personally stored.
-  const hasKey = apiKey !== null || serverKeyAvailable;
+  const hasKey = apiKey !== null || canGenerate;
   const hasBrowserKey = apiKey !== null;
   const hasManagementKey = keyStore.hasManagementKey();
 

@@ -381,9 +381,9 @@ export default function DebateControls({ debateId, currentState, isYoloMode = fa
         {!isYoloMode && !shouldConclude && (currentState === 'pending' || currentState === 'running') && (
           <button
             onClick={handleStartAutoMode}
-            disabled={startingAuto || !apiKey}
+            disabled={startingAuto || !hasKey}
             className={styles.btnAuto}
-            title={!apiKey
+            title={!hasKey
               ? 'Add OpenRouter API key in Settings'
               : 'Run the whole session automatically — each panel member speaks in turn until all rounds are complete'}
           >

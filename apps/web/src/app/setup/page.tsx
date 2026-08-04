@@ -550,7 +550,7 @@ export default function SetupPage() {
           {step === 6 && (
             <button
               onClick={handleLaunchAfterPreflight}
-              disabled={isLoading || !canEnterRoom || !apiKey}
+              disabled={isLoading || !canEnterRoom || !hasKey}
               className={styles.btnLaunch}
               title={!hasKey ? 'Add OpenRouter API key in Settings first' : !canEnterRoom ? 'Complete panel preparation first' : ''}
             >

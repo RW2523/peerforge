@@ -14,17 +14,30 @@ class OpenRouterKeyStore {
   private memoryKey: string | null = null;
   private memoryManagementKey: string | null = null;
   private serverKeyAvailable = false;
+  private statusKnown = false;
   private listeners = new Set<() => void>();
 
   /** Told by the app once /me/openrouter-key has answered. */
   setServerKeyAvailable(available: boolean): void {
-    if (this.serverKeyAvailable === available) return;
+    if (this.statusKnown && this.serverKeyAvailable === available) return;
     this.serverKeyAvailable = available;
+    this.statusKnown = true;
     this.listeners.forEach((l) => l());
   }
 
   hasServerKey(): boolean {
     return this.serverKeyAvailable;
+  }
+
+  /**
+   * Whether we have actually heard back about the server's key.
+   *
+   * Before the answer arrives, "no key" and "not asked yet" look identical,
+   * and treating them the same made every AI control flash "API Key Required"
+   * on first paint — on a deployment that has a key.
+   */
+  isStatusKnown(): boolean {
+    return this.statusKnown;
   }
 
   /** Notified when server-key availability changes, so gates re-render. */
@@ -92,10 +105,14 @@ class OpenRouterKeyStore {
    * Can this deployment generate? Not "is there a key in this browser".
    *
    * Gating on browser storage alone disabled every AI control on a deployment
-   * whose server key worked perfectly well.
+   * whose server key worked perfectly well. Before the server has answered we
+   * assume yes, so the UI does not accuse a working deployment of missing a
+   * key during the moment it takes to ask. Acting without one simply surfaces
+   * the backend's own message instead.
    */
   hasKey(): boolean {
-    return this.getKey() !== null || this.serverKeyAvailable;
+    if (this.getKey() !== null) return true;
+    return this.statusKnown ? this.serverKeyAvailable : true;
   }
 
   /** True only when the key came from this browser, for Settings to display. */

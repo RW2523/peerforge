@@ -284,12 +284,12 @@ export function PreflightStep({
           <button
             onClick={handleStartPreflight}
             className={styles.btnPrimary}
-            disabled={!apiKey}
+            disabled={!hasKey}
             style={{
               padding: '1rem 2rem',
               fontSize: '1rem',
-              opacity: apiKey ? 1 : 0.45,
-              cursor: apiKey ? 'pointer' : 'not-allowed',
+              opacity: hasKey ? 1 : 0.45,
+              cursor: hasKey ? 'pointer' : 'not-allowed',
             }}
           >
             Start preparation

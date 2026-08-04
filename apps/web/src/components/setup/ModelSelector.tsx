@@ -103,7 +103,7 @@ export function ModelSelector({ value, onChange, placeholder = 'Select a model..
         type="button"
         className={styles.selectorButton}
         onClick={() => setIsOpen(!isOpen)}
-        disabled={!apiKey}
+        disabled={!hasKey}
       >
         <span className={styles.selectedValue}>{displayValue}</span>
         <span className={styles.arrow}>{isOpen ? '▲' : '▼'}</span>
