@@ -115,6 +115,33 @@ def _seats_used(cursor, org_id: str) -> int:
     return cursor.fetchone()["n"]
 
 
+def _seats_pending(cursor, org_id: str) -> int:
+    """
+    Billable invitations that are still live.
+
+    A pending invitation is a seat already promised. Leaving these uncounted
+    let an admin send fifty invitations against one free seat, and the refusal
+    then surfaced to a student at accept time rather than to the admin who
+    caused it. Addresses already on the roster do not double-count.
+    """
+    cursor.execute(
+        """SELECT COUNT(DISTINCT LOWER(i.email)) AS n
+           FROM invitations i
+           WHERE i.org_id = %s
+             AND i.invited_role = ANY(%s)
+             AND i.accepted_at IS NULL
+             AND i.revoked_at IS NULL
+             AND i.expires_at > NOW()
+             AND NOT EXISTS (
+                 SELECT 1 FROM organization_members om
+                 WHERE om.org_id = i.org_id
+                   AND LOWER(om.email) = LOWER(i.email)
+             )""",
+        (org_id, list(BILLABLE_ROLES)),
+    )
+    return cursor.fetchone()["n"]
+
+
 def _seat_breakdown(cursor, org_id: str) -> Dict[str, int]:
     """Members per role, so an admin can see what is and is not billed."""
     cursor.execute(
@@ -125,7 +152,15 @@ def _seat_breakdown(cursor, org_id: str) -> Dict[str, int]:
     return {r["org_role"]: r["n"] for r in cursor.fetchall()}
 
 
-def _assert_seat_available(cursor, org_id: str) -> None:
+def _assert_seat_available(cursor, org_id: str, count_pending: bool = True) -> None:
+    """
+    Refuse when the organization has no seat left to commit.
+
+    `count_pending` includes invitations that have been sent but not yet
+    accepted. That is right when issuing a new invitation and wrong when
+    redeeming one, since the invitation being redeemed already holds its own
+    reservation and would otherwise block itself.
+    """
     cursor.execute(
         "SELECT seats_purchased FROM organization_seats WHERE org_id = %s", (org_id,)
     )
@@ -133,11 +168,22 @@ def _assert_seat_available(cursor, org_id: str) -> None:
     if not row:
         return  # No seat record yet — treat as unmetered (trial).
     purchased = row["seats_purchased"]
-    if purchased and _seats_used(cursor, org_id) >= purchased:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"All {purchased} seats are in use. Free a seat or purchase more.",
-        )
+    if not purchased:
+        return
+
+    used = _seats_used(cursor, org_id)
+    committed = used + (_seats_pending(cursor, org_id) if count_pending else 0)
+    if committed < purchased:
+        return
+
+    outstanding = committed - used
+    detail = f"All {purchased} seats are committed"
+    if outstanding:
+        detail += f" ({used} in use, {outstanding} awaiting acceptance)"
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=detail + ". Free a seat, revoke an invitation, or purchase more.",
+    )
 
 
 def _name_from_email(email: Optional[str]) -> Optional[str]:
@@ -787,7 +833,33 @@ def redeem_invitation(cursor, token: str, user_id: str,
         raise HTTPException(status_code=410, detail="This invitation has expired")
 
     org_id = str(invite["org_id"])
-    _assert_seat_available(cursor, org_id)
+    # count_pending=False: this invitation already holds a reservation, and
+    # counting it here would make every invitation block its own redemption.
+    _assert_seat_available(cursor, org_id, count_pending=False)
+
+    # Redeeming an invitation rewrites org_role, which is a role change by
+    # another name - and it was the one path that skipped the last-admin guard
+    # that PATCH and DELETE enforce. A professor may invite students, so
+    # inviting the sole administrator's address as 'student' left the
+    # organization with nobody able to administer it.
+    cursor.execute(
+        "SELECT org_role FROM organization_members WHERE org_id = %s AND user_id = %s",
+        (org_id, user_id),
+    )
+    existing = cursor.fetchone()
+    if (existing and existing["org_role"] == "org_admin"
+            and invite["invited_role"] != "org_admin"):
+        cursor.execute(
+            """SELECT COUNT(*) AS n FROM organization_members
+               WHERE org_id = %s AND org_role = 'org_admin' AND user_id <> %s""",
+            (org_id, user_id),
+        )
+        if cursor.fetchone()["n"] == 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Accepting this would remove the last administrator. "
+                       "Promote someone else first.",
+            )
 
     # The invitation address is the only identity we reliably have: the API
     # has no view onto auth.users, which may belong to another app.
@@ -896,6 +968,17 @@ async def cohort_overview(
             LEFT JOIN latest_assessment la  ON la.debate_id = sd.debate_id
             LEFT JOIN first_assessment fa   ON fa.debate_id = sd.debate_id
             WHERE om.org_id = %(org_id)s
+              -- Scoped to the course when one is named. Filtering only the
+              -- debates and invitations, as this did, still listed every
+              -- person in the university under each individual course.
+              AND (
+                %(workspace_id)s::uuid IS NULL
+                OR EXISTS (
+                    SELECT 1 FROM user_workspaces uw
+                    WHERE uw.user_id = om.user_id
+                      AND uw.workspace_id = %(workspace_id)s::uuid
+                )
+              )
             GROUP BY om.user_id, om.org_role, om.email, om.display_name
             ORDER BY COUNT(sd.debate_id) DESC, om.email NULLS LAST
             """,
@@ -985,6 +1068,7 @@ async def get_seats(
         )
         row = cursor.fetchone()
         used = _seats_used(cursor, org_id)
+        pending = _seats_pending(cursor, org_id)
         breakdown = _seat_breakdown(cursor, org_id)
 
     purchased = row["seats_purchased"] if row else 0
@@ -993,9 +1077,13 @@ async def get_seats(
         "plan": row["plan"] if row else "trial",
         "seats_purchased": purchased,
         "seats_used": used,
+        # Outstanding invitations hold seats too. Reporting only `seats_used`
+        # showed capacity that the next invitation would immediately refuse.
+        "seats_pending": pending,
+        "seats_committed": used + pending,
         "billable_roles": list(BILLABLE_ROLES),
         "members_by_role": breakdown,
-        "seats_available": max(0, purchased - used) if purchased else None,
+        "seats_available": max(0, purchased - used - pending) if purchased else None,
         "period_end": row["period_end"].isoformat() if row and row["period_end"] else None,
     }
 

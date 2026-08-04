@@ -27,7 +27,7 @@ import { useToast } from '@/components/ui/Toaster';
 
 export default function SetupPage() {
   const router = useRouter();
-  const { apiKey } = useOpenRouterKey();
+  const { apiKey, hasKey } = useOpenRouterKey();
   const [step, setStep] = useState(1);
   const [canEnterRoom, setCanEnterRoom] = useState(false);
   const [participantIds, setParticipantIds] = useState<string[]>([]);
@@ -337,7 +337,7 @@ export default function SetupPage() {
         <p className={styles.subtitle}>Configure your AI review panel</p>
       </header>
 
-      {!apiKey && (
+      {!hasKey && (
         <div style={{
           backgroundColor: 'var(--surface-2)',
           border: '1px solid var(--warning, #ffc107)',
@@ -552,11 +552,11 @@ export default function SetupPage() {
               onClick={handleLaunchAfterPreflight}
               disabled={isLoading || !canEnterRoom || !apiKey}
               className={styles.btnLaunch}
-              title={!apiKey ? 'Add OpenRouter API key in Settings first' : !canEnterRoom ? 'Complete panel preparation first' : ''}
+              title={!hasKey ? 'Add OpenRouter API key in Settings first' : !canEnterRoom ? 'Complete panel preparation first' : ''}
             >
               <span className={styles.launchIcon} />
               <span>
-                {isLoading ? 'Loading...' : !apiKey ? 'API Key Required' : 'Launch Review Session'}
+                {isLoading ? 'Loading...' : !hasKey ? 'API Key Required' : 'Launch Review Session'}
               </span>
             </button>
           )}

@@ -1,6 +1,11 @@
 /**
  * Centralized OpenRouter API key storage
- * BYOK: Key never sent to our backend DB, only used in request headers
+ *
+ * BYOK: a key held here is never sent to our backend DB, only used in request
+ * headers. But it is no longer the only way to generate — the deployment can
+ * carry its own key, and the backend resolves header → account key → server
+ * key on every AI route. `serverKeyAvailable` records that, so the UI stops
+ * demanding a key the server already has.
  */
 
 export type KeyPersistence = 'memory' | 'session' | 'local';
@@ -8,6 +13,25 @@ export type KeyPersistence = 'memory' | 'session' | 'local';
 class OpenRouterKeyStore {
   private memoryKey: string | null = null;
   private memoryManagementKey: string | null = null;
+  private serverKeyAvailable = false;
+  private listeners = new Set<() => void>();
+
+  /** Told by the app once /me/openrouter-key has answered. */
+  setServerKeyAvailable(available: boolean): void {
+    if (this.serverKeyAvailable === available) return;
+    this.serverKeyAvailable = available;
+    this.listeners.forEach((l) => l());
+  }
+
+  hasServerKey(): boolean {
+    return this.serverKeyAvailable;
+  }
+
+  /** Notified when server-key availability changes, so gates re-render. */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
 
   getKey(): string | null {
     // Priority: memory > sessionStorage > localStorage
@@ -64,7 +88,18 @@ class OpenRouterKeyStore {
     return null;
   }
 
+  /**
+   * Can this deployment generate? Not "is there a key in this browser".
+   *
+   * Gating on browser storage alone disabled every AI control on a deployment
+   * whose server key worked perfectly well.
+   */
   hasKey(): boolean {
+    return this.getKey() !== null || this.serverKeyAvailable;
+  }
+
+  /** True only when the key came from this browser, for Settings to display. */
+  hasBrowserKey(): boolean {
     return this.getKey() !== null;
   }
 

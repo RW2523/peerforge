@@ -37,7 +37,7 @@ export default function SummaryReport({ debateId, agendaData, onStartPractice }:
   const router = useRouter();
 
   const generateSummary = async () => {
-    if (!apiKey) {
+    if (!hasKey) {
       router.push('/settings');
       return;
     }
@@ -74,7 +74,7 @@ export default function SummaryReport({ debateId, agendaData, onStartPractice }:
           Create a structured feedback report with strengths, areas to improve, and concrete recommendations using AI.
         </p>
 
-        {!apiKey && (
+        {!hasKey && (
           <div className={styles.warning}>
             <span>⚠</span>
             <span>You need to set your OpenRouter API key first.</span>

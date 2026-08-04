@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from ..auth import get_current_user
+from ..config import settings
 from ..database import get_db_connection, get_cursor
 from ..utils.key_vault import encrypt_key, decrypt_key, mask_key
 
@@ -111,9 +112,26 @@ async def get_openrouter_key_status(
             (user_id,),
         )
         row = cur.fetchone()
+
+    # Whether the deployment can generate without the caller supplying anything.
+    # A boolean only - never the key, never its prefix, never its balance. The
+    # UI needs this to stop demanding a key the server already has, which left
+    # every AI control disabled on a deployment that was perfectly able to run.
+    server_key_available = bool((settings.openrouter_api_key or "").strip())
+
     if not row:
-        return {"connected": False, "masked": None}
-    return {"connected": True, "masked": f"sk-or-…{row['openrouter_key_last4']}"}
+        return {
+            "connected": False,
+            "masked": None,
+            "server_key_available": server_key_available,
+            "usable": server_key_available,
+        }
+    return {
+        "connected": True,
+        "masked": f"sk-or-…{row['openrouter_key_last4']}",
+        "server_key_available": server_key_available,
+        "usable": True,
+    }
 
 
 @router.delete("/me/openrouter-key")

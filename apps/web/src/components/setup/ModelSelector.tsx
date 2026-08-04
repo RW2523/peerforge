@@ -12,7 +12,7 @@ interface ModelSelectorProps {
 }
 
 export function ModelSelector({ value, onChange, placeholder = 'Select a model...' }: ModelSelectorProps) {
-  const { apiKey } = useOpenRouterKey();
+  const { apiKey, hasKey } = useOpenRouterKey();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [models, setModels] = useState<api.OpenRouterModel[]>([]);
@@ -28,7 +28,7 @@ export function ModelSelector({ value, onChange, placeholder = 'Select a model..
   }, [isOpen, apiKey]);
 
   const fetchModels = async () => {
-    if (!apiKey) {
+    if (!hasKey) {
       setError('OpenRouter API key required');
       return;
     }
@@ -133,7 +133,7 @@ export function ModelSelector({ value, onChange, placeholder = 'Select a model..
           {error && (
             <div className={styles.dropdownError}>
               {error}
-              {!apiKey && (
+              {!hasKey && (
                 <p className={styles.errorHint}>
                   Add your OpenRouter key in Settings first
                 </p>

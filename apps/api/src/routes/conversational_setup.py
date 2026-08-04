@@ -22,6 +22,12 @@ from ..services.persona_prompts import get_base_prompt
 
 router = APIRouter(tags=["conversational-setup"])
 
+# Sessions that have begun speaking. Replacing a panel here would delete the
+# reviewers whose turns are already in the transcript. Named as a blocklist
+# rather than an allowlist because the pre-start states vary ('draft',
+# 'pending', and whatever setup adds next) while "under way" does not.
+_STATES_UNDER_WAY = frozenset({"running", "paused", "ended", "completed", "concluded"})
+
 
 class Turn(BaseModel):
     role: str
@@ -111,13 +117,25 @@ async def setup_apply(
     with get_db_connection() as conn:
         cursor = get_cursor(conn)
         cursor.execute(
-            "SELECT workspace_id, policy_config FROM debates WHERE debate_id = %s",
+            "SELECT workspace_id, policy_config, state FROM debates WHERE debate_id = %s",
             (debate_id,),
         )
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Session not found")
         workspace_id = str(row["workspace_id"])
+
+        # Applying replaces the panel, so it may only run before the session
+        # has said anything. Without this check, re-applying a proposal to a
+        # session already under way deleted the reviewers mid-review, orphaning
+        # every turn they had produced.
+        state = (row["state"] or "").lower()
+        if state in _STATES_UNDER_WAY:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"This session is {state}; its panel can no longer be "
+                       "replaced. Start a new session to use a different panel.",
+            )
 
         # Replace rather than append: revising a proposal must not stack panels.
         cursor.execute("DELETE FROM participants WHERE debate_id = %s", (debate_id,))

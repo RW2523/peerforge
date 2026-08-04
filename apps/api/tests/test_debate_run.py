@@ -182,13 +182,20 @@ def test_debate_run_invalid_openrouter_key(mock_openrouter, valid_request_payloa
 
 
 def test_debate_run_missing_api_key(valid_request_payload):
-    """Test request with missing API key"""
+    """
+    Omitting the key is allowed; running with none available anywhere is not.
+
+    The field is optional so the server's own key (or the caller's stored one)
+    can supply it. When neither exists the answer is a 400 that says so, not a
+    422 about a malformed request nor a 401 implying the key was rejected.
+    """
     payload = valid_request_payload.copy()
     del payload["openrouter_api_key"]
-    
+
     response = client.post("/debates/run", json=payload)
-    
-    assert response.status_code == 422  # FastAPI validation error
+
+    assert response.status_code == 400, response.text
+    assert 'no openrouter key' in response.json()['detail'].lower()
 
 
 @patch('src.debate_engine.OpenRouterClient')

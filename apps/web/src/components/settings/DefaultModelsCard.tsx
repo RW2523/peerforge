@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { keyStore } from '@/lib/openrouterKeyStore';
 import * as api from '@/lib/api';
 import styles from './DefaultModelsCard.module.css';
 
@@ -31,7 +32,7 @@ export function DefaultModelsCard({ apiKey, workspaceId }: DefaultModelsCardProp
   }, [apiKey]);
 
   const fetchAvailableModels = async () => {
-    if (!apiKey) return;
+    if (!keyStore.hasKey()) return;
 
     try {
       const data = await api.listOpenRouterModels(apiKey);
@@ -112,7 +113,7 @@ export function DefaultModelsCard({ apiKey, workspaceId }: DefaultModelsCardProp
             />
           )}
           <span className={styles.fieldHint}>
-            Used for semantic search and RAG retrieval. {!apiKey && '(Add OpenRouter key above to see all available models)'}
+            Used for semantic search and RAG retrieval. {!keyStore.hasKey() && '(Add OpenRouter key above to see all available models)'}
           </span>
         </label>
 
@@ -146,7 +147,7 @@ export function DefaultModelsCard({ apiKey, workspaceId }: DefaultModelsCardProp
             />
           )}
           <span className={styles.fieldHint}>
-            Used after OCR to clean up and structure extracted text. {!apiKey && '(Add OpenRouter key above to see all available models)'}
+            Used after OCR to clean up and structure extracted text. {!keyStore.hasKey() && '(Add OpenRouter key above to see all available models)'}
           </span>
         </label>
 

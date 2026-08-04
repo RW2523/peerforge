@@ -8,7 +8,9 @@ class DebateRunRequest(BaseModel):
     """Request to run a debate"""
     problem_statement: str = Field(..., description="Problem to discuss")
     agents: List[AgentInput] = Field(..., description="Exactly 3 agents for M1")
-    openrouter_api_key: str = Field(..., description="OpenRouter API key (BYOK)")
+    openrouter_api_key: Optional[str] = Field(
+        default=None, description="OpenRouter API key (BYOK); falls back to the server key"
+    )
     debate_title: str = Field(default="Untitled Debate", description="Optional debate title")
 
 

@@ -2,6 +2,7 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import Dict, Any
 from ..auth import get_current_user, check_workspace_access
+from ..config import resolve_openrouter_key
 from ..debate_service import DebateService
 from ..summary_service import SummaryService
 from ..openrouter_client import OpenRouterAuthError, OpenRouterError
@@ -54,11 +55,19 @@ async def generate_summary(
             detail=f"Debate must be in 'ended' state to generate summary. Current state: {debate['state']}"
         )
     
+    resolved_key = resolve_openrouter_key(request.openrouter_api_key)
+    if not resolved_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No OpenRouter key available. Add one in Settings, or "
+                   "configure OPENROUTER_API_KEY on the server.",
+        )
+
     try:
         summary_service = SummaryService()
         outputs = summary_service.generate_summary(
             debate_id=debate_id,
-            openrouter_api_key=request.openrouter_api_key,
+            openrouter_api_key=resolved_key,
             model_id=request.model_id if hasattr(request, 'model_id') else "openai/gpt-4o-mini"  # Cost-optimized
         )
         

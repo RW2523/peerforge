@@ -138,7 +138,12 @@ def test_get_summary_after_generation(mock_openrouter_class, mock_openrouter_res
 
 
 def test_summarize_missing_openrouter_key():
-    """Test summarize without OpenRouter key returns 422 (validation error)"""
+    """
+    Omitting the key is allowed; having none available anywhere is a 400.
+
+    The field is optional so the server's key can supply it. The autouse
+    fixture hides that key from tests, so this exercises the bare case.
+    """
     from src.debate_service import DebateService
     
     service = DebateService()
@@ -154,8 +159,9 @@ def test_summarize_missing_openrouter_key():
         f"/debates/{debate_id}/summarize",
         json={"model_id": "anthropic/claude-3.5-sonnet"}  # Missing openrouter_api_key
     )
-    
-    assert response.status_code == 422  # Pydantic validation error
+
+    assert response.status_code == 400, response.text
+    assert 'no openrouter key' in response.json()['detail'].lower()
 
 
 def test_summarize_debate_not_ended():

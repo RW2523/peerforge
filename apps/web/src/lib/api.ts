@@ -106,9 +106,7 @@ export async function getDebate(debateId: string): Promise<any> {
 
 export async function startDebate(debateId: string, openrouterKey?: string | null): Promise<DebateResponse> {
   const headers = await getAuthHeaders();
-  if (openrouterKey) {
-    (headers as Record<string, string>)['X-OpenRouter-Key'] = openrouterKey;
-  }
+  if (openrouterKey) (headers as Record<string, string>)['X-OpenRouter-Key'] = openrouterKey;
   const response = await fetch(`${API_URL}/debates/${debateId}/start`, {
     method: 'POST',
     headers,
@@ -188,9 +186,9 @@ export async function endDebate(debateId: string): Promise<DebateResponse> {
   return response.json();
 }
 
-export async function triggerNextTurn(debateId: string, openrouterKey: string): Promise<any> {
+export async function triggerNextTurn(debateId: string, openrouterKey: string | null | undefined): Promise<any> {
   const headers = await getAuthHeaders() as Record<string, string>;
-  headers['X-OpenRouter-Key'] = openrouterKey;
+  if (openrouterKey) headers['X-OpenRouter-Key'] = openrouterKey;
   
   const response = await fetch(`${API_URL}/debates/${debateId}/turn/next`, {
     method: 'POST',
@@ -204,9 +202,9 @@ export async function triggerNextTurn(debateId: string, openrouterKey: string): 
   return response.json();
 }
 
-export async function concludeDebate(debateId: string, openrouterKey: string): Promise<any> {
+export async function concludeDebate(debateId: string, openrouterKey: string | null | undefined): Promise<any> {
   const headers = await getAuthHeaders() as Record<string, string>;
-  headers['X-OpenRouter-Key'] = openrouterKey;
+  if (openrouterKey) headers['X-OpenRouter-Key'] = openrouterKey;
   
   const response = await fetch(`${API_URL}/debates/${debateId}/conclude`, {
     method: 'POST',
@@ -246,7 +244,8 @@ export function getStreamUrl(debateId: string, since?: number): string {
 
 // M3 Summary endpoints
 export interface SummarizeRequest {
-  openrouter_api_key: string;
+  /** Optional: the backend falls back to the account or server key. */
+  openrouter_api_key?: string | null;
   model_id?: string;
 }
 
@@ -269,14 +268,14 @@ export interface SummaryResponse {
 export async function generateSummary(
   debateId: string,
   request: SummarizeRequest,
-  openrouterKey: string
+  openrouterKey: string | null | undefined
 ): Promise<SummaryResponse> {
   const headers = await getAuthHeaders();
   const response = await fetch(`${API_URL}/debates/${debateId}/summarize`, {
     method: 'POST',
     headers: {
       ...headers,
-      'X-OpenRouter-Key': openrouterKey,
+      ...(openrouterKey ? { 'X-OpenRouter-Key': openrouterKey } : {}),
     },
     body: JSON.stringify(request),
   });
@@ -455,11 +454,11 @@ export interface OpenRouterModelListResponse {
   models: OpenRouterModel[];
 }
 
-export async function listOpenRouterModels(openrouterKey: string): Promise<OpenRouterModelListResponse> {
+export async function listOpenRouterModels(openrouterKey: string | null | undefined): Promise<OpenRouterModelListResponse> {
   const response = await fetch(`${API_URL}/openrouter/models`, {
     method: 'GET',
     headers: {
-      'X-OpenRouter-Key': openrouterKey,
+      ...(openrouterKey ? { 'X-OpenRouter-Key': openrouterKey } : {}),
     },
   });
   
@@ -471,11 +470,11 @@ export async function listOpenRouterModels(openrouterKey: string): Promise<OpenR
 }
 
 export async function getOpenRouterAccount(
-  openrouterKey: string,
+  openrouterKey: string | null | undefined,
   managementKey?: string | null
 ): Promise<OpenRouterAccountResponse> {
   const headers: Record<string, string> = {
-    'X-OpenRouter-Key': openrouterKey,
+    ...(openrouterKey ? { 'X-OpenRouter-Key': openrouterKey } : {}),
   };
   
   if (managementKey) {
@@ -631,7 +630,7 @@ export async function uploadMaterials(
     'Authorization': token ? `Bearer ${token}` : '',
   };
   if (openrouterKey) {
-    headers['X-OpenRouter-Key'] = openrouterKey;
+    if (openrouterKey) headers['X-OpenRouter-Key'] = openrouterKey;
   }
 
   const response = await fetch(`${API_URL}/debates/${debateId}/materials/upload`, {
@@ -675,10 +674,10 @@ export interface ActionItemDecision {
 export async function extractActionItems(
   debateId: string,
   materialId: string,
-  openrouterKey: string
+  openrouterKey: string | null | undefined
 ): Promise<TranscriptActionItem[]> {
   const headers = await getAuthHeaders();
-  (headers as Record<string, string>)['X-OpenRouter-Key'] = openrouterKey;
+  if (openrouterKey) (headers as Record<string, string>)['X-OpenRouter-Key'] = openrouterKey;
   const response = await fetch(
     `${API_URL}/debates/${debateId}/materials/${materialId}/extract-action-items`,
     { method: 'POST', headers }
@@ -718,10 +717,10 @@ export async function updateActionItem(
 export async function debateActionItem(
   debateId: string,
   actionId: string,
-  openrouterKey: string
+  openrouterKey: string | null | undefined
 ): Promise<ActionItemDecision> {
   const headers = await getAuthHeaders();
-  (headers as Record<string, string>)['X-OpenRouter-Key'] = openrouterKey;
+  if (openrouterKey) (headers as Record<string, string>)['X-OpenRouter-Key'] = openrouterKey;
   const response = await fetch(
     `${API_URL}/debates/${debateId}/action-items/${actionId}/debate`,
     { method: 'POST', headers }
@@ -745,10 +744,10 @@ export async function getActionItemDecision(
 
 export async function triggerEmbeddingGeneration(
   debateId: string,
-  openrouterKey: string
+  openrouterKey: string | null | undefined
 ): Promise<{ debate_id: string; job_id: string | null; message: string }> {
   const headers = await getAuthHeaders();
-  (headers as Record<string, string>)['X-OpenRouter-Key'] = openrouterKey;
+  if (openrouterKey) (headers as Record<string, string>)['X-OpenRouter-Key'] = openrouterKey;
   const response = await fetch(`${API_URL}/debates/${debateId}/materials/embed`, {
     method: 'POST',
     headers,
@@ -1025,9 +1024,7 @@ export async function startPreflight(debateId: string, openrouterKey?: string | 
   const headers = await getAuthHeaders();
   
   // Add OpenRouter key if provided (for real AI prep generation)
-  if (openrouterKey) {
-    (headers as Record<string, string>)['X-OpenRouter-Key'] = openrouterKey;
-  }
+  if (openrouterKey) (headers as Record<string, string>)['X-OpenRouter-Key'] = openrouterKey;
   
   const response = await fetch(`${API_URL}/debates/${debateId}/preflight/start`, {
     method: 'POST',
@@ -1182,13 +1179,13 @@ export interface ImproveProblemStatementResponse {
 
 export async function improveProblemStatement(
   inputText: string,
-  openrouterKey: string
+  openrouterKey: string | null | undefined
 ): Promise<ImproveProblemStatementResponse> {
   const response = await fetch(`${API_URL}/ai/improve-problem-statement`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-OpenRouter-Key': openrouterKey,
+      ...(openrouterKey ? { 'X-OpenRouter-Key': openrouterKey } : {}),
     },
     body: JSON.stringify({ input_text: inputText }),
   });
@@ -1256,10 +1253,10 @@ export async function addInlineMaterials(
 export async function startAutonomousDebate(
   debateId: string,
   autoTurnDelaySeconds: number = 10,
-  openrouterKey: string
+  openrouterKey: string | null | undefined
 ): Promise<{ status: string; debate_id: string }> {
   const headers: any = await getAuthHeaders();
-  headers['X-OpenRouter-Key'] = openrouterKey;
+  if (openrouterKey) headers['X-OpenRouter-Key'] = openrouterKey;
   
   const response = await fetch(`${API_URL}/api/debates/${debateId}/start-autonomous`, {
     method: 'POST',
@@ -1289,9 +1286,9 @@ export async function pauseAutonomousDebate(debateId: string): Promise<{ status:
   return response.json();
 }
 
-export async function resumeAutonomousDebate(debateId: string, openrouterKey: string): Promise<{ status: string }> {
+export async function resumeAutonomousDebate(debateId: string, openrouterKey: string | null | undefined): Promise<{ status: string }> {
   const headers: any = await getAuthHeaders();
-  headers['X-OpenRouter-Key'] = openrouterKey;
+  if (openrouterKey) headers['X-OpenRouter-Key'] = openrouterKey;
   
   const response = await fetch(`${API_URL}/api/debates/${debateId}/resume-autonomous`, {
     method: 'POST',
@@ -1664,7 +1661,7 @@ export interface ReadinessReport {
   generated_at?: string;
 }
 
-async function defenseHeaders(openrouterKey?: string): Promise<HeadersInit> {
+async function defenseHeaders(openrouterKey?: string | null): Promise<HeadersInit> {
   const base = await getAuthHeaders() as Record<string, string>;
   if (openrouterKey) base['X-OpenRouter-Key'] = openrouterKey;
   return base;
@@ -1681,7 +1678,7 @@ export async function getReasoningModes(): Promise<Record<ReasoningMode, Reasoni
 
 export async function analyzeResearch(
   debateId: string,
-  openrouterKey: string,
+  openrouterKey: string | null | undefined,
   mode: ReasoningMode = 'medium',
   modelId = ''
 ): Promise<{ status: string; profile: ResearchProfile; mode_used: string }> {
@@ -1699,7 +1696,7 @@ export async function analyzeResearch(
 
 export async function suggestPersonas(
   debateId: string,
-  openrouterKey: string,
+  openrouterKey: string | null | undefined,
   mode: ReasoningMode = 'medium'
 ): Promise<{ personas: SuggestedPersona[]; mode: string; mode_info: ReasoningModeInfo }> {
   const response = await fetch(`${API_URL}/debates/${debateId}/suggest-personas`, {
@@ -1728,7 +1725,7 @@ export async function getResearchProfile(debateId: string): Promise<ResearchProf
 
 export async function generateDefenseQuestions(
   debateId: string,
-  openrouterKey: string,
+  openrouterKey: string | null | undefined,
   nQuestions = 15,
   mode: ReasoningMode = 'medium',
   modelId = ''
@@ -1761,7 +1758,7 @@ export async function submitAnswer(
   debateId: string,
   questionId: string,
   answerText: string,
-  openrouterKey: string,
+  openrouterKey: string | null | undefined,
   mode: ReasoningMode = 'medium',
   modelId = ''
 ): Promise<AnswerEvaluation> {
@@ -1787,7 +1784,7 @@ export async function getAnswers(debateId: string): Promise<{ count: number; ans
 
 export async function generateReadinessReport(
   debateId: string,
-  openrouterKey: string,
+  openrouterKey: string | null | undefined,
   mode: ReasoningMode = 'medium',
   modelId = ''
 ): Promise<ReadinessReport> {
@@ -2079,10 +2076,10 @@ export interface UngroundedCitationDemo {
 export async function demoUngroundedCitation(
   debateId: string,
   claim: string,
-  openrouterKey: string,
+  openrouterKey: string | null | undefined,
 ): Promise<UngroundedCitationDemo> {
   const headers = await getAuthHeaders() as Record<string, string>;
-  headers['X-OpenRouter-Key'] = openrouterKey;
+  if (openrouterKey) headers['X-OpenRouter-Key'] = openrouterKey;
   const response = await fetch(`${API_URL}/debates/${debateId}/demo/ungrounded-citation`, {
     method: 'POST',
     headers,
@@ -2108,14 +2105,14 @@ export async function suggestPanelTemplates(
   title: string,
   abstract: string,
   templates: AgentTemplate[],
-  openrouterKey: string,
+  openrouterKey: string | null | undefined,
   n: number = 5,
 ): Promise<{ suggestions: PanelSuggestion[]; model_used: string }> {
   const response = await fetch(`${API_URL}/ai/suggest-panel`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-OpenRouter-Key': openrouterKey,
+      ...(openrouterKey ? { 'X-OpenRouter-Key': openrouterKey } : {}),
     },
     body: JSON.stringify({
       title,
@@ -2169,12 +2166,12 @@ export interface AcademicAssessment {
 
 export async function generateAcademicAssessment(
   debateId: string,
-  openrouterKey: string,
+  openrouterKey: string | null | undefined,
   triggerSource: string = 'manual',
   mode: ReasoningMode = 'light',
 ): Promise<AcademicAssessment> {
   const headers = await getAuthHeaders() as Record<string, string>;
-  headers['X-OpenRouter-Key'] = openrouterKey;
+  if (openrouterKey) headers['X-OpenRouter-Key'] = openrouterKey;
   const response = await fetch(`${API_URL}/debates/${debateId}/assessment/generate`, {
     method: 'POST',
     headers,
@@ -2203,9 +2200,18 @@ export async function getAcademicAssessment(debateId: string): Promise<AcademicA
 // ============================================================================
 
 export interface AccountKeyStatus {
+  /** The caller has stored a key on their own account. */
   connected: boolean;
   masked: string | null;
+  /** The deployment carries its own key, so generation works with none stored. */
+  server_key_available?: boolean;
+  /** Either of the above — "can this user actually generate right now". */
+  usable?: boolean;
 }
+
+/** Alias used by useOpenRouterKey; same endpoint, clearer name at the call site. */
+export const getOpenRouterKeyStatus = (): Promise<AccountKeyStatus> =>
+  getAccountOpenRouterKey();
 
 export async function getAccountOpenRouterKey(): Promise<AccountKeyStatus> {
   const response = await fetch(`${API_URL}/me/openrouter-key`, {

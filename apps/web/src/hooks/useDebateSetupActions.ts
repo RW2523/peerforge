@@ -3,6 +3,7 @@
  * Extracted from setup/page.tsx for maintainability
  */
 import { useState } from 'react';
+import { keyStore } from '@/lib/openrouterKeyStore';
 import { useRouter } from 'next/navigation';
 import * as api from '@/lib/api';
 import type { SetupParticipant, SetupMaterial } from '@/lib/api';
@@ -178,7 +179,7 @@ export function useDebateSetupActions(
     }
 
     // Validate API key before launching
-    if (!apiKey) {
+    if (!keyStore.hasKey()) {
       toast.error('An OpenRouter API key is needed before the panel can run.', {
         label: 'Open Settings',
         onClick: () => { window.location.href = '/settings'; },
@@ -230,7 +231,7 @@ export function useDebateSetupActions(
 
       // Check if YOLO mode is enabled
       if (options.yoloMode) {
-        if (!apiKey) {
+        if (!keyStore.hasKey()) {
           throw new Error('OpenRouter API key required for YOLO mode. Please add it in Settings.');
         }
         await api.startAutonomousDebate(debateId, options.autoTurnDelay || 10, apiKey);

@@ -14,7 +14,12 @@ class SummarizeRequest(BaseModel):
     """Request to generate debate summary (M3)"""
     model_config = ConfigDict(protected_namespaces=())
     
-    openrouter_api_key: str = Field(..., description="OpenRouter BYOK key (never stored)", min_length=10)
+    # Optional: omitted when the caller relies on the key stored on their
+    # account or configured on the server. Required-with-min_length made
+    # the request 422 before the handler could resolve either.
+    openrouter_api_key: Optional[str] = Field(
+        default=None, description="OpenRouter BYOK key (never stored)"
+    )
     model_id: str = Field(default="anthropic/claude-sonnet-4-5", description="Model for summary generation")
 
 

@@ -138,9 +138,17 @@ async def run_debate(
             detail="Exactly 3 agents required for M1"
         )
     
+    resolved_key = resolve_openrouter_key(request.openrouter_api_key)
+    if not resolved_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No OpenRouter key available. Add one in Settings, or "
+                   "configure OPENROUTER_API_KEY on the server.",
+        )
+
     try:
         # Initialize engine with BYOK
-        engine = DebateEngine(openrouter_api_key=request.openrouter_api_key)
+        engine = DebateEngine(openrouter_api_key=resolved_key)
         
         # Convert agents to dict format
         agents_list = [
@@ -176,6 +184,10 @@ async def run_debate(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
+    except HTTPException:
+        # A deliberate status set deeper in the stack is the answer we want,
+        # not "Internal server error".
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

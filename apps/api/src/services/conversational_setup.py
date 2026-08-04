@@ -189,22 +189,67 @@ def converse(
     }
 
 
+# Words that point an unfamiliar title at the lane closest to it, so
+# "ACL area chair" reads as an external examiner rather than a generic sceptic.
+_LANE_HINTS = (
+    ("methodology professor", ("method", "statistic", "experiment", "rigou", "rigor", "design")),
+    ("domain expert", ("domain", "subject", "specialist", "expert", "clinician", "practitioner")),
+    ("external examiner", ("examiner", "chair", "editor", "committee", "viva", "external", "area")),
+    ("friendly professor", ("friendly", "supportive", "mentor", "encourag")),
+    ("advisor", ("advisor", "adviser", "supervisor", "pi ", "principal")),
+    ("skeptical reviewer", ("skeptic", "sceptic", "critic", "adversar", "reviewer 2")),
+)
+
+
+def _closest_lane(role: str, taken: List[str]) -> str:
+    """
+    Pick the lane an unrecognised role best fits, avoiding duplicates.
+
+    Falling back to a single fixed lane made every unmapped reviewer identical;
+    preferring an unused lane keeps the panel differentiated, which is the
+    whole point of having six of them.
+    """
+    for lane, hints in _LANE_HINTS:
+        if any(h in role for h in hints):
+            return lane
+    for lane in REVIEWER_ROLES:
+        if lane not in taken:
+            return lane
+    return "skeptical reviewer"
+
+
 def _clean_proposal(proposal: Any) -> Optional[Dict[str, Any]]:
     """Normalise whatever the model returned into the shape the UI expects."""
     if not isinstance(proposal, dict):
         return None
 
     panel = []
+    remapped: List[Dict[str, str]] = []
     for member in (proposal.get("panel") or [])[:6]:
         if not isinstance(member, dict):
             continue
-        role = str(member.get("role") or "").strip().lower()
+        requested = str(member.get("role") or "").strip().lower()
+        focus = str(member.get("focus") or "").strip()[:300]
+
+        if requested in REVIEWER_ROLES:
+            lane = requested
+        else:
+            # The orchestrator only differentiates the six known lanes, so an
+            # unrecognised role has to land on one of them. Pinning every such
+            # role to "skeptical reviewer" made two unmapped members collapse
+            # into byte-identical personas, and told the researcher we had
+            # staffed a role we had not.
+            lane = _closest_lane(requested, [p["role"] for p in panel])
+            remapped.append({"requested": requested, "assigned": lane})
+            if requested:
+                # Keep the intent alive in the persona rather than discarding it.
+                focus = (f"Reviewing in the manner of a {requested}. {focus}").strip()[:300]
+
         panel.append({
             "name": str(member.get("name") or "Reviewer").strip()[:80],
-            # An unrecognised role would be assigned a default lane, so pin it
-            # to one the orchestrator differentiates on.
-            "role": role if role in REVIEWER_ROLES else "skeptical reviewer",
-            "focus": str(member.get("focus") or "").strip()[:300],
+            "role": lane,
+            "requested_role": requested or None,
+            "focus": focus,
         })
 
     rounds = proposal.get("rounds")
@@ -218,6 +263,9 @@ def _clean_proposal(proposal: Any) -> Optional[Dict[str, Any]]:
         "problem_statement": str(proposal.get("problem_statement") or "").strip()[:2000],
         "panel": panel,
         "rounds": rounds,
+        # Surfaced so the UI can say "we staffed an external examiner for the
+        # area chair you asked for" instead of quietly claiming otherwise.
+        "remapped_roles": remapped,
     }
 
 

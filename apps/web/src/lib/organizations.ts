@@ -189,13 +189,15 @@ export const converseSetup = async (
   debateId: string,
   message: string,
   history: { role: string; content: string }[],
-  openrouterKey: string,
+  openrouterKey: string | null,
   modelId?: string
 ): Promise<ConverseResult> => {
   const base = await headers();
   const response = await fetch(`${API_URL}/debates/${debateId}/setup/converse`, {
     method: 'POST',
-    headers: { ...base, 'X-OpenRouter-Key': openrouterKey },
+    // Omitted entirely when this browser holds no key, so the backend can
+    // fall back to the account or server key instead of seeing 'null'.
+    headers: { ...base, ...(openrouterKey ? { 'X-OpenRouter-Key': openrouterKey } : {}) },
     body: JSON.stringify({ message, history, model_id: modelId || null }),
   });
   if (!response.ok) {

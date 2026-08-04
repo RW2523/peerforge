@@ -80,7 +80,7 @@ export function PreflightStep({
   meetingAgenda,
   desiredOutcomes,
 }: PreflightStepProps) {
-  const { apiKey } = useOpenRouterKey();
+  const { apiKey, hasKey } = useOpenRouterKey();
   const {
     status,
     isPolling,
@@ -123,7 +123,7 @@ export function PreflightStep({
 
   const handleStartPreflight = async () => {
     if (!debateId) return;
-    if (!apiKey) return;
+    if (!hasKey) return;
 
     setIsStarting(true);
     try {
@@ -256,7 +256,7 @@ export function PreflightStep({
 
       {!isStarted && !isStarting && (
         <div style={{ marginTop: '2rem' }}>
-          {!apiKey && (
+          {!hasKey && (
             <div style={{
               background: 'var(--warning-bg, #fff8e1)',
               border: '1px solid var(--warning, #f5a623)',

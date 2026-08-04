@@ -62,7 +62,7 @@ export function BasicInfoStep({
   isLoading,
 }: BasicInfoStepProps) {
   const router = useRouter();
-  const { apiKey } = useOpenRouterKey();
+  const { apiKey, hasKey } = useOpenRouterKey();
   const toast = useToast();
   const [agendaInput, setAgendaInput] = useState('');
   const [outcomeInput, setOutcomeInput] = useState('');
@@ -259,7 +259,7 @@ export function BasicInfoStep({
   };
 
   const handleImproveProblemStatement = async () => {
-    if (!apiKey) {
+    if (!hasKey) {
       router.push('/settings');
       return;
     }

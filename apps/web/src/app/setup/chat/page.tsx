@@ -29,7 +29,7 @@ const OPENER =
 export default function ConversationalSetupPage() {
   const router = useRouter();
   const { workspaceId } = useWorkspace();
-  const { apiKey } = useOpenRouterKey();
+  const { apiKey, hasKey } = useOpenRouterKey();
 
   const [debateId, setDebateId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([
@@ -62,7 +62,7 @@ export default function ConversationalSetupPage() {
     const text = input.trim();
     if (!text || busy || !debateId) return;
 
-    if (!apiKey) {
+    if (!hasKey) {
       setError('An OpenRouter key is required. Add one in Settings.');
       return;
     }

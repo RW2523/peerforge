@@ -24,7 +24,7 @@ interface DebateControlsProps {
 }
 
 export default function DebateControls({ debateId, currentState, isYoloMode = false, yoloStatus, policyConfig, totalTurns = 0, participantCount = 0, onPolicyUpdate, onStateChange, onYoloStatusChange, onAutoModeChange, sendCommand }: DebateControlsProps) {
-  const { apiKey } = useOpenRouterKey();
+  const { apiKey, hasKey } = useOpenRouterKey();
   const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,7 +105,7 @@ export default function DebateControls({ debateId, currentState, isYoloMode = fa
     try {
       // If YOLO mode, resume autonomous loop as well
       if (isYoloMode) {
-        if (!apiKey) {
+        if (!hasKey) {
           setError('OpenRouter API key required for YOLO mode. Please add it in Settings.');
           setLoading(false);
           return;
@@ -141,7 +141,7 @@ export default function DebateControls({ debateId, currentState, isYoloMode = fa
   };
 
   const handleResumeYolo = async () => {
-    if (!apiKey) {
+    if (!hasKey) {
       setError('OpenRouter API key required. Please add it in Settings.');
       return;
     }
@@ -163,7 +163,7 @@ export default function DebateControls({ debateId, currentState, isYoloMode = fa
   // turn (waiting for the previous turn to finish) until all rounds complete,
   // then the session concludes automatically.
   const handleStartAutoMode = async () => {
-    if (!apiKey) {
+    if (!hasKey) {
       setError('OpenRouter API key required for Auto Mode. Please add it in Settings.');
       return;
     }
@@ -209,7 +209,7 @@ export default function DebateControls({ debateId, currentState, isYoloMode = fa
   };
 
   const handleNextTurn = async () => {
-    if (!apiKey) {
+    if (!hasKey) {
       setError('OpenRouter API key required. Please add it in Settings.');
       return;
     }
@@ -372,7 +372,7 @@ export default function DebateControls({ debateId, currentState, isYoloMode = fa
             onClick={handleNextTurn}
             disabled={!canTriggerTurn || triggeringTurn}
             className={shouldConclude ? styles.btnConclude : (canTriggerTurn ? styles.btnPrimary : '')}
-            title={shouldConclude ? (policyConfig?.enable_host ? 'Host will provide final conclusion' : 'All rounds complete - End meeting') : (!apiKey ? 'Add OpenRouter API key in Settings' : 'Trigger next agent to speak')}
+            title={shouldConclude ? (policyConfig?.enable_host ? 'Host will provide final conclusion' : 'All rounds complete - End meeting') : (!hasKey ? 'Add OpenRouter API key in Settings' : 'Trigger next agent to speak')}
           >
             {triggeringTurn ? '🤔 Agent thinking...' : shouldConclude ? '🏁 Conclude Meeting' : '▶ Next Turn'} {!triggeringTurn && !shouldConclude && currentState === 'running' && !isYoloMode ? <span style={{opacity: 0.6, fontSize: '0.85em'}}>(Ctrl+Enter)</span> : null}
           </button>
