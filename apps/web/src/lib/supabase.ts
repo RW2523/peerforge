@@ -70,9 +70,21 @@ export async function getAccessToken(): Promise<string | null> {
     }
   }
 
-  // Production: use Supabase session
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.access_token || null;
+  // Production: use Supabase session.
+  //
+  // Never allowed to throw. When the Supabase URL is unreachable — an https
+  // page reaching for http://localhost:54321 is blocked outright — this
+  // rejects with "Failed to fetch", and because every request awaits this
+  // first, that error surfaced as the failure of whatever the user was doing.
+  // Uploading a document reported "Failed to fetch" without a single byte
+  // having been sent to our own API, which was up and answering.
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token || null;
+  } catch (err) {
+    console.warn('Could not read a Supabase session; continuing without a token', err);
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------

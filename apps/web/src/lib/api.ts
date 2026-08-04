@@ -84,7 +84,7 @@ export async function createDebate(workspaceId: string, title: string): Promise<
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to create debate: ${response.statusText}`);
+    throw new Error(`Failed to create debate: ${response.status}`);
   }
   
   return response.json();
@@ -98,7 +98,7 @@ export async function getDebate(debateId: string): Promise<any> {
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to get debate: ${response.statusText}`);
+    throw new Error(`Failed to get debate: ${response.status}`);
   }
   
   return response.json();
@@ -114,7 +114,7 @@ export async function startDebate(debateId: string, openrouterKey?: string | nul
   
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    const detail = body?.detail ?? response.statusText;
+    const detail = body?.detail ?? `HTTP ${response.status}`;
     throw new Error(`Failed to start debate: ${detail}`);
   }
   
@@ -129,7 +129,7 @@ export async function pauseDebate(debateId: string): Promise<DebateResponse> {
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to pause debate: ${response.statusText}`);
+    throw new Error(`Failed to pause debate: ${response.status}`);
   }
   
   return response.json();
@@ -143,7 +143,7 @@ export async function resumeDebate(debateId: string): Promise<DebateResponse> {
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to resume debate: ${response.statusText}`);
+    throw new Error(`Failed to resume debate: ${response.status}`);
   }
   
   return response.json();
@@ -166,7 +166,7 @@ export async function extendDebate(
   
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(`Failed to extend debate: ${error.detail || response.statusText}`);
+    throw new Error(`Failed to extend debate: ${error.detail || `HTTP ${response.status}`}`);
   }
   
   return response.json();
@@ -180,7 +180,7 @@ export async function endDebate(debateId: string): Promise<DebateResponse> {
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to end debate: ${response.statusText}`);
+    throw new Error(`Failed to end debate: ${response.status}`);
   }
   
   return response.json();
@@ -196,7 +196,7 @@ export async function triggerNextTurn(debateId: string, openrouterKey: string | 
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to trigger next turn: ${response.statusText}`);
+    throw new Error(`Failed to trigger next turn: ${response.status}`);
   }
   
   return response.json();
@@ -213,7 +213,7 @@ export async function concludeDebate(debateId: string, openrouterKey: string | n
   
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(`Failed to conclude debate: ${error.detail || response.statusText}`);
+    throw new Error(`Failed to conclude debate: ${error.detail || `HTTP ${response.status}`}`);
   }
   
   return response.json();
@@ -228,7 +228,7 @@ export async function intervene(debateId: string, request: InterventionRequest):
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to intervene: ${response.statusText}`);
+    throw new Error(`Failed to intervene: ${response.status}`);
   }
   
   return response.json();
@@ -282,7 +282,7 @@ export async function generateSummary(
   
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.detail || `Failed to generate summary: ${response.statusText}`);
+    throw new Error(error.detail || `Failed to generate summary: ${response.status}`);
   }
   
   return response.json();
@@ -299,7 +299,7 @@ export async function getSummary(debateId: string): Promise<SummaryResponse> {
     if (response.status === 404) {
       throw new Error('Summary not generated yet');
     }
-    throw new Error(`Failed to get summary: ${response.statusText}`);
+    throw new Error(`Failed to get summary: ${response.status}`);
   }
   
   return response.json();
@@ -378,7 +378,7 @@ export async function listAgentTemplates(): Promise<AgentTemplate[]> {
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to fetch templates: ${response.statusText}`);
+    throw new Error(`Failed to fetch templates: ${response.status}`);
   }
   
   return response.json();
@@ -392,7 +392,7 @@ export async function listAgents(workspaceId: string): Promise<Agent[]> {
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to fetch agents: ${response.statusText}`);
+    throw new Error(`Failed to fetch agents: ${response.status}`);
   }
   
   return response.json();
@@ -408,7 +408,7 @@ export async function setupDebate(request: DebateSetupRequest): Promise<DebateSe
   
   if (!response.ok) {
     const error = await response.json().catch(() => null);
-    throw new Error(formatErrorDetail(error?.detail, `Failed to setup debate: ${response.statusText}`));
+    throw new Error(formatErrorDetail(error?.detail, `Failed to setup debate: ${response.status}`));
   }
   
   return response.json();
@@ -463,7 +463,7 @@ export async function listOpenRouterModels(openrouterKey: string | null | undefi
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to fetch models: ${response.statusText}`);
+    throw new Error(`Failed to fetch models: ${response.status}`);
   }
   
   return response.json();
@@ -488,7 +488,7 @@ export async function getOpenRouterAccount(
   
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    const detail = body?.detail ?? response.statusText;
+    const detail = body?.detail ?? `HTTP ${response.status}`;
     if (response.status === 401) {
       throw new Error(`Invalid API key — ${detail}`);
     }
@@ -534,7 +534,7 @@ export async function listDebates(
   
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    const detail = body?.detail ?? response.statusText;
+    const detail = body?.detail ?? `HTTP ${response.status}`;
     throw new Error(`Failed to list debates: ${detail}`);
   }
 
@@ -549,7 +549,7 @@ export async function getDebateEvents(debateId: string): Promise<any[]> {
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to get events: ${response.statusText}`);
+    throw new Error(`Failed to get events: ${response.status}`);
   }
   
   return response.json();
@@ -567,7 +567,7 @@ export async function getDebateSummary(debateId: string): Promise<any> {
       return null; // No summary generated yet
     }
     const body = await response.json().catch(() => null);
-    const detail = body?.detail ?? response.statusText;
+    const detail = body?.detail ?? `HTTP ${response.status}`;
     throw new Error(`Failed to get summary: ${detail}`);
   }
 
@@ -626,12 +626,16 @@ export async function uploadMaterials(
   formData.append('category', category);
   formData.append('is_primary', String(isPrimary));
 
-  const headers: Record<string, string> = {
-    'Authorization': token ? `Bearer ${token}` : '',
-  };
-  if (openrouterKey) {
-    if (openrouterKey) headers['X-OpenRouter-Key'] = openrouterKey;
-  }
+  // Content-Type is deliberately absent: the browser must set it itself so the
+  // multipart boundary matches the body.
+  const headers: Record<string, string> = {};
+  // Omitted rather than sent empty — `Authorization: ''` is a malformed header.
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (openrouterKey) headers['X-OpenRouter-Key'] = openrouterKey;
+  // Sent by every other call via getAuthHeaders; missing here, so an upload
+  // acted in whichever workspace the server happened to pick.
+  const workspaceId = getActiveWorkspaceId();
+  if (workspaceId) headers['X-Workspace-Id'] = workspaceId;
 
   const response = await fetch(`${API_URL}/debates/${debateId}/materials/upload`, {
     method: 'POST',
@@ -640,7 +644,12 @@ export async function uploadMaterials(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to upload materials: ${response.statusText}`);
+    // statusText is empty over HTTP/2, so this read "Failed to upload
+    // materials: " with nothing after it. Use what the server actually said.
+    const body = await response.json().catch(() => null);
+    throw new Error(
+      formatErrorDetail(body?.detail, `Upload failed (${response.status})`)
+    );
   }
 
   return response.json();
@@ -694,7 +703,7 @@ export async function listActionItems(debateId: string): Promise<TranscriptActio
     method: 'GET',
     headers,
   });
-  if (!response.ok) throw new Error(`Failed to list action items: ${response.statusText}`);
+  if (!response.ok) throw new Error(`Failed to list action items: ${response.status}`);
   return response.json();
 }
 
@@ -710,7 +719,7 @@ export async function updateActionItem(
     headers,
     body: JSON.stringify(update),
   });
-  if (!response.ok) throw new Error(`Failed to update action item: ${response.statusText}`);
+  if (!response.ok) throw new Error(`Failed to update action item: ${response.status}`);
   return response.json();
 }
 
@@ -738,7 +747,7 @@ export async function getActionItemDecision(
     `${API_URL}/debates/${debateId}/action-items/${actionId}/decision`,
     { method: 'GET', headers }
   );
-  if (!response.ok) throw new Error(`Failed to get decision: ${response.statusText}`);
+  if (!response.ok) throw new Error(`Failed to get decision: ${response.status}`);
   return response.json();
 }
 
@@ -767,7 +776,7 @@ export async function getMaterialsStatus(debateId: string): Promise<MaterialsSta
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to get materials status: ${response.statusText}`);
+    throw new Error(`Failed to get materials status: ${response.status}`);
   }
   
   return response.json();
@@ -784,7 +793,7 @@ export async function deleteMaterial(
   );
 
   if (!response.ok) {
-    throw new Error(`Failed to remove material: ${response.statusText}`);
+    throw new Error(`Failed to remove material: ${response.status}`);
   }
 
   return response.json();
@@ -799,7 +808,7 @@ export async function retryMaterial(debateId: string, materialId: string): Promi
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to retry material: ${response.statusText}`);
+    throw new Error(`Failed to retry material: ${response.status}`);
   }
   
   return response.json();
@@ -897,7 +906,7 @@ export async function listImportableMemorySources(
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to list importable sources: ${response.statusText}`);
+    throw new Error(`Failed to list importable sources: ${response.status}`);
   }
   
   return response.json();
@@ -916,7 +925,7 @@ export async function previewMemoryImport(
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to preview memory import: ${response.statusText}`);
+    throw new Error(`Failed to preview memory import: ${response.status}`);
   }
   
   return response.json();
@@ -935,7 +944,7 @@ export async function importMemory(
   
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to import memory: ${response.statusText} - ${errorText}`);
+    throw new Error(`Failed to import memory: ${response.status} - ${errorText}`);
   }
   
   return response.json();
@@ -949,7 +958,7 @@ export async function listMemoryGrants(debateId: string): Promise<MemoryGrantsRe
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to list memory grants: ${response.statusText}`);
+    throw new Error(`Failed to list memory grants: ${response.status}`);
   }
   
   return response.json();
@@ -963,7 +972,7 @@ export async function revokeMemoryGrant(debateId: string, grantId: string): Prom
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to revoke memory grant: ${response.statusText}`);
+    throw new Error(`Failed to revoke memory grant: ${response.status}`);
   }
   
   return response.json();
@@ -1033,7 +1042,7 @@ export async function startPreflight(debateId: string, openrouterKey?: string | 
   
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to start preflight: ${response.statusText} - ${errorText}`);
+    throw new Error(`Failed to start preflight: ${response.status} - ${errorText}`);
   }
   
   return response.json();
@@ -1048,7 +1057,7 @@ export async function getPreflightStatus(debateId: string): Promise<PreflightSta
   
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to get preflight status: ${response.statusText} - ${errorText}`);
+    throw new Error(`Failed to get preflight status: ${response.status} - ${errorText}`);
   }
   
   return response.json();
@@ -1067,7 +1076,7 @@ export async function retryPreflightParticipant(
   
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to retry preflight: ${response.statusText} - ${errorText}`);
+    throw new Error(`Failed to retry preflight: ${response.status} - ${errorText}`);
   }
   
   return response.json();
@@ -1087,7 +1096,7 @@ export async function skipPreflightParticipant(
   
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to skip preflight: ${response.statusText} - ${errorText}`);
+    throw new Error(`Failed to skip preflight: ${response.status} - ${errorText}`);
   }
   
   return response.json();
@@ -1123,7 +1132,7 @@ export async function getWorkspaceModels(workspaceId: string): Promise<Workspace
   
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to get workspace models: ${response.statusText} - ${errorText}`);
+    throw new Error(`Failed to get workspace models: ${response.status} - ${errorText}`);
   }
   
   return response.json();
@@ -1142,7 +1151,7 @@ export async function updateWorkspaceModels(
   
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to update workspace models: ${response.statusText} - ${errorText}`);
+    throw new Error(`Failed to update workspace models: ${response.status} - ${errorText}`);
   }
   
   return response.json();
@@ -1191,7 +1200,7 @@ export async function improveProblemStatement(
   });
   
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: response.statusText }));
+    const error = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
     throw new Error(error.detail || 'Failed to improve problem statement');
   }
   
@@ -1215,7 +1224,7 @@ export async function addParticipantsToDebate(
   
   if (!response.ok) {
     const error = await response.json().catch(() => null);
-    throw new Error(formatErrorDetail(error?.detail, `Failed to add participants: ${response.statusText}`));
+    throw new Error(formatErrorDetail(error?.detail, `Failed to add participants: ${response.status}`));
   }
 
   return response.json();
@@ -1240,7 +1249,7 @@ export async function addInlineMaterials(
 
   if (!response.ok) {
     const error = await response.json().catch(() => null);
-    throw new Error(formatErrorDetail(error?.detail, `Failed to add materials: ${response.statusText}`));
+    throw new Error(formatErrorDetail(error?.detail, `Failed to add materials: ${response.status}`));
   }
 
   return response.json();
@@ -1265,7 +1274,7 @@ export async function startAutonomousDebate(
   });
   
   if (!response.ok) {
-    const errorText = await response.text().catch(() => response.statusText);
+    const errorText = await response.text().catch(() => `HTTP ${response.status}`);
     throw new Error(`Failed to start autonomous debate: ${errorText}`);
   }
   
@@ -1280,7 +1289,7 @@ export async function pauseAutonomousDebate(debateId: string): Promise<{ status:
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to pause autonomous debate: ${response.statusText}`);
+    throw new Error(`Failed to pause autonomous debate: ${response.status}`);
   }
   
   return response.json();
@@ -1296,7 +1305,7 @@ export async function resumeAutonomousDebate(debateId: string, openrouterKey: st
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to resume autonomous debate: ${response.statusText}`);
+    throw new Error(`Failed to resume autonomous debate: ${response.status}`);
   }
   
   return response.json();
@@ -1329,7 +1338,7 @@ export async function getAutonomousStatus(debateId: string): Promise<{
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to get autonomous status: ${response.statusText}`);
+    throw new Error(`Failed to get autonomous status: ${response.status}`);
   }
   
   return response.json();
@@ -1348,7 +1357,7 @@ export async function createDocument(request: any): Promise<any> {
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to create document: ${response.statusText}`);
+    throw new Error(`Failed to create document: ${response.status}`);
   }
   
   return response.json();
@@ -1362,7 +1371,7 @@ export async function getDocument(documentId: string): Promise<any> {
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to get document: ${response.statusText}`);
+    throw new Error(`Failed to get document: ${response.status}`);
   }
   
   return response.json();
@@ -1426,7 +1435,7 @@ export async function searchLiterature(
   });
 
   if (!response.ok) {
-    const errText = await response.text().catch(() => response.statusText);
+    const errText = await response.text().catch(() => `HTTP ${response.status}`);
     throw new Error(`Literature search failed: ${errText}`);
   }
 
@@ -1446,7 +1455,7 @@ export async function savePapersToContext(
   });
 
   if (!response.ok) {
-    const errText = await response.text().catch(() => response.statusText);
+    const errText = await response.text().catch(() => `HTTP ${response.status}`);
     throw new Error(`Failed to save papers: ${errText}`);
   }
 
@@ -1464,7 +1473,7 @@ export async function listSavedPapers(debateId: string): Promise<{
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to list saved papers: ${response.statusText}`);
+    throw new Error(`Failed to list saved papers: ${response.status}`);
   }
 
   return response.json();
@@ -1522,7 +1531,7 @@ export async function searchWeb(
   });
 
   if (!response.ok) {
-    const errText = await response.text().catch(() => response.statusText);
+    const errText = await response.text().catch(() => `HTTP ${response.status}`);
     throw new Error(`Web search failed: ${errText}`);
   }
 
@@ -1542,7 +1551,7 @@ export async function saveWebResults(
   });
 
   if (!response.ok) {
-    const errText = await response.text().catch(() => response.statusText);
+    const errText = await response.text().catch(() => `HTTP ${response.status}`);
     throw new Error(`Failed to save web results: ${errText}`);
   }
 
@@ -1560,7 +1569,7 @@ export async function listSavedWebResults(debateId: string): Promise<{
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to list saved web results: ${response.statusText}`);
+    throw new Error(`Failed to list saved web results: ${response.status}`);
   }
 
   return response.json();
@@ -1671,7 +1680,7 @@ export async function getReasoningModes(): Promise<Record<ReasoningMode, Reasoni
   const response = await fetch(`${API_URL}/reasoning-modes`, {
     headers: await getAuthHeaders(),
   });
-  if (!response.ok) throw new Error(response.statusText);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const data = await response.json();
   return data.modes;
 }
@@ -1689,7 +1698,7 @@ export async function analyzeResearch(
   });
   if (!response.ok) {
     const b = await response.json().catch(() => null);
-    throw new Error(b?.detail ?? response.statusText);
+    throw new Error(b?.detail ?? `HTTP ${response.status}`);
   }
   return response.json();
 }
@@ -1706,7 +1715,7 @@ export async function suggestPersonas(
   });
   if (!response.ok) {
     const b = await response.json().catch(() => null);
-    throw new Error(b?.detail ?? response.statusText);
+    throw new Error(b?.detail ?? `HTTP ${response.status}`);
   }
   return response.json();
 }
@@ -1718,7 +1727,7 @@ export async function getResearchProfile(debateId: string): Promise<ResearchProf
   if (!response.ok) {
     if (response.status === 404) throw new Error('not_found');
     const b = await response.json().catch(() => null);
-    throw new Error(b?.detail ?? response.statusText);
+    throw new Error(b?.detail ?? `HTTP ${response.status}`);
   }
   return response.json();
 }
@@ -1737,7 +1746,7 @@ export async function generateDefenseQuestions(
   });
   if (!response.ok) {
     const b = await response.json().catch(() => null);
-    throw new Error(b?.detail ?? response.statusText);
+    throw new Error(b?.detail ?? `HTTP ${response.status}`);
   }
   return response.json();
 }
@@ -1750,7 +1759,7 @@ export async function getDefenseQuestions(
   const response = await fetch(`${API_URL}/debates/${debateId}/defense-questions${params}`, {
     headers: await getAuthHeaders(),
   });
-  if (!response.ok) throw new Error(response.statusText);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
 
@@ -1769,7 +1778,7 @@ export async function submitAnswer(
   });
   if (!response.ok) {
     const b = await response.json().catch(() => null);
-    throw new Error(b?.detail ?? response.statusText);
+    throw new Error(b?.detail ?? `HTTP ${response.status}`);
   }
   return response.json();
 }
@@ -1778,7 +1787,7 @@ export async function getAnswers(debateId: string): Promise<{ count: number; ans
   const response = await fetch(`${API_URL}/debates/${debateId}/answers`, {
     headers: await getAuthHeaders(),
   });
-  if (!response.ok) throw new Error(response.statusText);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
 
@@ -1795,7 +1804,7 @@ export async function generateReadinessReport(
   });
   if (!response.ok) {
     const b = await response.json().catch(() => null);
-    throw new Error(b?.detail ?? response.statusText);
+    throw new Error(b?.detail ?? `HTTP ${response.status}`);
   }
   return response.json();
 }
@@ -1806,7 +1815,7 @@ export async function getReadinessReport(debateId: string): Promise<ReadinessRep
   });
   if (!response.ok) {
     if (response.status === 404) throw new Error('not_found');
-    throw new Error(response.statusText);
+    throw new Error(`HTTP ${response.status}`);
   }
   return response.json();
 }
@@ -1864,7 +1873,7 @@ export async function buildCommitteeTwins(
   });
   if (!response.ok) {
     const b = await response.json().catch(() => null);
-    throw new Error(b?.detail ?? response.statusText);
+    throw new Error(b?.detail ?? `HTTP ${response.status}`);
   }
   return response.json();
 }
@@ -1929,7 +1938,7 @@ export async function getCertificate(debateId: string): Promise<ReadinessCertifi
   });
   if (!response.ok) {
     const b = await response.json().catch(() => null);
-    throw new Error(b?.detail ?? response.statusText);
+    throw new Error(b?.detail ?? `HTTP ${response.status}`);
   }
   return response.json();
 }
@@ -1950,7 +1959,7 @@ export async function issueCertificate(debateId: string): Promise<IssuedCertific
   });
   if (!response.ok) {
     const b = await response.json().catch(() => null);
-    throw new Error(b?.detail ?? response.statusText);
+    throw new Error(b?.detail ?? `HTTP ${response.status}`);
   }
   return response.json();
 }
@@ -1999,7 +2008,7 @@ export async function getReadinessOverview(
   const response = await fetch(`${API_URL}/workspaces/${workspaceId}/readiness-overview`, {
     headers: await getAuthHeaders(),
   });
-  if (!response.ok) throw new Error(response.statusText);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
 
@@ -2008,7 +2017,7 @@ export async function getCertificateVerification(certificateId: string): Promise
   const response = await fetch(`${API_URL}/verify/${encodeURIComponent(certificateId)}`);
   if (!response.ok) {
     const b = await response.json().catch(() => null);
-    throw new Error(b?.detail ?? response.statusText);
+    throw new Error(b?.detail ?? `HTTP ${response.status}`);
   }
   return response.json();
 }
@@ -2060,7 +2069,7 @@ export async function getProvenance(debateId: string): Promise<ProvenanceRespons
   const response = await fetch(`${API_URL}/debates/${debateId}/provenance`, {
     headers: await getAuthHeaders(),
   });
-  if (!response.ok) throw new Error(response.statusText);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
 
@@ -2087,7 +2096,7 @@ export async function demoUngroundedCitation(
   });
   if (!response.ok) {
     const b = await response.json().catch(() => null);
-    throw new Error(b?.detail ?? response.statusText);
+    throw new Error(b?.detail ?? `HTTP ${response.status}`);
   }
   return response.json();
 }
@@ -2129,7 +2138,7 @@ export async function suggestPanelTemplates(
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: response.statusText }));
+    const error = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
     throw new Error(error.detail || 'Failed to suggest panel');
   }
 
@@ -2179,7 +2188,7 @@ export async function generateAcademicAssessment(
   });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new Error(body?.detail ?? response.statusText);
+    throw new Error(body?.detail ?? `HTTP ${response.status}`);
   }
   return response.json();
 }
@@ -2190,7 +2199,7 @@ export async function getAcademicAssessment(debateId: string): Promise<AcademicA
   });
   if (!response.ok) {
     if (response.status === 404) throw new Error('not_found');
-    throw new Error(response.statusText);
+    throw new Error(`HTTP ${response.status}`);
   }
   return response.json();
 }
@@ -2217,7 +2226,7 @@ export async function getAccountOpenRouterKey(): Promise<AccountKeyStatus> {
   const response = await fetch(`${API_URL}/me/openrouter-key`, {
     headers: await getAuthHeaders(),
   });
-  if (!response.ok) throw new Error(response.statusText);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
 
@@ -2239,6 +2248,6 @@ export async function deleteAccountOpenRouterKey(): Promise<AccountKeyStatus> {
     method: 'DELETE',
     headers: await getAuthHeaders(),
   });
-  if (!response.ok) throw new Error(response.statusText);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }

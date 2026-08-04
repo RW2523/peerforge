@@ -15,6 +15,14 @@ class TextExtractor:
     """Extract text from uploaded files with provenance tracking"""
     
     # Allowed file types (MIME types)
+    @staticmethod
+    def _readable_types(allow_audio: bool = False) -> str:
+        """Extensions a person recognises, rather than MIME types."""
+        exts = sorted(set(TextExtractor.ALLOWED_TYPES.values()))
+        if allow_audio:
+            exts += sorted(set(TextExtractor.AUDIO_TYPES.values()))
+        return ", ".join(exts)
+
     ALLOWED_TYPES = {
         'application/pdf': '.pdf',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
@@ -62,7 +70,15 @@ class TextExtractor:
             elif filename.endswith('.md'):
                 mime_type = 'text/markdown'
             else:
-                return False, '', 'Unknown file type'
+                # "Unknown file type" told the researcher nothing they could
+                # act on. Name what we accept, and say that the CONTENT is
+                # what was unrecognised — a .pdf extension on a file that is
+                # not a PDF lands here and the name looks fine to them.
+                return False, '', (
+                    f"Could not read '{filename}'. Its contents do not look "
+                    f"like any supported document. Accepted: "
+                    f"{TextExtractor._readable_types(allow_audio)}."
+                )
         else:
             mime_type = kind.mime
 
@@ -72,8 +88,15 @@ class TextExtractor:
 
         # Check if allowed
         if mime_type not in allowed:
-            suffix = ' (audio only allowed for transcripts)' if mime_type in TextExtractor.AUDIO_TYPES else ''
-            return False, mime_type, f'File type {mime_type} not allowed{suffix}'
+            if mime_type in TextExtractor.AUDIO_TYPES:
+                return False, mime_type, (
+                    f"'{filename}' is audio, which is only accepted as a meeting "
+                    f"transcript. Upload it under the transcript category instead."
+                )
+            return False, mime_type, (
+                f"'{filename}' is a {mime_type} file, which cannot be read. "
+                f"Accepted: {TextExtractor._readable_types(allow_audio)}."
+            )
 
         return True, mime_type, ''
     
