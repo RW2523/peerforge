@@ -356,6 +356,52 @@ def _dev_organizations() -> List[Dict[str, Any]]:
     }]
 
 
+def _dev_workspaces() -> List[Dict[str, Any]]:
+    """
+    Workspaces the local dev user belongs to, with the demo one first.
+
+    Read straight from user_workspaces rather than through
+    get_workspaces_for_user, which auto-provisions a personal workspace when it
+    finds none and would move the dev user out of the demo workspace.
+
+    A hardcoded single-entry list was the previous shape, and it locked the dev
+    user out of every course they created: the enrolment row existed, the
+    selector named the new workspace, and the membership check answered "not a
+    member of the requested workspace". Founding an organization therefore
+    failed immediately after succeeding.
+
+    The demo workspace stays first so it remains the default when no selector
+    is sent; the rest are appended purely so they can be selected.
+    """
+    demo = {
+        'workspace_id': DEV_WORKSPACE_ID,
+        'role': 'owner',
+        'name': 'Local Dev',
+        'tenant_id': DEV_TENANT_ID,
+    }
+    try:
+        from .database import get_db_connection, get_cursor
+        with get_db_connection() as conn:
+            cursor = get_cursor(conn)
+            cursor.execute("""
+                SELECT uw.workspace_id, uw.role, w.name, w.tenant_id
+                FROM user_workspaces uw
+                JOIN workspaces w ON w.workspace_id = uw.workspace_id
+                WHERE uw.user_id = %s
+                ORDER BY uw.created_at DESC
+            """, (DEV_USER_ID,))
+            rows = cursor.fetchall()
+    except Exception:
+        # A dev box without the table yet still gets the demo workspace.
+        rows = []
+
+    others = [
+        _membership(r) for r in rows
+        if str(r['workspace_id']) != DEV_WORKSPACE_ID
+    ]
+    return [demo] + others
+
+
 def get_current_user(
     authorization: str = Header(None),
     x_workspace_id: Optional[str] = Header(None),
@@ -375,17 +421,10 @@ def get_current_user(
         # Auth disabled for local dev/testing. The workspace selector is still
         # validated so dev behaves like production on this dimension — asking
         # for a workspace you don't belong to fails here too.
-        dev_memberships = [{
-            'workspace_id': DEV_WORKSPACE_ID,
-            'role': 'owner',
-            'name': 'Local Dev',
-            'tenant_id': DEV_TENANT_ID,
-        }]
-        # Organizations are read from the database, unlike the workspace list:
-        # the dev user can create one, and a fixed list locked them straight
-        # back out of the organization they had just founded. Workspaces stay
-        # fixed here because resolving them would auto-provision a personal
-        # one and move the dev user out of the demo workspace.
+        # Both lists come from the database. A fixed list locked the dev user
+        # out of whatever they had just created — the organization first, and
+        # then, once that was fixed, every course inside it.
+        dev_memberships = _dev_workspaces()
         dev_orgs = _dev_organizations()
 
         active = _select_active_workspace(dev_memberships, x_workspace_id)
@@ -394,7 +433,7 @@ def get_current_user(
             'workspace_id': active['workspace_id'],
             'tenant_id': active['tenant_id'],
             'workspaces': dev_memberships,
-            'workspace_ids': [DEV_WORKSPACE_ID],
+            'workspace_ids': [str(m['workspace_id']) for m in dev_memberships],
             'workspace_role': active['role'],
             'organizations': dev_orgs,
         }

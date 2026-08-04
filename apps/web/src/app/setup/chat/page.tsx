@@ -29,7 +29,9 @@ const OPENER =
 export default function ConversationalSetupPage() {
   const router = useRouter();
   const { workspaceId } = useWorkspace();
-  const { apiKey, hasKey } = useOpenRouterKey();
+  // No key gate here: the backend resolves the account or server key and
+  // reports its own error if none exists.
+  const { apiKey } = useOpenRouterKey();
 
   const [debateId, setDebateId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([
@@ -43,15 +45,38 @@ export default function ConversationalSetupPage() {
   const [error, setError] = useState<string | null>(null);
 
   const feedRef = useRef<HTMLDivElement>(null);
+  const creatingRef = useRef(false);
 
-  // A session must exist before anything can be attached to or grounded in it.
+  // A session must exist before anything can be attached to or grounded in it,
+  // so start one in the background. Typing does not wait on this: the composer
+  // used to be disabled until two network round-trips had completed, which on
+  // a slow link meant staring at a dead text box, and on a failed one meant a
+  // text box that never came back.
   useEffect(() => {
-    if (!workspaceId || debateId) return;
+    if (!workspaceId || debateId || creatingRef.current) return;
+    creatingRef.current = true;
     api
       .createDebate(workspaceId, 'Untitled review session')
       .then((d: any) => setDebateId(d.debate_id))
-      .catch((err: any) => setError(err?.message ?? 'Could not start a session'));
+      .catch(() => {
+        // Not surfaced here. The next send retries, and reporting a background
+        // failure the user did not ask for reads as the page being broken.
+      })
+      .finally(() => {
+        creatingRef.current = false;
+      });
   }, [workspaceId, debateId]);
+
+  /** The session id, creating one now if the background attempt has not landed. */
+  const ensureSession = async (): Promise<string> => {
+    if (debateId) return debateId;
+    if (!workspaceId) {
+      throw new Error('Still loading your workspace — try again in a moment.');
+    }
+    const created: any = await api.createDebate(workspaceId, 'Untitled review session');
+    setDebateId(created.debate_id);
+    return created.debate_id;
+  };
 
   useEffect(() => {
     feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: 'smooth' });
@@ -60,12 +85,7 @@ export default function ConversationalSetupPage() {
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
     const text = input.trim();
-    if (!text || busy || !debateId) return;
-
-    if (!hasKey) {
-      setError('An OpenRouter key is required. Add one in Settings.');
-      return;
-    }
+    if (!text || busy) return;
 
     setError(null);
     setBusy(true);
@@ -74,7 +94,10 @@ export default function ConversationalSetupPage() {
     setInput('');
 
     try {
-      const result = await converseSetup(debateId, text, history, apiKey);
+      // Created on demand rather than up front, so the composer never waits on
+      // a network round-trip before accepting a character.
+      const id = await ensureSession();
+      const result = await converseSetup(id, text, history, apiKey);
       setMessages((prev) => [
         ...prev,
         {
@@ -155,9 +178,8 @@ export default function ConversationalSetupPage() {
               }}
               placeholder="I have a paper on…"
               rows={2}
-              disabled={!debateId}
             />
-            <button className={styles.send} type="submit" disabled={busy || !input.trim() || !debateId}>
+            <button className={styles.send} type="submit" disabled={busy || !input.trim()}>
               {busy ? 'Sending…' : 'Send'}
             </button>
           </form>
