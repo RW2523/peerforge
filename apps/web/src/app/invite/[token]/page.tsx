@@ -84,7 +84,8 @@ export default function AcceptInvitePage() {
             {wrongAccount ? (
               <p className={styles.hint}>
                 Invitations are tied to the email address they were sent to.
-                Sign in with that address and open this link again.
+                Open this link from that account, or ask whoever invited you to
+                send one to the address you are using.
               </p>
             ) : (
               <p className={styles.hint}>
@@ -93,15 +94,10 @@ export default function AcceptInvitePage() {
               </p>
             )}
             <div className={styles.actions}>
-              {wrongAccount ? (
-                <Link className={styles.primary} href="/login">
-                  Sign in as someone else
-                </Link>
-              ) : (
-                <button className={styles.primary} onClick={accept}>
-                  Try again
-                </button>
-              )}
+              {/* No "sign in as someone else": this build has no sign-in. */}
+              <button className={styles.primary} onClick={accept}>
+                Try again
+              </button>
               <Link className={styles.secondary} href="/">
                 Go home
               </Link>

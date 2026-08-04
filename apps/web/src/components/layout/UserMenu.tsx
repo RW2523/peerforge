@@ -129,23 +129,8 @@ export default function UserMenu() {
             <span>History</span>
           </button>
 
-          <div className={styles.divider} />
-
-          <button
-            className={styles.menuItem}
-            onClick={() => handleNavigate('/login')}
-          >
-            <span className={styles.menuIcon}>👤</span>
-            <span>Account</span>
-          </button>
-
-          <button
-            className={styles.menuItem}
-            onClick={() => handleNavigate('/logout')}
-          >
-            <span className={styles.menuIcon}>🚪</span>
-            <span>Logout</span>
-          </button>
+          {/* No Account or Logout entries: this build ships without sign-in,
+              so both would lead to a page that does not exist. */}
         </div>
       )}
     </div>

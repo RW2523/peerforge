@@ -1,7 +1,25 @@
 /**
  * Supabase client for authentication
+ *
+ * Three modes, via NEXT_PUBLIC_AUTH_MODE:
+ *
+ *   'disabled'    — this deployment has no sign-in at all, on purpose. There
+ *                   is no login page and everyone is the same user. Honoured
+ *                   in production builds, because it is a deliberate choice
+ *                   rather than a leftover.
+ *   'development' — local convenience bypass. Refused in a production build,
+ *                   so a stray env var cannot silently un-gate a real deploy.
+ *   anything else — real Supabase sessions.
+ *
+ * The distinction matters: 'disabled' is someone saying "open by design",
+ * 'development' left on in production is someone making a mistake. Collapsing
+ * them into one flag means you cannot tell those apart, and the safe handling
+ * of each is opposite.
  */
 import { createClient } from '@supabase/supabase-js';
+
+/** True when this build intentionally ships without any sign-in. */
+export const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_MODE === 'disabled';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 // Accept either the modern publishable key (sb_publishable_…) or the legacy
@@ -11,7 +29,9 @@ const supabaseAnonKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   '';
 
-if (!supabaseUrl || !supabaseAnonKey) {
+if (!AUTH_DISABLED && (!supabaseUrl || !supabaseAnonKey)) {
+  // Silent when auth is off by design — there is nothing to configure and the
+  // warning only trained people to ignore the console.
   console.warn('Supabase credentials not configured. Auth will not work.');
 }
 
@@ -20,13 +40,17 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 /**
  * Get current session access token.
  *
- * In development mode (NEXT_PUBLIC_AUTH_MODE=development) the backend runs
- * with REQUIRE_AUTH=false and accepts any non-empty bearer value.  We return a
- * static dev-bypass token so every API call and WebSocket connection succeeds
- * without a real Supabase session.
+ * With auth disabled there is no session to get: the backend runs with
+ * REQUIRE_AUTH=false and ignores the value, so a static sentinel keeps every
+ * API call and WebSocket connection working without a sign-in that does not
+ * exist.
  */
 export async function getAccessToken(): Promise<string | null> {
   const authMode = process.env.NEXT_PUBLIC_AUTH_MODE;
+
+  if (AUTH_DISABLED) {
+    return 'anonymous';
+  }
 
   if (authMode === 'development') {
     // The bypass is refused in a production build. Otherwise a stray
@@ -50,6 +74,15 @@ export async function getAccessToken(): Promise<string | null> {
   const { data: { session } } = await supabase.auth.getSession();
   return session?.access_token || null;
 }
+
+// ---------------------------------------------------------------------------
+// Sign-in helpers.
+//
+// Nothing calls these while NEXT_PUBLIC_AUTH_MODE=disabled — the login page and
+// its routes were removed. They are kept deliberately as the seam for turning
+// authentication back on: point NEXT_PUBLIC_SUPABASE_URL at a real project,
+// drop the 'disabled' mode, and rebuild a login page around them.
+// ---------------------------------------------------------------------------
 
 /**
  * Sign in with email and password

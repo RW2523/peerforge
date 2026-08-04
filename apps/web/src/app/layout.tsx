@@ -3,7 +3,6 @@ import { Inter, Space_Grotesk } from 'next/font/google'
 import '../styles/globals.css'
 import { APP_NAME_TAGLINE, APP_DESCRIPTION } from '@/lib/brand'
 import { WorkspaceProvider } from '@/components/WorkspaceProvider'
-import { AuthGuard } from '@/components/AuthGuard'
 import { Toaster } from '@/components/ui/Toaster'
 
 const inter = Inter({
@@ -45,11 +44,12 @@ export default function RootLayout({
       </head>
       <body>
         <a className="skip-link" href="#main-content">Skip to main content</a>
-        <AuthGuard>
-          <WorkspaceProvider>
-            <Toaster>{children}</Toaster>
-          </WorkspaceProvider>
-        </AuthGuard>
+        {/* No AuthGuard: this build ships without sign-in, so there is no
+            session to check and nowhere to send anyone who lacks one. The API
+            remains the enforcement point either way. */}
+        <WorkspaceProvider>
+          <Toaster>{children}</Toaster>
+        </WorkspaceProvider>
       </body>
     </html>
   )
