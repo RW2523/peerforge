@@ -120,7 +120,34 @@ def _get_schema(role_description: str) -> Dict[str, str]:
     return _DEFAULT_SCHEMA
 
 
-def _round_instruction(current_round: Optional[int], max_rounds: Optional[int]) -> str:
+def _already_raised(conversation_history: Optional[List[Dict[str, str]]]) -> List[str]:
+    """
+    The opening claim of each reviewer who has already spoken this round.
+
+    Round one told every reviewer to ignore the others, so on a short paper all
+    of them independently picked the same obvious flaw and the panel produced
+    one review three times. Showing each speaker what is already covered is what
+    makes a second and third reviewer worth having.
+    """
+    out: List[str] = []
+    for turn in (conversation_history or []):
+        if turn.get("role") != "assistant":
+            continue
+        text = (turn.get("content") or "").strip()
+        if not text:
+            continue
+        # The first sentence carries the point; the rest is its justification.
+        first = re.split(r"(?<=[.!?])\s", text, maxsplit=1)[0]
+        out.append(first[:160])
+    return out
+
+
+def _round_instruction(
+    current_round: Optional[int],
+    max_rounds: Optional[int],
+    schema_dimensions: Optional[str] = None,
+    already_raised: Optional[List[str]] = None,
+) -> str:
     """
     Return the structural requirement for this round.
 
@@ -139,12 +166,28 @@ def _round_instruction(current_round: Optional[int], max_rounds: Optional[int]) 
         return "Evaluate the submission directly from your reviewer perspective. Cite specific evidence."
 
     if current_round == 1:
+        # Every reviewer used to be handed the same task — "your most important
+        # strength, your most critical weakness" — and told to ignore whoever
+        # had already spoken. On a short paper there is one obvious strength and
+        # one obvious weakness, so three reviewers with three distinct personas
+        # produced three paraphrases of the same paragraph. Point each of them
+        # at their OWN remit instead, and let them see what is already covered.
+        lens = f" through {schema_dimensions}" if schema_dimensions else ""
+        avoid = ""
+        if already_raised:
+            covered = "; ".join(already_raised[:4])
+            avoid = (
+                f"\n\nAlready raised by reviewers before you: {covered}. "
+                "Do NOT restate any of it. If you agree, say so in one clause and "
+                "move immediately to the point only YOUR remit would surface."
+            )
         return (
-            "ROUND 1 — INDEPENDENT EVALUATION: "
-            "Assess the submission from your reviewer lens. "
-            "Do NOT reference what other reviewers said yet (they may not have spoken). "
-            "State your most important strength, your most critical weakness, "
-            "and one specific recommendation. Cite evidence from the submitted materials."
+            "ROUND 1 — YOUR OWN LENS: "
+            f"Evaluate this submission specifically{lens}. "
+            "Lead with the concern that follows from your remit, not with the most "
+            "obvious problem in the paper. Give one strength and one weakness that "
+            "sit inside your remit, and one specific recommendation. "
+            "Cite evidence from the submitted materials." + avoid
         )
     elif current_round == max_rounds:
         return (
@@ -286,7 +329,7 @@ class AgentResponseGenerator:
                 f"  Confidence: {reasoning.get('confidence', '')}\n"
                 f"  Unique contribution this turn: {unique}\n"
                 f"  Key points: {key_points_str}\n\n"
-                f"{_round_instruction(current_round, max_rounds)}\n\n"
+                f"{_round_instruction(current_round, max_rounds, schema['dimensions'], _already_raised(conversation_history))}\n\n"
                 "Generate your review message now. "
                 "Do NOT start with filler phrases. Open with your substantive point."
             ),
