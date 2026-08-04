@@ -49,8 +49,15 @@ export interface Seats {
   plan: string;
   seats_purchased: number;
   seats_used: number;
+  /** Invitations sent but not yet accepted. These hold seats too. */
+  seats_pending?: number;
+  /** used + pending — what the next invitation is actually measured against. */
+  seats_committed?: number;
   seats_available: number | null;
   period_end: string | null;
+  /** Which roles consume a seat, so the panel can say so rather than imply all do. */
+  billable_roles?: string[];
+  members_by_role?: Record<string, number>;
 }
 
 export interface CreatedInvitation {
@@ -167,6 +174,8 @@ export const updateSeats = (orgId: string, seatsPurchased: number, plan?: string
 export interface PanelProposalMember {
   name: string;
   role: string;
+  /** What the assistant originally called this reviewer, when remapped. */
+  requested_role?: string | null;
   focus?: string;
 }
 
@@ -175,6 +184,13 @@ export interface SetupProposal {
   problem_statement: string;
   panel: PanelProposalMember[];
   rounds: number;
+  /**
+   * Roles the assistant asked for that had to be mapped onto one of the six
+   * lanes the orchestrator differentiates. Surfaced so we can say we staffed
+   * an external examiner for the "area chair" you asked for, instead of
+   * quietly claiming otherwise.
+   */
+  remapped_roles?: { requested: string; assigned: string }[];
 }
 
 export interface ConverseResult {

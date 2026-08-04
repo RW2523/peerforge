@@ -228,10 +228,40 @@ export default function ConversationalSetupPage() {
                     <li key={i} className={styles.reviewer}>
                       <div className={styles.reviewerName}>{m.name}</div>
                       <div className={styles.reviewerRole}>{m.role}</div>
+                      {/* Said out loud rather than swapped in silently: the
+                          assistant asked for a role the panel does not have,
+                          and this is what it got instead. */}
+                      {m.requested_role && m.requested_role !== m.role && (
+                        <div className={styles.muted}>
+                          you asked for “{m.requested_role}” — staffed as {m.role}
+                        </div>
+                      )}
                       {m.focus && <div className={styles.muted}>{m.focus}</div>}
+                      {/* A panel of one cannot be launched, so removing a
+                          reviewer must not be the only way out of a bad
+                          proposal — being unable to edit it at all was. */}
+                      <button
+                        type="button"
+                        className={styles.removeReviewer}
+                        aria-label={`Remove ${m.name}`}
+                        onClick={() =>
+                          setProposal({
+                            ...proposal,
+                            panel: proposal.panel.filter((_, j) => j !== i),
+                          })
+                        }
+                      >
+                        Remove
+                      </button>
                     </li>
                   ))}
                 </ul>
+                {proposal.panel.length < 2 && (
+                  <p className={styles.muted}>
+                    A panel needs at least two reviewers — ask for another in the
+                    conversation.
+                  </p>
+                )}
               </div>
 
               <div className={styles.field}>

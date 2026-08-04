@@ -5,7 +5,7 @@ Endpoints for accessing agent knowledge units (prep packs, etc.)
 
 from fastapi import APIRouter, HTTPException, Header
 from ..database import get_db_connection, get_cursor
-from ..auth import require_auth
+from ..auth import get_current_user, require_auth, workspace_ids_for
 import logging
 
 logger = logging.getLogger(__name__)
@@ -22,8 +22,12 @@ async def get_knowledge_unit(
     Fetch a specific agent knowledge unit by ID.
     Returns the full content and metadata.
     """
-    # Validate authorization and get workspace_id
-    workspace_id = require_auth(authorization)
+    # require_auth returns only the caller's ACTIVE workspace, so a prep pack
+    # in any of their other workspaces answered "not found or unauthorized" -
+    # which is every prep pack, since preflight runs in the session's workspace
+    # and not necessarily the one selected in the header.
+    current_user = get_current_user(authorization)
+    workspace_ids = workspace_ids_for(current_user)
     
     with get_db_connection() as conn:
         cursor = get_cursor(conn)
@@ -41,8 +45,8 @@ async def get_knowledge_unit(
                 FROM agent_knowledge_units aku
                 LEFT JOIN debates d ON aku.source_debate_id = d.debate_id
                 WHERE aku.knowledge_id = %s
-                  AND (d.workspace_id = %s OR d.workspace_id IS NULL)
-            """, (knowledge_id, workspace_id))
+                  AND (d.workspace_id = ANY(%s) OR d.workspace_id IS NULL)
+            """, (knowledge_id, workspace_ids))
             
             result = cursor.fetchone()
             

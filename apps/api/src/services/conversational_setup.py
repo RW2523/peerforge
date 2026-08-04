@@ -14,6 +14,7 @@ never has to merge partial state across turns.
 """
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, List, Optional
 
 from ..openrouter_client import OpenRouterClient
@@ -168,12 +169,27 @@ def converse(
         if not isinstance(parsed, dict):
             raise ValueError(f"expected an object, got {type(parsed).__name__}")
     except ValueError:
-        # Never strand the user on a malformed turn: keep the raw reply and let
-        # them continue rather than showing them a parser error.
+        # The model sometimes wraps the object in prose. Salvage it before
+        # giving up, because giving up here silently discarded the change the
+        # user had just agreed to.
+        parsed = _salvage_object(response["content"])
+
+    if not isinstance(parsed, dict):
+        raw = response["content"].strip()
+        # Dumping the raw content was the old behaviour, and when the content
+        # was unparseable JSON the user got a wall of braces truncated
+        # mid-word. Say what happened instead, and keep the panel they already
+        # have rather than replacing it with nothing.
+        looks_like_json = raw.startswith("{") or raw.startswith("[")
         return {
-            "reply": response["content"].strip()[:1200],
+            "reply": (
+                "I couldn't turn that into a panel proposal. Could you say it "
+                "again in a sentence — for example which reviewer to add, or "
+                "what you want them to focus on?"
+            ) if looks_like_json else raw[:1200],
             "ready": False,
             "proposal": None,
+            "parse_failed": True,
             "grounded": bool(passages),
             "passages_used": len(passages),
         }
@@ -216,6 +232,47 @@ def _closest_lane(role: str, taken: List[str]) -> str:
         if lane not in taken:
             return lane
     return "skeptical reviewer"
+
+
+def _salvage_object(content: str) -> Optional[Dict[str, Any]]:
+    """
+    Pull a JSON object out of a reply that wrapped it in prose.
+
+    The model is asked for an object and mostly complies, but a minority of
+    turns arrive as "Sure! {...} Let me know." Treating those as unparseable
+    threw away a perfectly good proposal - the change the user had just asked
+    for - and showed them the braces instead.
+    """
+    if not content:
+        return None
+    start = content.find("{")
+    if start == -1:
+        return None
+    # Walk to the matching brace so trailing prose does not break the parse.
+    depth, in_string, escaped = 0, False, False
+    for i in range(start, len(content)):
+        ch = content[i]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    obj = json.loads(content[start:i + 1])
+                except (ValueError, TypeError):
+                    return None
+                return obj if isinstance(obj, dict) else None
+    return None
 
 
 def _clean_proposal(proposal: Any) -> Optional[Dict[str, Any]]:

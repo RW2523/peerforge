@@ -14,7 +14,7 @@ detect the specific ways this panel is known to fail:
   role_differentiation   lanes collapsing so everyone writes the same critique
   self_similarity        the same points restated across turns
   placeholder_rate       "@Name" and invented citations leaking into output
-  grounding_rate         claims tied to the submitted material
+  citation_form_rate     turns that CITE something — form only, see below
 """
 from __future__ import annotations
 
@@ -40,7 +40,13 @@ _PLACEHOLDER = re.compile(
 )
 
 # A claim tied to the materials rather than asserted freely.
-_GROUNDED = re.compile(
+# Matches the SHAPE of a citation, not its truth. A reviewer that invents
+# "Section 4.2" scores exactly like one quoting a real passage, so this must
+# never be reported as "grounding": it was, and a turn with fabricated
+# citations came back grounding_rate 1.0 and healthy: true. Verifying a
+# citation means checking it against the retrieved chunks, which this harness
+# deliberately does not do.
+_CITATION_FORM = re.compile(
     r'\bexcerpt\b|\bas stated\b|\bSection\s+\d|\bTable\s+\d|\bFigure\s+\d'
     r'|\bp\.\s*\d+|\bquotes?\b|"[^"]{12,}"',
     re.IGNORECASE,
@@ -71,7 +77,8 @@ class QualityReport:
     self_similarity: float = 0.0
     role_differentiation: float = 1.0
     placeholder_rate: float = 0.0
-    grounding_rate: float = 0.0
+    # Renamed from grounding_rate, which claimed more than it measured.
+    citation_form_rate: float = 0.0
     repeated_phrases: List[str] = field(default_factory=list)
 
     def failures(self, thresholds: "Thresholds") -> List[str]:
@@ -141,7 +148,9 @@ def analyse(turns: Sequence[Turn]) -> QualityReport:
         report.opener_template_rate = hits / len(respondable)
 
     report.placeholder_rate = sum(1 for t in texts if _PLACEHOLDER.search(t)) / len(texts)
-    report.grounding_rate = sum(1 for t in texts if _GROUNDED.search(t)) / len(texts)
+    report.citation_form_rate = sum(
+        1 for t in texts if _CITATION_FORM.search(t)
+    ) / len(texts)
 
     # How much consecutive turns restate each other.
     words = [_content_words(t) for t in texts]

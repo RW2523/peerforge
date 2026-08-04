@@ -162,3 +162,21 @@
   .wrap { grid-template-columns: 1fr; }
   .panel { position: static; }
 }
+
+/* Lets a bad proposal be corrected in place. Without it the only recourse was
+   to keep talking and hope the model dropped the reviewer itself. */
+.removeReviewer {
+  margin-top: 6px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.removeReviewer:hover {
+  color: var(--danger, #b91c1c);
+  border-color: var(--danger, #b91c1c);
+}

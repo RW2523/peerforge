@@ -5,7 +5,7 @@ Materials upload and status endpoints
 import io
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 import psycopg2
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Header, status
 from pydantic import BaseModel
@@ -87,8 +87,14 @@ def _purge_storage_keys(file_keys: List[str]) -> None:
             logger.info(f"Storage delete failed (non-fatal) for {file_key}: {exc}")
 
 
+# Only these are chunked and made retrievable further down this module. Any
+# other value was accepted, stored, never processed, and left polling clients
+# waiting on a status that would never change.
+INLINE_KINDS = ("text", "link")
+
+
 class InlineMaterial(BaseModel):
-    kind: str  # 'text' | 'link'
+    kind: Literal["text", "link"]
     title: Optional[str] = None
     body_text: Optional[str] = None
     url: Optional[str] = None

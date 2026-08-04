@@ -2071,7 +2071,20 @@ Requirements:
             return agent_message
             
         except Exception as e:
-            logger.error(f"  ⚠️ Constitutional pipeline error: {e}")
+            # With the traceback swallowed, this degraded on 100% of turns for
+            # a trivial reason and nobody could see which line. The three-stage
+            # pipeline is the product's whole differentiator; losing it silently
+            # is worse than losing it loudly.
+            logger.error(
+                "  ⚠️ Constitutional pipeline error: %s", e, exc_info=True
+            )
+            # Close the thinking session the pipeline opened. Left dangling, its
+            # events stayed in the transcript forever with no turn to belong to,
+            # so a reader saw an agent think and then never speak.
+            try:
+                self.thinking_service.complete_thinking_session()
+            except Exception:
+                logger.debug("Could not close the thinking session after a failure")
             logger.info(f"  📞 Falling back to legacy approach")
             # Fallback to legacy single LLM call
             response = self.openrouter_client.chat_completion(

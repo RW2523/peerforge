@@ -254,6 +254,45 @@ async def get_debate(
     )
 
 
+
+def _debate_response(debate: Dict[str, Any], participants: Optional[List[Dict[str, Any]]] = None) -> DebateResponse:
+    """
+    Build the full response for a session.
+
+    The lifecycle endpoints (start, pause, resume, end, extend) each built this
+    by hand with only five fields set, so a fully staffed session came back
+    reporting no participants and no policy — the opposite of the truth, and
+    contradicting what GET returns for the same id one request later.
+    """
+    if participants is None:
+        try:
+            participants = DebateService().get_participants(debate['debate_id'])
+        except Exception:
+            participants = []
+    return DebateResponse(
+        debate_id=debate['debate_id'],
+        workspace_id=debate['workspace_id'],
+        title=debate['title'],
+        state=debate['state'],
+        policy_config=debate.get('policy_config'),
+        created_at=debate['created_at'].isoformat() if hasattr(debate['created_at'], 'isoformat') else str(debate['created_at']),
+        participants=[
+            {
+                "participant_id": str(p.get('participant_id')),
+                # Required by ParticipantInfo; rows predating the column carry
+                # no value and every one of them is an agent.
+                "participant_type": p.get('participant_type') or 'agent',
+                "role_name": p.get('role_name') or 'Unknown',
+                "agent_config": p.get('agent_config'),
+                "created_at": p['created_at'].isoformat() if p.get('created_at') else '',
+            }
+            for p in (participants or [])
+        ],
+        autonomous_mode=debate.get('autonomous_mode', False),
+        autonomous_status=debate.get('autonomous_status'),
+        auto_turn_delay_seconds=debate.get('auto_turn_delay_seconds', 10),
+    )
+
 @router.post("/debates", response_model=DebateResponse, status_code=status.HTTP_201_CREATED)
 async def create_debate(
     request: CreateDebateRequest,
@@ -282,13 +321,7 @@ async def create_debate(
             owner_user_id=current_user.get('user_id')
         )
         
-        return DebateResponse(
-            debate_id=debate['debate_id'],
-            workspace_id=debate['workspace_id'],
-            title=debate['title'],
-            state=debate['state'],
-            created_at=debate['created_at'].isoformat()
-        )
+        return _debate_response(debate)
     
     except Exception as e:
         raise HTTPException(
@@ -355,13 +388,7 @@ async def start_debate(
             except Exception as embed_err:
                 logger.warning(f"Could not queue embedding backfill: {embed_err}")
         
-        return DebateResponse(
-            debate_id=debate['debate_id'],
-            workspace_id=debate['workspace_id'],
-            title=debate['title'],
-            state=debate['state'],
-            created_at=debate['created_at'].isoformat()
-        )
+        return _debate_response(debate)
     
     except ValueError as e:
         logger.error(f"ValueError starting debate {debate_id}: {str(e)}")
@@ -416,13 +443,7 @@ async def pause_debate(
     try:
         debate = service.pause_debate(debate_id)
         
-        return DebateResponse(
-            debate_id=debate['debate_id'],
-            workspace_id=debate['workspace_id'],
-            title=debate['title'],
-            state=debate['state'],
-            created_at=debate['created_at'].isoformat()
-        )
+        return _debate_response(debate)
     
     except ValueError as e:
         raise HTTPException(
@@ -472,13 +493,7 @@ async def resume_debate(
     try:
         debate = service.resume_debate(debate_id)
         
-        return DebateResponse(
-            debate_id=debate['debate_id'],
-            workspace_id=debate['workspace_id'],
-            title=debate['title'],
-            state=debate['state'],
-            created_at=debate['created_at'].isoformat()
-        )
+        return _debate_response(debate)
     
     except ValueError as e:
         raise HTTPException(
@@ -583,13 +598,7 @@ async def end_debate(
     try:
         debate = service.end_debate(debate_id)
         
-        return DebateResponse(
-            debate_id=debate['debate_id'],
-            workspace_id=debate['workspace_id'],
-            title=debate['title'],
-            state=debate['state'],
-            created_at=debate['created_at'].isoformat()
-        )
+        return _debate_response(debate)
     
     except ValueError as e:
         raise HTTPException(

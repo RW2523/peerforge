@@ -20,6 +20,10 @@ from ..config import settings
 from ..database import get_db_connection, get_cursor
 from ..utils.key_vault import encrypt_key, decrypt_key, mask_key
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["user-settings"])
 
 
@@ -83,7 +87,18 @@ async def save_openrouter_key(
         )
 
     user_id = _user_id(current_user)
-    encrypted = encrypt_key(key)
+    try:
+        encrypted = encrypt_key(key)
+    except RuntimeError as exc:
+        # Refusing to store a key without encryption at rest is right; doing it
+        # as an unhandled 500 was not. The browser showed "Failed to fetch" and
+        # the operator had no way to learn which setting was missing.
+        logger.error("Cannot store account key: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="This deployment cannot store keys yet: KEY_ENCRYPTION_SECRET "
+                   "is not configured on the server. Your key was not saved.",
+        )
     with get_db_connection() as conn:
         cur = get_cursor(conn)
         cur.execute("""

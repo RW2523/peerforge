@@ -25,7 +25,9 @@ class DebateRunResponse(BaseModel):
 class CreateDebateRequest(BaseModel):
     """Request to create a debate"""
     workspace_id: str = Field(..., description="Workspace ID")
-    title: str = Field(..., description="Debate title")
+    # Bounded here so an over-long title is a readable 422 rather than a
+    # Postgres truncation error surfaced to the screen as a 500.
+    title: str = Field(..., min_length=1, max_length=500, description="Debate title")
     policy_config: Optional[Dict[str, Any]] = Field(default=None, description="Policy configuration")
 
 

@@ -42,6 +42,13 @@ export default function OrganizationPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [invites, setInvites] = useState<Invitation[]>([]);
   const [seats, setSeats] = useState<Seats | null>(null);
+  // Mirrors the server value so the input always opens on the current
+  // allocation, including after switching organization.
+  const [seatInput, setSeatInput] = useState(0);
+
+  useEffect(() => {
+    if (seats) setSeatInput(seats.seats_purchased);
+  }, [seats]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -201,32 +208,52 @@ export default function OrganizationPage() {
             <h2 className={styles.h2}>Seats</h2>
             <p className={styles.seatLine}>
               <strong>{seats.seats_used}</strong> in use
+              {/* Outstanding invitations hold seats too. Showing only
+                  seats_used advertised capacity the next invite would refuse. */}
+              {(seats.seats_pending ?? 0) > 0 && (
+                <>, <strong>{seats.seats_pending}</strong> awaiting acceptance</>
+              )}
               {seats.seats_purchased > 0
                 ? <> of <strong>{seats.seats_purchased}</strong> on the {seats.plan} plan</>
                 : <> — unlimited while on {seats.plan}</>}
             </p>
+            {seats.billable_roles && seats.billable_roles.length > 0 && (
+              <p className={styles.muted}>
+                Only {seats.billable_roles.join(' and ')} accounts use a seat —
+                professors, TAs and administrators are free.
+              </p>
+            )}
             {isAdmin && (
               <form
                 className={styles.inline}
                 onSubmit={(e) => {
                   e.preventDefault();
-                  const value = Number(
-                    (e.currentTarget.elements.namedItem('seats') as HTMLInputElement).value
-                  );
-                  act(() => updateSeats(orgId!, value), `Seat allocation set to ${value}.`);
+                  act(() => updateSeats(orgId!, seatInput), `Seat allocation set to ${seatInput}.`);
                 }}
               >
                 <label className={styles.field}>
                   <span className={styles.label}>Seats</span>
+                  {/* Controlled, and synced when the organization changes.
+                      defaultValue only applies on first mount, so switching
+                      organization left the previous number in the box — and
+                      before seats had loaded it showed 0, one Update click
+                      away from wiping the allocation. */}
                   <input
                     name="seats"
                     type="number"
                     min={0}
-                    defaultValue={seats.seats_purchased}
+                    value={seatInput}
+                    onChange={(e) => setSeatInput(Number(e.target.value) || 0)}
                     className={styles.input}
                   />
                 </label>
-                <button className={styles.button} type="submit">Update</button>
+                <button
+                  className={styles.button}
+                  type="submit"
+                  disabled={seatInput === seats.seats_purchased}
+                >
+                  Update
+                </button>
               </form>
             )}
           </section>

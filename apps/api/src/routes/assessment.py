@@ -233,7 +233,11 @@ async def transcript_quality(
             "self_similarity": round(report.self_similarity, 3),
             "role_differentiation": round(report.role_differentiation, 3),
             "placeholder_rate": round(report.placeholder_rate, 3),
-            "grounding_rate": round(report.grounding_rate, 3),
+            # Renamed: this counts turns that LOOK like they cite something.
+            # It does not verify the citation, and reporting it as
+            # "grounding" told callers a fabricated reference was sound.
+            "citation_form_rate": round(report.citation_form_rate, 3),
+            "citation_form_note": "counts citation-shaped text; does not verify it",
         },
         "repeated_phrases": report.repeated_phrases,
         "concerns": concerns,

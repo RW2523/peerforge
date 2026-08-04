@@ -504,7 +504,11 @@ async def create_invitation(
 
     with get_db_connection() as conn:
         cursor = get_cursor(conn)
-        _assert_seat_available(cursor, org_id)
+        # Only billable roles consume a seat. Checking before looking at the
+        # invited role meant an organization at capacity could not add a
+        # professor, TA or administrator - none of whom occupy a seat at all.
+        if invited_role in BILLABLE_ROLES:
+            _assert_seat_available(cursor, org_id)
 
         if request.workspace_id:
             cursor.execute(
@@ -1100,10 +1104,18 @@ async def update_seats(
     with get_db_connection() as conn:
         cursor = get_cursor(conn)
         used = _seats_used(cursor, org_id)
-        if request.seats_purchased and request.seats_purchased < used:
+        pending = _seats_pending(cursor, org_id)
+        committed = used + pending
+        # Outstanding invitations are seats already promised. Comparing against
+        # `used` alone let an admin set a cap below what was committed and be
+        # told everything was fine, with the failure landing later on a student.
+        if request.seats_purchased and request.seats_purchased < committed:
+            detail = f"{used} seats are in use"
+            if pending:
+                detail += f" and {pending} more are awaiting acceptance"
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"{used} seats are already in use — remove members before reducing to {request.seats_purchased}.",
+                detail=detail + f" — free those before reducing to {request.seats_purchased}.",
             )
         cursor.execute(
             """INSERT INTO organization_seats (org_id, seats_purchased, plan)

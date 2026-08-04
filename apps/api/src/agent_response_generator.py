@@ -120,8 +120,21 @@ def _get_schema(role_description: str) -> Dict[str, str]:
     return _DEFAULT_SCHEMA
 
 
-def _round_instruction(current_round: int, max_rounds: int) -> str:
-    """Return the structural requirement for this round."""
+def _round_instruction(current_round: Optional[int], max_rounds: Optional[int]) -> str:
+    """
+    Return the structural requirement for this round.
+
+    Both values are optional: a session created without a policy carries no
+    max_rounds, and comparing None to an int raised here on EVERY turn. The
+    caller wrapped the whole constitutional pipeline in a bare except, so the
+    three-stage reasoning silently degraded to a single plain LLM call for
+    every review the product has ever produced.
+    """
+    if not max_rounds or not current_round:
+        return (
+            "Evaluate the submission directly from your reviewer perspective. "
+            "Cite specific evidence."
+        )
     if max_rounds < 2:
         return "Evaluate the submission directly from your reviewer perspective. Cite specific evidence."
 
@@ -208,8 +221,11 @@ class AgentResponseGenerator:
             valid_participant_names:  Exact participant names — only these may be @mentioned.
         """
         schema = _get_schema(agent_role_description)
-        current_round = turn_info.get("current_round", 1)
-        max_rounds = turn_info.get("max_rounds", 1)
+        # `or` rather than a .get default: a session with no policy stores
+        # max_rounds as an explicit None, and .get(key, 1) returns that None
+        # because the key is present. The default silently never applied.
+        current_round = turn_info.get("current_round") or 1
+        max_rounds = turn_info.get("max_rounds") or 1
 
         system_prompt = self._build_system_prompt(
             agent_name=agent_name,

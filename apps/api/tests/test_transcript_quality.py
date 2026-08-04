@@ -92,11 +92,11 @@ def test_placeholder_names_and_invented_citations_are_caught():
 
 
 def test_grounding_is_measured():
-    grounded = analyse(DIFFERENTIATED).grounding_rate
+    grounded = analyse(DIFFERENTIATED).citation_form_rate
     ungrounded = analyse([
         Turn('A', 'This work feels underdeveloped and needs more rigour.', 'advisor'),
         Turn('B', 'I share those concerns about the overall approach.', 'domain expert'),
-    ]).grounding_rate
+    ]).citation_form_rate
     assert grounded > ungrounded
 
 

@@ -2,7 +2,9 @@
 import logging
 import time
 
+import psycopg2
 from fastapi import FastAPI, Request, WebSocket
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .logging_setup import bind_request_id, configure_logging, new_request_id, request_id_var
@@ -24,6 +26,43 @@ app = FastAPI(
     description="AI-Powered Academic Peer Review Platform",
     version="2.0.0"
 )
+
+@app.exception_handler(psycopg2.errors.InvalidTextRepresentation)
+async def _invalid_id(request: Request, exc: psycopg2.errors.InvalidTextRepresentation):
+    """
+    A malformed id is a missing resource, not a server fault.
+
+    Eighty-odd routes take `debate_id: str` and hand it straight to Postgres,
+    so one mistyped character in a URL produced a 500 whose body was the raw
+    Postgres error - on eleven of twenty endpoints. Fixing it per route would
+    mean touching all of them and missing the next one.
+    """
+    logger.info("Malformed identifier in %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=404, content={"detail": "Not found"})
+
+
+@app.exception_handler(psycopg2.errors.StringDataRightTruncation)
+async def _too_long(request: Request, exc: psycopg2.errors.StringDataRightTruncation):
+    """A value longer than its column is the caller's mistake, and saying so
+    beats returning 500 with the schema details attached."""
+    logger.info("Oversized value in %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=400,
+        content={"detail": "One of the values you sent is too long for that field."},
+    )
+
+
+@app.exception_handler(psycopg2.Error)
+async def _database_error(request: Request, exc: psycopg2.Error):
+    """
+    Anything else from the database is ours, and its text is not the caller's
+    business - Postgres errors name tables, columns and constraints.
+    """
+    logger.error("Database error in %s %s", request.method, request.url.path, exc_info=True)
+    return JSONResponse(
+        status_code=500, content={"detail": "Internal server error"}
+    )
+
 
 PLACEHOLDER_JWT_SECRET = "your-jwt-secret-here"
 
