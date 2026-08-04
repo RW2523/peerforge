@@ -1,4 +1,5 @@
 """Turn orchestration endpoints"""
+import asyncio
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, status, Depends, Header
 from typing import Optional, Dict, Any
@@ -56,7 +57,10 @@ async def trigger_next_turn(
     
     try:
         orchestrator = TurnOrchestrator(x_openrouter_key)
-        result = orchestrator.trigger_next_turn(debate_id)
+        # Off the event loop: this spends tens of seconds inside LLM HTTP
+        # calls, and run directly it froze every other request on the
+        # instance for its whole duration.
+        result = await asyncio.to_thread(orchestrator.trigger_next_turn, debate_id)
         
         return {
             "event_id": result['event_id'],

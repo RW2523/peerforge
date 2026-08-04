@@ -8,6 +8,7 @@ The debate is created first (empty), material is uploaded to it, and the
 conversation is grounded in that material. Applying staffs the panel and
 writes the policy, leaving the session ready to start.
 """
+import asyncio
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -71,7 +72,10 @@ async def setup_converse(
             detail="An OpenRouter key is required. Add one in Settings.",
         )
 
-    return converse(
+    # Off the event loop: this spends tens of seconds inside LLM HTTP calls,
+    # and run directly it froze every other request on the instance.
+    return await asyncio.to_thread(
+        converse,
         debate_id=debate_id,
         message=request.message,
         history=[t.model_dump() for t in request.history],

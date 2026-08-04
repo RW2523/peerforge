@@ -1,4 +1,5 @@
 """Summary and outputs endpoints (M3)"""
+import asyncio
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import Dict, Any
 from ..auth import get_current_user, check_workspace_access
@@ -65,10 +66,14 @@ async def generate_summary(
 
     try:
         summary_service = SummaryService()
-        outputs = summary_service.generate_summary(
+        # Off the event loop: this spends tens of seconds inside LLM HTTP
+        # calls, and run directly it froze every other request on the
+        # instance for its whole duration.
+        outputs = await asyncio.to_thread(
+            summary_service.generate_summary,
             debate_id=debate_id,
             openrouter_api_key=resolved_key,
-            model_id=request.model_id if hasattr(request, 'model_id') else "openai/gpt-4o-mini"  # Cost-optimized
+            model_id=request.model_id if hasattr(request, 'model_id') else "openai/gpt-4o-mini",
         )
         
         # The summary_service.generate_summary already saves to DB

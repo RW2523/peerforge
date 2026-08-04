@@ -76,7 +76,11 @@ function RoomPageContent() {
 
   // Auto-load debate from URL params (e.g., from setup flow)
   useEffect(() => {
-    const debateIdFromUrl = searchParams.get('debate_id');
+    // 'debate' accepted too: the conversational setup linked with that key,
+    // so anyone holding one of those URLs would otherwise land in an empty
+    // room with no hint that their session exists.
+    const debateIdFromUrl =
+      searchParams.get('debate_id') || searchParams.get('debate');
     if (debateIdFromUrl && !debateId) {
       // Auto-load the debate
       api.getDebate(debateIdFromUrl)

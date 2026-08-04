@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 import psycopg2
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Header
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Header, status
 from pydantic import BaseModel
 from psycopg2.extras import Json
 
@@ -117,49 +117,67 @@ async def add_inline_materials(
     x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
     resolved_key = x_openrouter_key or settings.openrouter_api_key
 
+    # Validate BEFORE touching anything. This endpoint replaces the existing
+    # inline materials, and it used to delete them - and commit that delete -
+    # before looking at the payload. A request carrying nothing usable, or one
+    # that failed partway through the inserts, therefore destroyed work the
+    # researcher had already saved, and answered with a bare 500.
+    incoming = []
+    for m in request.materials:
+        kind = m.kind
+        body = (m.body_text or "").strip()
+        url = (m.url or "").strip()
+        if kind == "text" and not body:
+            continue
+        if kind == "link" and not url:
+            continue
+        incoming.append((str(uuid.uuid4()), kind, body, url, m.title))
+
+    if not incoming:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No usable materials in this request. Text needs body_text "
+                   "and a link needs a url. Nothing was changed.",
+        )
+
     with get_db_connection() as conn:
         cur = get_cursor(conn)
         cur.execute("SELECT debate_id FROM debates WHERE debate_id = %s", (debate_id,))
         if not cur.fetchone():
             raise HTTPException(status_code=404, detail="Debate not found")
 
-        # Remove prior inline materials + their chunks (idempotent re-submit).
-        cur.execute(
-            "SELECT material_id FROM meeting_materials WHERE debate_id = %s AND kind IN ('text','link')",
-            (debate_id,),
-        )
-        old_ids = [str(r["material_id"]) for r in cur.fetchall()]
-        for old_id in old_ids:
+        # One transaction: the replacement either happens whole or not at all.
+        try:
             cur.execute(
-                "DELETE FROM memory_chunks WHERE source_debate_id = %s AND chunk_metadata->>'material_id' = %s",
-                (debate_id, old_id),
+                "SELECT material_id FROM meeting_materials WHERE debate_id = %s AND kind IN ('text','link')",
+                (debate_id,),
             )
-        cur.execute(
-            "DELETE FROM meeting_materials WHERE debate_id = %s AND kind IN ('text','link')",
-            (debate_id,),
-        )
-        conn.commit()
+            old_ids = [str(r["material_id"]) for r in cur.fetchall()]
+            for old_id in old_ids:
+                cur.execute(
+                    "DELETE FROM memory_chunks WHERE source_debate_id = %s AND chunk_metadata->>'material_id' = %s",
+                    (debate_id, old_id),
+                )
+            cur.execute(
+                "DELETE FROM meeting_materials WHERE debate_id = %s AND kind IN ('text','link')",
+                (debate_id,),
+            )
 
-        created = []
-        for m in request.materials:
-            kind = m.kind
-            body = (m.body_text or "").strip()
-            url = (m.url or "").strip()
-            if kind == "text" and not body:
-                continue
-            if kind == "link" and not url:
-                continue
-            material_id = str(uuid.uuid4())
             now = datetime.utcnow()
-            cur.execute(
-                """
-                INSERT INTO meeting_materials (material_id, debate_id, kind, title, body_text, url, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                """,
-                (material_id, debate_id, kind, m.title, m.body_text, m.url, now, now),
-            )
+            for material_id, kind, body, url, title in incoming:
+                cur.execute(
+                    """
+                    INSERT INTO meeting_materials (material_id, debate_id, kind, title, body_text, url, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (material_id, debate_id, kind, title, body or None, url or None, now, now),
+                )
             conn.commit()
-            created.append((material_id, kind, body, url, m.title))
+        except Exception:
+            conn.rollback()
+            raise
+
+        created = incoming
 
     total_chunks = 0
     for material_id, kind, body, url, title in created:

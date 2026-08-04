@@ -5,6 +5,7 @@ POST /debates/{id}/assessment/generate  → build a fresh ten-dimension assessme
 GET  /debates/{id}/assessment           → latest assessment
 GET  /debates/{id}/assessment/history   → prior overall scores (progress over time)
 """
+import asyncio
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -49,7 +50,11 @@ async def create_assessment(
             detail="X-OpenRouter-Key header is required for this operation",
         )
     try:
-        return generate_assessment(
+        # Off the event loop: this spends tens of seconds inside LLM HTTP
+        # calls, and run directly it froze every other request on the
+        # instance for its whole duration.
+        return await asyncio.to_thread(
+            generate_assessment,
             debate_id=debate_id,
             openrouter_key=x_openrouter_key,
             mode=request.mode,

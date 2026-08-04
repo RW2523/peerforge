@@ -25,9 +25,14 @@ export default function HistoryPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'running' | 'paused' | 'ended'>('all');
 
+  // Depends on workspaceId, which is null for the first render or two while
+  // WorkspaceProvider resolves. With an empty dependency array this ran once,
+  // hit the guard below, returned before ever clearing `loading`, and never ran
+  // again — so a direct visit or a refresh sat on "Loading sessions…" forever
+  // while the very same request succeeded from the nav link.
   useEffect(() => {
-    loadDebates();
-  }, []);
+    if (workspaceId) loadDebates();
+  }, [workspaceId]);
 
   const loadDebates = async () => {
     if (!workspaceId) return;

@@ -1,4 +1,5 @@
 """Debate-related endpoints"""
+import asyncio
 from fastapi import APIRouter, HTTPException, status, Depends, Query, Header
 from typing import Dict, Any, Optional, List
 from ..auth import get_current_user, check_workspace_access
@@ -161,10 +162,14 @@ async def run_debate(
         ]
         
         # Run debate
-        result = engine.run_debate(
+        # Off the event loop: this spends tens of seconds inside LLM HTTP
+        # calls, and run directly it froze every other request on the
+        # instance for its whole duration.
+        result = await asyncio.to_thread(
+            engine.run_debate,
             problem_statement=request.problem_statement,
             agents=agents_list,
-            debate_title=request.debate_title
+            debate_title=request.debate_title,
         )
         
         return result

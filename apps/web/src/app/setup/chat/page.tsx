@@ -122,7 +122,7 @@ export default function ConversationalSetupPage() {
     setError(null);
     try {
       await applySetup(debateId, proposal);
-      router.push(`/room?debate=${debateId}`);
+      router.push(`/room?debate_id=${debateId}`);
     } catch (err: any) {
       setError(err?.message ?? 'Could not create the session');
       setApplying(false);
@@ -136,9 +136,14 @@ export default function ConversationalSetupPage() {
         <div className={styles.chat}>
           <header className={styles.head}>
             <h1 className={styles.h1}>Set up a review session</h1>
+            {/* This used to say "upload a document first", and there is no
+                upload control on this page — it sent people looking for a
+                button that does not exist. Grounding in a file lives in
+                Advanced setup; say so rather than implying it is here. */}
             <p className={styles.sub}>
-              Describe your work in your own words. Upload a document first if you
-              want the panel grounded in it.
+              Describe your work in your own words — paste an abstract or a
+              section and the panel will react to it. To attach a file instead,
+              use <a href="/setup">Advanced setup</a>.
             </p>
           </header>
 
