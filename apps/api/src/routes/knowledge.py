@@ -50,13 +50,21 @@ async def get_knowledge_unit(
                     aku.metadata,
                     aku.created_at
                 FROM agent_knowledge_units aku
-                LEFT JOIN debates d ON aku.source_debate_id = d.debate_id
+                -- INNER JOIN, and no "OR d.workspace_id IS NULL".
+                --
+                -- It was a LEFT JOIN with that OR, so a unit whose debate link
+                -- was NULL matched for EVERY caller. The FK is ON DELETE SET
+                -- NULL, so deleting a session silently turned its prep packs
+                -- into world-readable rows — measured on the live database,
+                -- all 16 units were in that state. A prep pack nobody can
+                -- attribute to a session is not a prep pack anyone may read.
+                JOIN debates d ON aku.source_debate_id = d.debate_id
                 WHERE aku.knowledge_id = %s
                   -- ::uuid[] because workspace_ids_for returns strings while
                   -- debates.workspace_id is uuid; without the cast Postgres
                   -- raises "operator does not exist: uuid = text", which the
                   -- bare except below re-raised as a 500.
-                  AND (d.workspace_id = ANY(%s::uuid[]) OR d.workspace_id IS NULL)
+                  AND d.workspace_id = ANY(%s::uuid[])
             """, (knowledge_id, workspace_ids))
             
             result = cursor.fetchone()
