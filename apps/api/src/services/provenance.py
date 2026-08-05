@@ -58,7 +58,17 @@ def _locate_excerpt(excerpt: str, chunk_text: str) -> Optional[Dict[str, int]]:
 
 
 def _fetch_material_chunks(debate_id: str, limit: int = 40) -> List[Dict[str, Any]]:
-    """Material-owned chunks (agent_id IS NULL) with provenance metadata."""
+    """Material-owned chunks (agent_id IS NULL) with provenance metadata.
+
+    The join compares material_id as TEXT, not by casting the metadata to
+    uuid. chunk_metadata->>'material_id' is not reliably a uuid: across the
+    live table it is NULL for 350 chunks and the literal string 'mat1' for 70
+    more. Casting raised invalid input syntax for type uuid, and because the
+    only caller wraps grounding in a bare except, every affected session
+    silently produced zero citations — the Glass-Box lineage looked empty
+    rather than broken. Comparing as text matches the same valid rows and
+    simply fails to match the junk ones.
+    """
     with get_db_connection() as conn:
         cur = get_cursor(conn)
         cur.execute(
@@ -67,7 +77,7 @@ def _fetch_material_chunks(debate_id: str, limit: int = 40) -> List[Dict[str, An
                    COALESCE(mm.title, 'uploaded document') AS doc_title
             FROM   memory_chunks mc
             LEFT JOIN meeting_materials mm
-                   ON (mc.chunk_metadata->>'material_id')::uuid = mm.material_id
+                   ON mc.chunk_metadata->>'material_id' = mm.material_id::text
             WHERE  mc.source_debate_id = %s AND mc.agent_id IS NULL
             ORDER BY mc.created_at
             LIMIT %s
@@ -181,7 +191,7 @@ def get_provenance(debate_id: str) -> Dict[str, Any]:
                    COUNT(mc.chunk_id) AS chunk_count
             FROM   meeting_materials mm
             LEFT JOIN memory_chunks mc
-                   ON (mc.chunk_metadata->>'material_id')::uuid = mm.material_id
+                   ON mc.chunk_metadata->>'material_id' = mm.material_id::text
                   AND mc.source_debate_id = mm.debate_id
             WHERE  mm.debate_id = %s
             GROUP BY mm.material_id, mm.title, mm.kind
@@ -210,7 +220,7 @@ def get_provenance(debate_id: str) -> Dict[str, Any]:
             FROM   defense_questions q
             LEFT JOIN memory_chunks mc ON mc.chunk_id = q.source_chunk_id
             LEFT JOIN meeting_materials mm
-                   ON (mc.chunk_metadata->>'material_id')::uuid = mm.material_id
+                   ON mc.chunk_metadata->>'material_id' = mm.material_id::text
             WHERE  q.debate_id = %s
             ORDER BY q.seq_order
             """,

@@ -122,7 +122,8 @@ class ConstitutionalValidator:
         past_messages: List[str],
         active_participants: List[str],
         recent_other_messages: Optional[List[str]] = None,
-        has_materials: bool = True
+        has_materials: bool = True,
+        absent_locators: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
         Validate message against constitutional rules
@@ -200,6 +201,11 @@ class ConstitutionalValidator:
         )
         if fabricated_citation:
             violations.append(fabricated_citation)
+
+        # Rule 4.6: Citing part of a document that does not exist in it
+        contradicted = self._check_contradicted_citation(absent_locators)
+        if contradicted:
+            violations.append(contradicted)
 
         # Rule 5: Check role consistency
         role_violation = self._check_role_consistency(
@@ -517,6 +523,49 @@ class ConstitutionalValidator:
         text = re.sub(r"\s+([,.;:])", r"\1", text)
         return text.strip(), paren_hits + bare_hits
 
+    @staticmethod
+    def strip_contradicted_locators(
+        message: str,
+        absent_locators: Optional[List[Dict[str, Any]]]
+    ) -> Tuple[str, int]:
+        """Mark the specific citations the document contradicts.
+
+        Targeted, unlike strip_fabricated_locators: a session WITH a document
+        has legitimate citations too, and "Section 2.1" must survive untouched
+        while "Section 2.3" is marked. Only the identifiers the index reported
+        as absent are replaced.
+
+        Needed for the same reason as the no-materials backstop — a
+        regenerated message is never re-validated, so without this the rule
+        fires, the retry cites the same missing section again, and it is
+        published anyway. Measured: 11 contradicted citations reached the
+        transcript across four turns while the rule fired on every one.
+        """
+        if not absent_locators:
+            return message, 0
+
+        text = message
+        replaced = 0
+        for item in absent_locators:
+            family = re.escape(item["family"])
+            ident = re.escape(item["cited"])
+            # Bound the match so "Section 3.4" does not fire inside "Section
+            # 3.45", while still matching "Section 3.4." at the end of a
+            # sentence. (?![\d.]) rejected that trailing full stop and let two
+            # contradicted citations through a live run.
+            pattern = re.compile(
+                rf"\b{family}s?\s+{ident}(?!\d)(?!\.\d)",
+                re.IGNORECASE,
+            )
+            text, n = pattern.subn("[not in the submitted document]", text)
+            replaced += n
+
+        text = re.sub(r"(?:\[not in the submitted document\][\s,]*){2,}",
+                      "[not in the submitted document] ", text)
+        text = re.sub(r"\s{2,}", " ", text)
+        text = re.sub(r"\s+([,.;:])", r"\1", text)
+        return text.strip(), replaced
+
     def _check_fabricated_citation(
         self,
         message: str,
@@ -558,6 +607,43 @@ class ConstitutionalValidator:
                 f"No document was submitted to this session, but the message "
                 f"cites {shown}. There is nothing those refer to. State the gap "
                 f"instead — \"the problem statement does not say whether...\"."
+            ),
+        }
+
+    def _check_contradicted_citation(
+        self,
+        absent_locators: Optional[List[Dict[str, Any]]]
+    ) -> Optional[Dict[str, Any]]:
+        """Catch a citation the submitted document contradicts.
+
+        The no-materials rule cannot see this one: a document DOES exist, so
+        every locator in the message is plausible. Observed live — a reviewer
+        cited "Section 2.3" of a paper whose sections are 1, 2, 2.1, 2.2, 3
+        and 4.
+
+        The verdict is computed in services.locator_index and passed in, so
+        this class stays free of database access. Only the "absent" verdict
+        reaches here: a locator whose FAMILY exists in the document but whose
+        specific member does not. A document with no sections at all yields
+        "unverifiable" and never gets this far, because extraction losing a
+        PDF's headings must not read as the reviewer lying.
+        """
+        if not absent_locators:
+            return None
+
+        parts = []
+        for item in absent_locators[:3]:
+            present = ", ".join(item["present"]) or "none"
+            parts.append(
+                f"{item['family']} {item['cited']} (document has: {present})"
+            )
+        return {
+            "rule": "no_contradicted_citation",
+            "severity": "critical",
+            "details": (
+                "The submitted document does not contain " + "; ".join(parts) +
+                ". Cite only what is actually there, or say the document does "
+                "not address the point."
             ),
         }
 

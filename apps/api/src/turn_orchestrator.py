@@ -145,6 +145,24 @@ def _agent_role_text(agent_config: Dict[str, Any]) -> str:
     )
 
 
+def _absent_locators(debate_id: str, message: str, material_context: Optional[str]) -> list:
+    """Locators the message cites that the submitted document contradicts.
+
+    Only meaningful when a document exists; the no-materials case is already
+    covered by the fabricated-citation rule, and running both would report the
+    same sentence twice.
+    """
+    if not material_context:
+        return []
+    try:
+        from .services.locator_index import find_absent_locators
+        return find_absent_locators(debate_id, message)
+    except Exception:
+        # Verification is a check, not a dependency. Unknown is not a lie.
+        logger.warning("locator verification unavailable", exc_info=True)
+        return []
+
+
 def _evidence_clause(material_context: Optional[str]) -> str:
     """What to say about evidence, given whether a document was actually supplied.
 
@@ -2074,6 +2092,10 @@ Requirements:
                 # No document supplied means every page or section reference in
                 # the output is invented — the check is exact in that case.
                 has_materials=bool(material_context),
+                # A document DOES exist: check the cited sections and tables
+                # against what it actually contains. Reads the chunks, not the
+                # prompt context, because that context is truncated.
+                absent_locators=_absent_locators(debate_id, agent_message, material_context),
             )
             
             if not validation["valid"]:
@@ -2130,6 +2152,15 @@ Requirements:
                             "- Where you need a detail the problem statement does not give, "
                             "say so plainly: 'the statement does not say whether...'.",
                             "- Referring to real external literature you actually know is fine.",
+                        ])
+
+                    if 'no_contradicted_citation' in violation_rules:
+                        constraints.extend([
+                            "- You cited part of the document that does not exist in it.",
+                            "- Cite ONLY sections, tables and figures that actually appear "
+                            "in the submitted materials above.",
+                            "- If the document does not address your point, say that "
+                            "outright — an honest gap is a legitimate review finding.",
                         ])
 
                     if 'no_flip_flop' in violation_rules:
@@ -2196,6 +2227,21 @@ Requirements:
                     logger.warning(
                         f"    ⚠️ {agent_name} cited a document that was never submitted; "
                         f"replaced {stripped} invented locator(s) with '[source not provided]'"
+                    )
+            else:
+                # A document exists, so most citations are legitimate — mark only
+                # the ones it contradicts. Re-checked here because the message may
+                # have been regenerated since validation, and nothing re-validates
+                # a retry: without this the rule fired on all four turns of a live
+                # run and all eleven bad citations were published regardless.
+                _absent = _absent_locators(debate_id, agent_message, material_context)
+                agent_message, marked = ConstitutionalValidator.strip_contradicted_locators(
+                    agent_message, _absent
+                )
+                if marked:
+                    logger.warning(
+                        f"    ⚠️ {agent_name} cited {marked} part(s) of the document that "
+                        f"do not exist in it; marked '[not in the submitted document]'"
                     )
 
             # Complete thinking session and persist summary
