@@ -87,8 +87,8 @@ _ROLE_SCHEMA: Dict[str, Dict[str, str]] = {
 
 _DEFAULT_SCHEMA = {
     "dimensions":      "Academic quality, contribution, rigor",
-    "strengths":       "Genuine strengths directly supported by the submitted materials",
-    "weaknesses":      "Specific weaknesses with evidence from submitted materials",
+    "strengths":       "Genuine strengths directly supported by what was actually provided",
+    "weaknesses":      "Specific weaknesses, with evidence from what was actually provided",
     "recommendations": "Actionable, specific recommendations for the authors",
     "evidence_req":    "Every claim must cite a specific section, figure, or result from the submitted work",
 }
@@ -146,11 +146,29 @@ def _already_raised(conversation_history: Optional[List[Dict[str, str]]]) -> Lis
     return out
 
 
+def _evidence_sentence(has_materials: bool) -> str:
+    """One sentence about evidence, honest about whether a document exists.
+
+    Every branch of _round_instruction used to end in "Cite specific evidence"
+    or "Cite evidence from the submitted materials" regardless. On a session
+    with no upload that is an instruction to invent a source, and the models
+    did: 33 fabricated locators across 18 live turns.
+    """
+    if has_materials:
+        return "Cite evidence from the submitted materials."
+    return (
+        "No document was submitted — do not cite pages, sections, tables or "
+        "figures. Where the problem statement omits something you would need, "
+        "say so."
+    )
+
+
 def _round_instruction(
     current_round: Optional[int],
     max_rounds: Optional[int],
     schema_dimensions: Optional[str] = None,
     already_raised: Optional[List[str]] = None,
+    has_materials: bool = True,
 ) -> str:
     """
     Return the structural requirement for this round.
@@ -164,10 +182,11 @@ def _round_instruction(
     if not max_rounds or not current_round:
         return (
             "Evaluate the submission directly from your reviewer perspective. "
-            "Cite specific evidence."
+            + _evidence_sentence(has_materials)
         )
     if max_rounds < 2:
-        return "Evaluate the submission directly from your reviewer perspective. Cite specific evidence."
+        return ("Evaluate the submission directly from your reviewer perspective. "
+                + _evidence_sentence(has_materials))
 
     if current_round == 1:
         # Every reviewer used to be handed the same task — "your most important
@@ -191,14 +210,14 @@ def _round_instruction(
             "Lead with the concern that follows from your remit, not with the most "
             "obvious problem in the paper. Give one strength and one weakness that "
             "sit inside your remit, and one specific recommendation. "
-            "Cite evidence from the submitted materials." + avoid
+            + _evidence_sentence(has_materials) + avoid
         )
     elif current_round == max_rounds:
         return (
             f"ROUND {current_round} — FINAL POSITION: "
             "State your definitive recommendation (Accept / Minor Revision / Major Revision / Reject). "
             "Address at least one unresolved concern from earlier discussion. "
-            "Justify your decision with evidence from the materials and the debate. "
+            + _evidence_sentence(has_materials) + " "
             "Be decisive — this is your last contribution."
         )
     else:
@@ -370,7 +389,7 @@ class AgentResponseGenerator:
                 f"  Confidence: {reasoning.get('confidence', '')}\n"
                 f"  Unique contribution this turn: {unique}\n"
                 f"  Key points: {key_points_str}\n\n"
-                f"{_round_instruction(current_round, max_rounds, schema['dimensions'], _already_raised(conversation_history))}\n\n"
+                f"{_round_instruction(current_round, max_rounds, schema['dimensions'], _already_raised(conversation_history), bool(material_context))}\n\n"
                 "Generate your review message now. "
                 "Do NOT start with filler phrases. Open with your substantive point."
             ),
@@ -494,7 +513,9 @@ Generate your review contribution now."""
     def _format_debate_context(self, context: Dict[str, Any]) -> str:
         parts = [f"Session: {context.get('title', 'Untitled')}"]
         if context.get("description"):
-            parts.append(f"Research question / abstract: {context['description']}")
+            # Calling the session description an "abstract" asserts a manuscript
+            # exists. On a session with no upload it is just the brief.
+            parts.append(f"Research question / brief: {context['description']}")
         if context.get("agenda"):
             items = "\n".join(f"  - {it}" for it in context["agenda"])
             parts.append(f"Review agenda:\n{items}")

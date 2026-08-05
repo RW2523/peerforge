@@ -240,3 +240,95 @@ class TestStripIsTheFinalBackstop:
         # It must NOT be conditioned on which rule fired — that was the bug.
         strip_call = tail[tail.index("if not material_context:"):]
         assert "violation_rules" not in strip_call.split("strip_fabricated_locators")[0]
+
+
+class TestEveryCitationDemandIsConditional:
+    """
+    There are TWO prompt paths and it is easy to fix only one.
+
+    USE_CONSTITUTIONAL_AI defaults to 'true', and on that path the ~7000-token
+    `messages[]` array that trigger_next_turn spends 500 lines building is
+    never sent — generate_response receives conversation_history, turn_info
+    and material_context instead. `messages[]` reaches the model only during
+    CONSTRAINED REGENERATION and the exception fallback.
+
+    Which made one string the worst in the codebase: the citation-requirement
+    block told the model to "Cite ingested materials as: (Section N of
+    submitted draft)" — a fill-in-the-blank template for exactly the
+    "Section 2.1" the guard objects to — and it was handed back during the
+    regeneration the guard itself triggers. The retry was being instructed to
+    do the thing it was being punished for.
+    """
+
+    def test_regeneration_prompt_does_not_template_a_locator(self):
+        import inspect
+        from src import turn_orchestrator
+
+        src = inspect.getsource(turn_orchestrator.TurnOrchestrator.trigger_next_turn)
+        block = src[src.index("ACADEMIC PEER REVIEW CITATION REQUIREMENT"):]
+        block = block[:block.index("Follow the review arc")]
+        assert "if _material_ctx else" in block, (
+            "the citation-format line is unconditional, so a session with no "
+            "document is handed '(Section N of submitted draft)' to fill in"
+        )
+
+    def test_material_context_loads_before_every_consumer(self):
+        """It used to load after the turn instruction was built, so nothing
+        upstream could know whether a document existed."""
+        import inspect
+        from src import turn_orchestrator
+
+        src = inspect.getsource(turn_orchestrator.TurnOrchestrator.trigger_next_turn)
+        load_at = src.index("_material_ctx = self._load_material_context")
+        for consumer in ("CITATION REQUIREMENT", "_evidence_clause", "_specifics_clause"):
+            assert src.index(consumer) > load_at, (
+                f"{consumer} runs before the material load"
+            )
+
+    def test_stage_one_reasoning_states_when_there_is_no_document(self):
+        """Stage 1 asked for a stance 'grounded in the research or materials'
+        without ever saying there were none, so the reasoning invented a
+        document and Stage 2 cited it."""
+        import inspect
+        from src.agent_reasoning import AgentReasoningEngine
+
+        src = inspect.getsource(AgentReasoningEngine)
+        assert "NO DOCUMENT HAS BEEN SUBMITTED" in src
+        assert "grounded in the research or materials" not in src
+
+    def test_round_instruction_is_material_aware(self):
+        from src.agent_response_generator import _round_instruction
+
+        with_doc = _round_instruction(1, 3, "methodology", [], True)
+        without = _round_instruction(1, 3, "methodology", [], False)
+        assert "submitted materials" in with_doc
+        assert "No document was submitted" in without
+        assert "Cite evidence from the submitted materials" not in without
+
+    def test_session_description_is_not_called_an_abstract(self):
+        """Calling the free-text brief an 'abstract' asserts a manuscript."""
+        import ast
+        import inspect
+        import textwrap
+        from src.agent_response_generator import AgentResponseGenerator
+
+        # Read the code, not the comments — the comment explaining the change
+        # names the word it removed.
+        fn = ast.parse(
+            textwrap.dedent(inspect.getsource(AgentResponseGenerator._format_debate_context))
+        ).body[0]
+        literals = " ".join(
+            n.value for n in ast.walk(fn)
+            if isinstance(n, ast.Constant) and isinstance(n.value, str)
+        )
+        assert "abstract" not in literals.lower()
+
+    def test_persona_lanes_are_overridden_when_nothing_was_submitted(self):
+        """The lanes are static text written for a session with a manuscript
+        ("Quote the methods section or a specific table")."""
+        import inspect
+        from src import turn_orchestrator
+
+        src = inspect.getsource(turn_orchestrator.TurnOrchestrator.trigger_next_turn)
+        assert "if not _material_ctx:" in src
+        assert "there is nothing to quote" in src

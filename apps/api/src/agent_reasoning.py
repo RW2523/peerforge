@@ -137,7 +137,7 @@ class AgentReasoningEngine:
                     "You have been flagged for repeating previously stated arguments. "
                     "You MUST introduce a new evidence-based perspective, critique, concern, "
                     "or recommendation that has NOT yet been discussed. It must be consistent "
-                    "with your assigned role and grounded in the provided materials."
+                    "with your assigned role and grounded in what was actually provided."
                 ),
             )
             reasoning = self._call_and_parse(
@@ -270,7 +270,7 @@ class AgentReasoningEngine:
         ):
             return False, (
                 "current_stance is too generic or empty. Provide a specific, substantive "
-                "one-sentence analytical position grounded in the research materials and "
+                "one-sentence analytical position grounded in what was actually provided and "
                 "session context."
             )
 
@@ -307,6 +307,15 @@ Do not automatically agree. Evaluate objectively before deciding whether to adju
             material_section = f"""
 SOURCE MATERIALS (available to all reviewers — ground your reasoning here):
 {material_context}
+"""
+        else:
+            # Stage 1 asked for a stance "grounded in the research or
+            # materials" without ever saying there were none, so the reasoning
+            # invented a document and Stage 2 then cited it.
+            material_section = """
+NO DOCUMENT HAS BEEN SUBMITTED. You have the session topic and the
+conversation, nothing else. Do not reason about pages, sections, tables or
+figures, and do not assume what a manuscript says — there is none.
 """
 
         valid_names_section = ""
@@ -350,7 +359,7 @@ RECENT CONVERSATION:
 
 TASK: Reason through your analytical position step-by-step.
 
-STEP 1 — Current stance (ONE specific sentence grounded in the research or materials)
+STEP 1 — Current stance (ONE specific sentence grounded in what you were actually given)
 STEP 2 — Confidence (0.0–1.0)
 STEP 3 — Has your stance changed since your last message? (true/false)
 STEP 4 — If changed: what new evidence or argument justifies it?
@@ -364,7 +373,8 @@ RULES:
 - should_disagree_with MUST only contain names from the VALID PARTICIPANTS list above
 - Never reference Agent A, Reviewer 1, or any placeholder — use real session names only
 - Key points must be distinct and not restate what others said
-- Ground every analytical claim in the session topic or source materials
+- Ground every analytical claim in the session topic, the conversation, or source
+  materials that were actually provided — never in a document you were not shown
 
 OUTPUT (valid JSON only — no markdown, no code fences):
 {{

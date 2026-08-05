@@ -162,6 +162,21 @@ def _evidence_clause(material_context: Optional[str]) -> str:
     )
 
 
+def _specifics_clause(material_context: Optional[str]) -> str:
+    """What a reviewer can legitimately be specific ABOUT.
+
+    "Name figures, tables, methods, or equations from the submitted work" is
+    fine when there is a submitted work. With none, it names the exact things
+    the panel invented.
+    """
+    if material_context:
+        return "name figures, tables, methods, or equations from the submitted work"
+    return (
+        "name the specific assumption, design choice or missing control you mean "
+        "— but NOT a page, section, table or figure, since no document was submitted"
+    )
+
+
 def _build_repetition_blacklist(history_events: List[Dict], current_agent: str) -> str:
     """
     Extract the key points each agent has already raised so the current
@@ -405,6 +420,15 @@ class TurnOrchestrator:
             current_date_str = current_datetime.strftime("%A, %B %d, %Y")
             current_time_str = current_datetime.strftime("%I:%M %p UTC")
             
+            # Load source materials once per turn — shared across every
+            # pipeline stage. Loaded this early because everything downstream
+            # that mentions citation has to know whether a document exists:
+            # the citation-requirement block below, the turn instruction, the
+            # reasoning prompt and the response prompt all said "cite the
+            # materials" unconditionally, which on a session with no upload is
+            # an instruction to invent one.
+            _material_ctx = self._load_material_context(debate_id)
+
             # Context message with review session topic, agenda, objectives
             context_parts = [
                 f"Current Date & Time: {current_date_str} at {current_time_str}",
@@ -419,8 +443,21 @@ class TurnOrchestrator:
             context_parts.append(
                 "ACADEMIC PEER REVIEW CITATION REQUIREMENT:\n"
                 "  - Every claim about the research MUST be supported by evidence\n"
-                "  - Cite ingested materials as: (Section N of submitted draft) or (see uploaded material: [title])\n"
-                "  - Cite literature as: Author et al. (Year) — doi/url if available\n"
+                + (
+                    "  - Cite ingested materials as: (Section N of submitted draft) or "
+                    "(see uploaded material: [title])\n"
+                    if _material_ctx else
+                    # This block reaches the model during CONSTRAINED REGENERATION —
+                    # exactly when the fabricated-citation guard has just fired. It
+                    # handed back a fill-in-the-blank template, "(Section N of
+                    # submitted draft)", which is precisely the shape of the
+                    # "Section 2.1" the guard had objected to. The retry was being
+                    # told to do the thing it was being punished for.
+                    "  - NO document was submitted to this session. Do NOT cite a page, "
+                    "section, table or figure — there is nothing for them to refer to. "
+                    "Name the gap instead: 'the statement does not say whether...'\n"
+                )
+                + "  - Cite literature as: Author et al. (Year) — doi/url if available\n"
                 "  - Do NOT make unsupported claims about the quality or novelty of the work\n"
                 "  - Follow the review arc: Contribution → Strengths → Weaknesses → Lit Gaps → Recommendation"
             )
@@ -541,9 +578,10 @@ class TurnOrchestrator:
 YOUR TASK AS A REVIEWER:
 - Directly address the most important point raised — agree, disagree, or extend with evidence
 - Use @mentions with the reviewer's EXACT name when responding to them
-- Every claim must be backed by cited evidence from the submitted materials or literature
+- Every claim must be backed by evidence you actually have: the brief, the discussion,
+  real literature, or submitted materials if any were provided
 - Move the review arc forward: if strengths were covered, pivot to weaknesses or lit gaps
-- Be specific: name figures, tables, methods, or equations from the submitted work
+- Be specific: {_specifics_clause(_material_ctx)}
 
 USE EXACT NAMES from the "Active:" list — do not invent @names"""
                 })
@@ -560,7 +598,7 @@ DO NOT:
 DO:
 - Open with a substantive claim about the work's core contribution or a methodological concern
 - State your most important observation from your reviewer lens immediately
-- Be specific: reference a method, figure, claim, or dataset from the submitted work
+- Be specific: {_specifics_clause(_material_ctx)}
 - Ask a pointed question that will drive the review discussion
 
 Example openers (adapt to your reviewer role):
@@ -625,14 +663,6 @@ How to respond:
                 participant_turns_remaining = turns_left_in_debate // len(participants)
                 is_final_turn = is_last_round and participant_turns_remaining == 0
             
-            # Load source materials once per turn — shared across pipeline
-            # stages. Loaded HERE rather than at first use because the turn
-            # instruction below must know whether a document exists: it used to
-            # say "cite evidence" and "the paper's main contribution"
-            # unconditionally, which on a session with no upload is an
-            # instruction to invent one.
-            _material_ctx = self._load_material_context(debate_id)
-
             # Determine urgency level and response length
             if max_rounds:
                 if is_final_turn:
@@ -690,6 +720,18 @@ How to respond:
                 agent_name.lower().strip(),
                 _persona_lane_from_description(_agent_role_text(agent_config))
             )
+            # The lanes are static text written for a session that has a
+            # manuscript — "Quote the methods section or a specific table",
+            # "Point to a SPECIFIC sentence, paragraph, or figure". Rewriting
+            # each one would weaken the case where a document genuinely exists,
+            # so override at the point of use instead.
+            if not _material_ctx:
+                _lane += (
+                    "\n  NOTE: no document was submitted to this session. Where this "
+                    "lane tells you to quote or point to a section, table, figure or "
+                    "sentence, there is nothing to quote — name the gap instead."
+                )
+
             _blacklist = _build_repetition_blacklist(history_events, agent_name)
 
             # Add turn instruction with conversational guidance
@@ -702,7 +744,7 @@ How to respond:
                         "ROUND 1 — INDEPENDENT EVALUATION:\n"
                         "  Assess the submission from your reviewer lens without referencing what others said.\n"
                         "  State your most important strength, your most critical weakness, and one specific recommendation.\n"
-                        "  Every claim MUST cite a specific section, method, figure, or result from the source materials."
+                        "  Every claim MUST be specific — " + _specifics_clause(_material_ctx) + "."
                     )
                 elif current_round == max_rounds:
                     round_requirement = (
@@ -718,7 +760,8 @@ How to respond:
                         "  You MUST challenge, rebut, qualify, or refine at least ONE specific claim made by another reviewer.\n"
                         "  Use their exact @name. Quote or paraphrase their claim. Explain the flaw or provide counter-evidence.\n"
                         "  Then advance to a new aspect of the review not yet covered.\n"
-                        "  Cite evidence from the source materials or the discussion. Do not simply repeat your Round 1 points."
+                        "  " + _evidence_clause(_material_ctx).strip()
+                        + " Do not simply repeat your Round 1 points."
                     )
 
                 strategy_guide = f"""
