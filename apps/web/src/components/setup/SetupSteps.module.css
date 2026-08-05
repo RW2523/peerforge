@@ -2637,3 +2637,15 @@
   outline: 2px solid var(--accent-bright, #6366f1);
   outline-offset: 2px;
 }
+
+/* Who has to act on an extracted item. Returned by the API from the start,
+   simply never rendered. */
+.actionItemOwner {
+  min-width: 110px;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  color: var(--text-1);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}

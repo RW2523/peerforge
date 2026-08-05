@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Dict, Any, Set
 from fastapi import WebSocket
+from .config import resolve_openrouter_key
 from .database import get_db_connection, get_cursor
 from .debate_service import DebateService
 
@@ -84,11 +85,15 @@ class WebSocketCommandHandlers:
         logger.info(f"   User ID: {user_id}")
         logger.info(f"   Request ID: {request_id}")
 
-        openrouter_key = payload.get('openrouter_key')
+        # The key is resolved server-side; a client-supplied one is only an
+        # override. Requiring it in the payload made the room's manual
+        # next-turn button the one place the configured key did not apply.
+        openrouter_key = resolve_openrouter_key(payload.get('openrouter_key'))
         if not openrouter_key:
-            logger.error("❌ ERROR: No OpenRouter key in payload!")
+            logger.error("❌ ERROR: No OpenRouter key configured on the server or supplied by the caller")
             await self.manager.send_to_client(
-                websocket, create_error_fn(request_id, 'control.next_turn', 'OpenRouter API key required')
+                websocket,
+                create_error_fn(request_id, 'control.next_turn', 'No OpenRouter API key is configured on the server.')
             )
             return
 

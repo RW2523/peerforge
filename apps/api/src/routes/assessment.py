@@ -384,5 +384,21 @@ async def verify_certificate(certificate_id: str):
             "live_check_available": live_available,
             "evidence_unchanged_since_issue": evidence_unchanged,
         },
-        "verdict": "VALID" if (sig_ok and hash_ok) else "INVALID",
+        # evidence_unchanged was computed, reported, and then ignored by the
+        # verdict — so a certificate headlined VALID while the session it
+        # attests to had moved on since issue. The certificate is still
+        # authentic in that case, which is why this is not INVALID: it is a
+        # true statement about a state that no longer holds.
+        "verdict": (
+            "INVALID" if not (sig_ok and hash_ok)
+            else "VALID" if evidence_unchanged
+            else "SUPERSEDED"
+        ),
+        "verdict_note": (
+            "" if (sig_ok and hash_ok and evidence_unchanged)
+            else "This certificate is authentic, but the session's evidence has "
+                 "changed since it was issued. Re-issue to certify the current state."
+            if (sig_ok and hash_ok)
+            else "This certificate does not verify against its signature or content hash."
+        ),
     }

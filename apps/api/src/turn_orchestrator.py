@@ -1952,16 +1952,26 @@ Requirements:
             # STAGE 3: CONSTITUTIONAL VALIDATION
             logger.info(f"  Stage 3: Validating...")
             
-            # Get recent messages from OTHER agents (for repetition check)
+            # Get recent messages from OTHER agents (for repetition check).
+            # This scanned the last 5 EVENTS, but a turn emits roughly seven
+            # (thinking steps plus the message), so the window never reached
+            # back to an agent_message — the list was always empty and the
+            # repetition rule had nothing to compare against. Bound the window
+            # by messages, not events.
             recent_other_messages = []
-            for event in reversed(history_events[-5:]):
-                if event.get('event_type') == 'agent_message':
-                    other_agent = event.get('content', {}).get('agent_name')
-                    if other_agent and other_agent != agent_name:
-                        recent_other_messages.append(event.get('content', {}).get('text', ''))
+            for event in reversed(history_events):
+                if event.get('event_type') != 'agent_message':
+                    continue
+                content = event.get('content') or {}
+                other_agent = content.get('agent_name')
+                if other_agent and other_agent != agent_name:
+                    text = content.get('text') or ''
+                    if text.strip():
+                        recent_other_messages.append(text)
                         if len(recent_other_messages) >= 3:
                             break
             recent_other_messages.reverse()  # Chronological order
+            logger.info(f"    Repetition check has {len(recent_other_messages)} prior message(s) to compare against")
             
             self.thinking_service.emit_thinking_step(debate_id, agent_name, "validating", {
                 "stage": "Stage 3: Validation",
@@ -2053,7 +2063,16 @@ Requirements:
                     )
                     agent_message = response['content']
             else:
-                logger.info(f"    ✅ Validation passed")
+                # `valid` only tracks critical violations, so non-critical ones
+                # were logged as a clean pass. Say what was actually found.
+                if validation["violations"]:
+                    logger.info(
+                        f"    ✅ Validation passed with "
+                        f"{len(validation['violations'])} advisory note(s): "
+                        + ", ".join(v['rule'] for v in validation['violations'])
+                    )
+                else:
+                    logger.info(f"    ✅ Validation passed")
                 self.thinking_service.emit_thinking_step(debate_id, agent_name, "validation_complete", {
                     "stage": "Stage 3: Complete",
                     "status": "✅ All checks passed",

@@ -16,12 +16,15 @@ from __future__ import annotations
 
 import json
 from typing import Any, Dict, List, Optional
+import logging
 
 from ..openrouter_client import OpenRouterClient
 from ..services.memory_retrieval import retrieve_allowed_chunks
 from ..utils.json_repair import parse_llm_json
 
 DEFAULT_SETUP_MODEL = "openai/gpt-4o-mini"
+
+logger = logging.getLogger(__name__)
 
 MAX_HISTORY_TURNS = 12
 MAX_CHUNKS = 6
@@ -155,24 +158,39 @@ def converse(
     messages.append({"role": "user", "content": message})
 
     client = OpenRouterClient(openrouter_key)
-    response = client.chat_completion(
-        model=model_id or DEFAULT_SETUP_MODEL,
-        messages=messages,
-        temperature=0.4,
-        max_tokens=900,
-        _debate_id=debate_id,
-        _stage="conversational_setup",
-    )
 
-    try:
-        parsed = parse_llm_json(response["content"], stage="conversational_setup")
-        if not isinstance(parsed, dict):
-            raise ValueError(f"expected an object, got {type(parsed).__name__}")
-    except ValueError:
-        # The model sometimes wraps the object in prose. Salvage it before
-        # giving up, because giving up here silently discarded the change the
-        # user had just agreed to.
-        parsed = _salvage_object(response["content"])
+    def _ask(msgs: List[Dict[str, str]]) -> Dict[str, Any]:
+        return client.chat_completion(
+            model=model_id or DEFAULT_SETUP_MODEL,
+            messages=msgs,
+            temperature=0.4,
+            max_tokens=900,
+            _debate_id=debate_id,
+            _stage="conversational_setup",
+        )
+
+    response = _ask(messages)
+    parsed = _parse_or_salvage(response["content"])
+
+    if parsed is None:
+        # The model answered in prose. Its prose usually *claims* the change
+        # was made ("I've added a statistics reviewer") while the panel on
+        # screen is untouched, so showing it as-is tells the user something
+        # false. Ask once for the object before giving up.
+        retry_messages = messages + [
+            {"role": "assistant", "content": response["content"][:2000]},
+            {"role": "user", "content": (
+                "Return that as the JSON object only — no prose before or after it, "
+                "with the complete proposal restated in full."
+            )},
+        ]
+        try:
+            retry = _ask(retry_messages)
+            parsed = _parse_or_salvage(retry["content"])
+            if parsed is not None:
+                response = retry
+        except Exception:
+            logger.warning("conversational_setup: re-ask for a JSON proposal failed", exc_info=True)
 
     if not isinstance(parsed, dict):
         raw = response["content"].strip()
@@ -186,7 +204,11 @@ def converse(
                 "I couldn't turn that into a panel proposal. Could you say it "
                 "again in a sentence — for example which reviewer to add, or "
                 "what you want them to focus on?"
-            ) if looks_like_json else raw[:1200],
+            ) if looks_like_json else (
+                raw[:1200]
+                + "\n\n(Note: your panel was not changed by this reply — "
+                  "tell me the change again and I'll apply it.)"
+            ),
             "ready": False,
             "proposal": None,
             "parse_failed": True,
@@ -273,6 +295,18 @@ def _salvage_object(content: str) -> Optional[Dict[str, Any]]:
                     return None
                 return obj if isinstance(obj, dict) else None
     return None
+
+
+def _parse_or_salvage(content: str) -> Optional[Dict[str, Any]]:
+    """Strict parse, then salvage an object wrapped in prose."""
+    try:
+        parsed = parse_llm_json(content, stage="conversational_setup")
+        if isinstance(parsed, dict):
+            return parsed
+    except ValueError:
+        pass
+    salvaged = _salvage_object(content)
+    return salvaged if isinstance(salvaged, dict) else None
 
 
 def _clean_proposal(proposal: Any) -> Optional[Dict[str, Any]]:

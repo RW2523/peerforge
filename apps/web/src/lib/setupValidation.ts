@@ -120,13 +120,21 @@ export function validateMaterials(materials: api.SetupMaterial[]): MaterialIssue
   return issues;
 }
 
-/** Primary research document uploaded on Step 2 (not text/link placeholders). */
+/**
+ * Primary research document uploaded on Step 2 (not text/link placeholders).
+ *
+ * A file whose processing FAILED is not one: its text was never extracted, so
+ * nothing about it is retrievable and the panel cannot cite a word of it. It
+ * satisfied the "main research file present" requirement anyway, letting a
+ * researcher launch a review of a document the reviewers could not read.
+ */
 export function getMainResearchFile(
   uploadedFiles: api.MaterialStatus[] = []
 ): api.MaterialStatus | undefined {
+  const usable = uploadedFiles.filter((f) => f.processed_status !== 'failed');
   return (
-    uploadedFiles.find((f) => f.is_primary) ??
-    uploadedFiles.find((f) => f.material_category === 'main_research')
+    usable.find((f) => f.is_primary) ??
+    usable.find((f) => f.material_category === 'main_research')
   );
 }
 

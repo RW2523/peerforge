@@ -368,3 +368,191 @@ def test_a_non_object_command_frame_is_answered_not_swallowed():
     )
     assert sent, 'a non-object frame produced no response at all'
     assert sent[0]['type'] == 'error'
+
+
+class TestRepetitionGuardReachable:
+    """
+    The mechanical overlap check was gated on the model confessing
+    am_i_repeating == "repeat", which it does not do when it paraphrases —
+    so the check was unreachable and only self-reported repetition was caught.
+    """
+
+    def _validator(self):
+        from src.agent_constitutional_validator import ConstitutionalValidator
+        return ConstitutionalValidator.__new__(ConstitutionalValidator)
+
+    PRIOR = [
+        "Dr. Chen: The sample size of 40 participants is too small to support "
+        "the causal claims made in the discussion section."
+    ]
+
+    def test_reworded_restatement_is_caught_without_a_confession(self):
+        v = self._validator()
+        out = v._check_repetition(
+            "The sample size of 40 participants is far too small to support the "
+            "causal claims that the discussion section makes.",
+            self.PRIOR,
+            {"am_i_repeating": "new"},
+        )
+        assert out is not None
+        assert out["rule"] == "no_repetition"
+
+    def test_padding_no_longer_hides_a_restatement(self):
+        """The old ratio divided by the new message's own length, so filler
+        dropped it under the threshold. Containment uses the shorter side."""
+        v = self._validator()
+        out = v._check_repetition(
+            "Building on that, I want to note, having considered the manuscript "
+            "carefully, that the sample size of 40 participants is too small to "
+            "support the causal claims made in the discussion section, which "
+            "matters a great deal for how readers interpret these findings.",
+            self.PRIOR,
+            {"am_i_repeating": "new"},
+        )
+        assert out is not None
+
+    def test_a_genuinely_new_point_passes(self):
+        v = self._validator()
+        assert v._check_repetition(
+            "The instrument's test-retest reliability is never reported, so we "
+            "cannot tell whether the null result reflects the intervention or "
+            "measurement noise.",
+            self.PRIOR,
+            {"am_i_repeating": "new"},
+        ) is None
+
+    def test_check_runs_when_the_model_reports_no_repetition(self):
+        """The gate in validate() must not require a confession."""
+        import ast
+        import inspect
+        from src import agent_constitutional_validator as mod
+
+        tree = ast.parse(inspect.getsource(mod))
+        src = ast.unparse(tree)
+        assert 'am_i_repeating\') == \'repeat\'' not in src.split('def _check_repetition')[0], (
+            "validate() still gates the repetition check on a self-reported confession"
+        )
+
+
+class TestNextTurnUsesServerKey:
+    def test_handler_resolves_the_key_server_side(self):
+        import inspect
+        from src import websocket_handlers
+
+        source = inspect.getsource(websocket_handlers.WebSocketCommandHandlers.handle_next_turn)
+        assert "resolve_openrouter_key" in source
+        assert "payload.get('openrouter_key')" in source, "client override should still be honoured"
+
+
+class TestSetupConverseKeepsProposals:
+    def test_prose_reply_says_the_panel_was_not_changed(self):
+        import inspect
+        from src.services import conversational_setup
+
+        source = inspect.getsource(conversational_setup.converse)
+        assert "not changed" in source, (
+            "a prose reply that claims a change must not be shown as if it landed"
+        )
+
+    def test_parse_or_salvage_handles_both_shapes(self):
+        from src.services.conversational_setup import _parse_or_salvage
+
+        assert _parse_or_salvage('{"reply": "ok", "ready": false}')["reply"] == "ok"
+        assert _parse_or_salvage('Sure! {"reply": "ok"} Hope that helps.')["reply"] == "ok"
+        assert _parse_or_salvage("I've added a statistics reviewer for you.") is None
+
+
+class TestRepetitionRuleIsActuallyWired:
+    """
+    The no_repetition rule was inert at three independent levels, each of
+    which alone was enough to stop it doing anything:
+
+      1. validate() only ran the check when the model self-reported
+         am_i_repeating == "repeat", which never happens on a paraphrase;
+      2. the comparison window scanned the last 5 EVENTS, but a turn emits
+         about seven (thinking steps plus the message), so it never reached
+         an agent_message and the list was always empty;
+      3. the violation was severity "high", and `valid` counts only
+         "critical" — so it was recorded and then ignored.
+
+    A live six-turn review produced six restatements of one point with
+    "Validation passed" logged every time. Each level has its own test.
+    """
+
+    def test_level_1_check_does_not_require_a_confession(self):
+        import ast
+        import inspect
+        import textwrap
+        from src import agent_constitutional_validator as mod
+
+        # Read the code, not the comments — the comment above the fix names
+        # the field it removed.
+        fn = ast.parse(
+            textwrap.dedent(inspect.getsource(mod.ConstitutionalValidator.validate))
+        ).body[0]
+        guards = [
+            ast.unparse(node.test)
+            for node in ast.walk(fn)
+            if isinstance(node, ast.If)
+            and "_check_repetition" in ast.unparse(node)
+        ]
+        assert guards, "no branch calls _check_repetition"
+        assert not any("am_i_repeating" in g for g in guards), (
+            f"the repetition check is still gated on a self-report: {guards}"
+        )
+
+    def test_level_2_window_is_bounded_by_messages_not_events(self):
+        import inspect
+        from src import turn_orchestrator
+
+        src = inspect.getsource(turn_orchestrator.TurnOrchestrator)
+        block = src.split("recent_other_messages = []")[1].split("recent_other_messages.reverse()")[0]
+        assert "history_events[-5:]" not in block, (
+            "a 5-event window cannot reach back to an agent_message"
+        )
+        assert "reversed(history_events)" in block
+
+    def test_level_3_repetition_counts_toward_validity(self):
+        import inspect
+        from src import agent_constitutional_validator as mod
+
+        src = inspect.getsource(mod.ConstitutionalValidator._check_repetition)
+        assert '"severity": "high"' not in src, (
+            "a high-severity repetition violation is recorded and then ignored"
+        )
+        assert '"severity": "critical"' in src
+
+    def test_thresholds_separate_restatement_from_new_material(self):
+        """
+        Calibrated on a live transcript: restatements scored 0.38-0.68
+        containment, three genuinely new critiques scored 0.00-0.07.
+        """
+        from src.agent_constitutional_validator import ConstitutionalValidator
+
+        v = ConstitutionalValidator.__new__(ConstitutionalValidator)
+        prior = [
+            "The reliance on convenience sampling in this study fundamentally "
+            "undermines its external validity and raises significant concerns "
+            "regarding bias and statistical inference. The authors utilized a "
+            "convenience sample drawn mainly from a single demographic group."
+        ]
+
+        restated = (
+            "The study's reliance on convenience sampling poses serious "
+            "methodological concerns that compromise its external validity. "
+            "The sample was predominantly from a singular demographic group, "
+            "which introduces significant bias."
+        )
+        assert v._check_repetition(restated, prior, {"am_i_repeating": "new"}) is not None
+
+        for fresh in (
+            "The instrument's test-retest reliability is never reported, so we "
+            "cannot tell whether the null result reflects the intervention or "
+            "measurement noise.",
+            "No preregistration means the primary outcome could have been chosen "
+            "after seeing the data; the large effect is consistent with an "
+            "optional-stopping artefact.",
+        ):
+            assert v._check_repetition(fresh, prior, {"am_i_repeating": "new"}) is None, (
+                f"false positive on genuinely new material: {fresh[:50]}"
+            )

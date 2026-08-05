@@ -205,9 +205,13 @@ class AgentReasoningEngine:
         except Exception as exc:
             logger.info(f"    [reasoning] Engine error for {agent_name}: {exc}")
 
+        # Marked as a fallback. This dict is indistinguishable from a real
+        # result, so a stage that threw was recorded as "Reasoning complete"
+        # with a confidence of 0.7 that nothing had computed — the transcript
+        # asserted the reviewer had reasoned when it had not.
         return {
             "current_stance": "maintain previous analytical position",
-            "confidence": 0.7,
+            "confidence": None,
             "stance_changed": False,
             "reason_for_change": None,
             "what_others_said": "",
@@ -215,6 +219,7 @@ class AgentReasoningEngine:
             "unique_contribution": "raise a fresh concern from my reviewer lane",
             "key_points": ["continue analysis from my reviewer perspective"],
             "should_disagree_with": [],
+            "reasoning_failed": True,
         }
 
     def _validate(

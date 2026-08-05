@@ -539,6 +539,17 @@ export function MaterialsStep({
                             <option value="medium">Medium</option>
                             <option value="high">High</option>
                           </select>
+                          {/* Extraction assigns an owner and the API returns it;
+                              the row never showed it, so the one field that says
+                              who has to act was invisible. */}
+                          <input
+                            className={styles.actionItemOwner}
+                            value={item.owner ?? ''}
+                            placeholder="Owner"
+                            aria-label={`Owner for: ${item.description}`}
+                            onChange={(e) => patchItem(file.material_id, item.action_id, { owner: e.target.value })}
+                            onBlur={() => handleEditCommit(file.material_id, item)}
+                          />
                         </div>
 
                         {item.status === 'extracted' && (

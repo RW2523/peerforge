@@ -100,7 +100,7 @@ class DebateService:
                     debate_id, workspace_id, title, state, policy_config,
                     owner_user_id, created_at, updated_at
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING debate_id, workspace_id, title, state, created_at
+                RETURNING debate_id, workspace_id, title, state, created_at, policy_config
             """, (
                 debate_id,
                 workspace_id,

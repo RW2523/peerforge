@@ -10,6 +10,20 @@ import re
 from typing import Dict, Any, Optional, List
 
 
+
+# Reused from the transcript quality harness so the live guard and the offline
+# harness agree on what counts as substance.
+from .services.transcript_quality import _content_words
+
+_ADJACENT = re.compile(r"[a-z]{4,}")
+
+
+def _adjacent_pairs(text: str) -> set:
+    """Adjacent content-word pairs — a cheap stand-in for phrasing."""
+    words = [w for w in _ADJACENT.findall(text.lower())]
+    return {f"{a} {b}" for a, b in zip(words, words[1:])}
+
+
 class ConstitutionalValidator:
     """
     Stage 3: Validates agent responses against constitutional rules
@@ -133,7 +147,10 @@ class ConstitutionalValidator:
             violations.append(contradiction_violation)
         
         # Rule 4: Check for repetition (NEW - Anthropic-style)
-        if recent_other_messages and reasoning.get("am_i_repeating") == "repeat":
+        # Gated on am_i_repeating == "repeat" this only ever fired when the
+        # model confessed, which it does not do when it is paraphrasing. The
+        # mechanical overlap check inside was unreachable. Run it every turn.
+        if recent_other_messages:
             repetition_violation = self._check_repetition(
                 message,
                 recent_other_messages,
@@ -160,7 +177,14 @@ class ConstitutionalValidator:
             if engagement_violation:
                 violations.append(engagement_violation)
         
-        # Determine severity
+        # Determine severity.
+        # NOTE: only "critical" affects `valid`, so a "high" violation is
+        # recorded and then ignored — no regeneration, and the caller logs
+        # "validation passed". no_repetition is critical for that reason:
+        # repetition is exactly what the constrained-regeneration path in
+        # turn_orchestrator was written to handle. The other "high" rules
+        # (persona authenticity, role consistency, engagement) are still
+        # advisory-only by this same mechanism.
         critical_violations = [v for v in violations if v["severity"] == "critical"]
         
         result = {
@@ -364,29 +388,64 @@ class ConstitutionalValidator:
         if reasoning.get("am_i_repeating") == "repeat":
             return {
                 "rule": "no_repetition",
-                "severity": "high",
+                "severity": "critical",
                 "details": f"Agent is repeating what others said: '{reasoning.get('what_others_said', 'N/A')[:100]}...'. Must add NEW information or disagree."
             }
         
-        # Additional check: keyword overlap with recent messages
-        message_words = set(w.lower() for w in message.split() if len(w) > 4)
-        
-        for other_msg in recent_other_messages[-2:]:  # Check last 2 messages
-            other_words = set(w.lower() for w in other_msg.split() if len(w) > 4)
-            overlap = len(message_words & other_words)
-            total = len(message_words)
-            
-            if total > 0:
-                overlap_ratio = overlap / total
-                
-                # If >60% overlap, it's likely repetition
-                if overlap_ratio > 0.6:
+        # Mechanical overlap check. Three things the old version got wrong:
+        #   - it divided by the new message's own word count, so padding a
+        #     restatement with filler dropped the ratio below the threshold;
+        #   - it counted "should", "however", "paper" — words every review
+        #     uses — as shared substance;
+        #   - it only looked at the last 2 messages, so a reviewer could
+        #     restate whatever was said three turns ago.
+        message_words = _content_words(message)
+        if not message_words:
+            return None
+
+        message_pairs = _adjacent_pairs(message)
+
+        for other_msg in recent_other_messages[-6:]:
+            other_words = _content_words(other_msg)
+            if not other_words:
+                continue
+
+            # Containment against the shorter side: a long restatement of a
+            # short point is still a restatement.
+            shared = len(message_words & other_words)
+            containment = shared / min(len(message_words), len(other_words))
+
+            # 0.35 is calibrated, not guessed: on a live six-turn transcript
+            # where every reviewer restated the same sampling critique, the
+            # restatements scored 0.38-0.68 while three genuinely new points
+            # (reliability, preregistration, follow-up window) scored 0.00-0.07
+            # against the same transcript. 0.35 sits in that gap.
+            if containment > 0.35:
+                return {
+                    "rule": "no_repetition",
+                    "severity": "critical",
+                    "details": (
+                        f"Message shares {containment*100:.0f}% of its substantive "
+                        f"vocabulary with a recent message. Must add a unique perspective."
+                    )
+                }
+
+            # Reused phrasing: same two content words side by side. Catches a
+            # lightly-reworded restatement that the word-set measure misses
+            # because the padding pushed containment down.
+            other_pairs = _adjacent_pairs(other_msg)
+            if message_pairs and other_pairs:
+                pair_overlap = len(message_pairs & other_pairs) / min(len(message_pairs), len(other_pairs))
+                if pair_overlap > 0.25:
                     return {
                         "rule": "no_repetition",
-                        "severity": "high",
-                        "details": f"Message has {overlap_ratio*100:.0f}% word overlap with recent message. Must add unique perspective."
+                        "severity": "critical",
+                        "details": (
+                            f"Message reuses {pair_overlap*100:.0f}% of the phrasing of a "
+                            f"recent message. Must add a unique perspective."
+                        )
                     }
-        
+
         return None
     
     def _check_persona_authenticity(
