@@ -41,7 +41,12 @@ const CommitteeTwinBuilder = dynamic(() => import('@/components/room/CommitteeTw
  */
 function RoomPageContent() {
   const searchParams = useSearchParams();
-  const { apiKey: openrouterKey } = useOpenRouterKey();
+  // apiKey is this BROWSER's key and is null when the server holds one, so
+  // passing it down made every panel that checked it show "API Key
+  // Required" on a deployment that can generate perfectly well. hasKey is
+  // the capability question; the key itself is still forwarded because
+  // api.ts omits the header when it is null and the server then uses its own.
+  const { apiKey: openrouterKey, hasKey: canGenerate } = useOpenRouterKey();
   const [debateId, setDebateId] = useState<string | null>(null);
   // Why the room is empty, when it is empty for a reason.
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -451,7 +456,7 @@ function RoomPageContent() {
               )}
               {activeTab === 'defense' && (
                 <div style={{ flex: 1, overflowY: 'auto', padding: '16px 0' }}>
-                  <MockDefenseRoom debateId={debateId} openrouterKey={openrouterKey || ''} initialVoice={practiceVoice} />
+                  <MockDefenseRoom debateId={debateId} openrouterKey={openrouterKey || ''} canGenerate={canGenerate} initialVoice={practiceVoice} />
                 </div>
               )}
               {activeTab === 'evidence' && (

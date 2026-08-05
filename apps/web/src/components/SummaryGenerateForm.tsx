@@ -30,8 +30,10 @@ export function SummaryGenerateForm({
   const [modelId, setModelId] = useState('anthropic/claude-sonnet-4-5');
 
   const handleGenerate = async () => {
-    if (!openrouterKey.trim()) {
-      onStatusChange('Error: OpenRouter API key required');
+    // The field pre-fills from the BROWSER key, which is empty when the server
+    // holds one — so this refused to generate on a working deployment.
+    if (!openrouterKey.trim() && !keyStore.hasKey()) {
+      onStatusChange('Error: no OpenRouter key is configured');
       return;
     }
 
@@ -72,7 +74,7 @@ export function SummaryGenerateForm({
       </select>
       <button
         onClick={handleGenerate}
-        disabled={isLoading || !openrouterKey.trim()}
+        disabled={isLoading || (!openrouterKey.trim() && !keyStore.hasKey())}
         className={styles.btnPrimary}
       >
         Generate Summary (uses OpenRouter credits)

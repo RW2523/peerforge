@@ -21,11 +21,13 @@ export function ModelSelector({ value, onChange, placeholder = 'Select a model..
 
   // Fetch models when dropdown opens (if not already loaded)
   useEffect(() => {
-    if (isOpen && models.length === 0 && apiKey) {
+    // hasKey, not apiKey: the model list never loaded when the server held
+    // the key, so the picker sat empty on a working deployment.
+    if (isOpen && models.length === 0 && hasKey) {
       fetchModels();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, apiKey]);
+  }, [isOpen, apiKey, hasKey]);
 
   const fetchModels = async () => {
     if (!hasKey) {

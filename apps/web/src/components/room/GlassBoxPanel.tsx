@@ -33,8 +33,9 @@ function TrustComparison({ debateId, claim }: { debateId: string; claim: Provena
   useEffect(() => { setDemo(null); setError(null); }, [claim.claim_id]);
 
   const run = async () => {
+    if (!keyStore.hasKey()) { setError('Comparison unavailable — no OpenRouter key is configured.'); return; }
+    // May be null; api.ts omits the header and the server uses its own key.
     const key = keyStore.getKey();
-    if (!key) { setError('Add your OpenRouter key in Settings to run the comparison.'); return; }
     setLoading(true);
     setError(null);
     try {

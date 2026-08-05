@@ -52,11 +52,13 @@ export default function AcademicAssessmentCard({ debateId, triggerSource = 'manu
   const autoGenRanRef = useRef(false);
 
   const handleGenerate = useCallback(async () => {
-    const key = keyStore.getKey();
-    if (!key) {
-      setError('Add your OpenRouter API key in Settings to generate the assessment.');
+    // The browser holds no key when the server does; gate on capability.
+    if (!keyStore.hasKey()) {
+      setError('Assessment is unavailable — no OpenRouter key is configured.');
       return;
     }
+    // May be null: api.ts omits the header and the server uses its own key.
+    const key = keyStore.getKey();
     setLoading(true);
     setError(null);
     try {
@@ -76,7 +78,7 @@ export default function AcademicAssessmentCard({ debateId, triggerSource = 'manu
       .catch(() => {
         // None yet — kick off a first assessment when auto-generation is on,
         // otherwise show the manual generate state.
-        if (!cancelled && autoGenerate && !autoGenRanRef.current && keyStore.getKey()) {
+        if (!cancelled && autoGenerate && !autoGenRanRef.current && keyStore.hasKey()) {
           autoGenRanRef.current = true;
           handleGenerate();
         }

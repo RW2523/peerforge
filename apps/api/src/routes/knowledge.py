@@ -3,7 +3,9 @@ Agent Knowledge Routes
 Endpoints for accessing agent knowledge units (prep packs, etc.)
 """
 
-from fastapi import APIRouter, HTTPException, Header
+from typing import Any, Dict
+
+from fastapi import APIRouter, Depends, HTTPException, Header
 from ..database import get_db_connection, get_cursor
 from ..auth import get_current_user, require_auth, workspace_ids_for
 import logging
@@ -16,7 +18,7 @@ router = APIRouter(prefix="/agent-knowledge", tags=["knowledge"])
 @router.get("/{knowledge_id}")
 async def get_knowledge_unit(
     knowledge_id: str,
-    authorization: str = Header(None)
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
     Fetch a specific agent knowledge unit by ID.
@@ -26,7 +28,12 @@ async def get_knowledge_unit(
     # in any of their other workspaces answered "not found or unauthorized" -
     # which is every prep pack, since preflight runs in the session's workspace
     # and not necessarily the one selected in the header.
-    current_user = get_current_user(authorization)
+    # Resolved via Depends, not by calling get_current_user() directly:
+    # called as a plain function its x_workspace_id parameter binds to its
+    # own default, a fastapi Header(None) OBJECT, which is truthy. That was
+    # read as "the caller asked for a specific workspace", and every request
+    # got 403 "not a member of the requested workspace" — so View Prep Pack
+    # failed for everyone, on every session.
     workspace_ids = workspace_ids_for(current_user)
     
     with get_db_connection() as conn:
@@ -45,7 +52,11 @@ async def get_knowledge_unit(
                 FROM agent_knowledge_units aku
                 LEFT JOIN debates d ON aku.source_debate_id = d.debate_id
                 WHERE aku.knowledge_id = %s
-                  AND (d.workspace_id = ANY(%s) OR d.workspace_id IS NULL)
+                  -- ::uuid[] because workspace_ids_for returns strings while
+                  -- debates.workspace_id is uuid; without the cast Postgres
+                  -- raises "operator does not exist: uuid = text", which the
+                  -- bare except below re-raised as a 500.
+                  AND (d.workspace_id = ANY(%s::uuid[]) OR d.workspace_id IS NULL)
             """, (knowledge_id, workspace_ids))
             
             result = cursor.fetchone()

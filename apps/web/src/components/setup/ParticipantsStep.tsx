@@ -120,11 +120,15 @@ export function ParticipantsStep({
   // ── AI panel suggestion ────────────────────────────────────────────────
   const handleSuggestPanel = async () => {
     setSuggestError(null);
-    const key = keyStore.getKey();
-    if (!key) {
-      setSuggestError('Add your OpenRouter API key in Settings to use AI suggestions.');
+    // keyStore.getKey() is the BROWSER's key, which is null on a deployment
+    // that holds the key server-side — so this refused to suggest a panel
+    // even though the server could. hasKey() is the capability question.
+    if (!keyStore.hasKey()) {
+      setSuggestError('AI suggestions are unavailable — no OpenRouter key is configured.');
       return;
     }
+    // May be null: api.ts omits the header and the server uses its own key.
+    const key = keyStore.getKey();
     if (!(sessionTitle || '').trim() && !(sessionAbstract || '').trim()) {
       setSuggestError('Fill in the research title and abstract in Step 1 first.');
       return;

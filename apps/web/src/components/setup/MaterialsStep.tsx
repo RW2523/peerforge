@@ -85,7 +85,7 @@ export function MaterialsStep({
       // semantic retrieval (RAG) works — covers upload-time embedding failures.
       if (allDone && status.materials.length > 0 && !embedTriggeredRef.current) {
         const key = keyStore.getKey();
-        if (key) {
+        if (keyStore.hasKey()) {
           embedTriggeredRef.current = true;
           api.triggerEmbeddingGeneration(debateId, key).catch(() => {
             embedTriggeredRef.current = false; // allow retry on next poll cycle
@@ -152,11 +152,12 @@ export function MaterialsStep({
   // ── Action items ──────────────────────────────────────────────────────────
   const handleExtract = async (materialId: string) => {
     if (!debateId) return;
-    const key = keyStore.getKey();
-    if (!key) {
-      setActionError('Add your OpenRouter key in Settings to extract action items.');
+    if (!keyStore.hasKey()) {
+      setActionError('Extraction unavailable — no OpenRouter key is configured.');
       return;
     }
+    // May be null; api.ts omits the header and the server uses its own key.
+    const key = keyStore.getKey();
     setExtracting(materialId);
     setActionError(null);
     try {
@@ -209,11 +210,12 @@ export function MaterialsStep({
 
   const handleRunDebate = async (materialId: string, item: api.TranscriptActionItem) => {
     if (!debateId) return;
-    const key = keyStore.getKey();
-    if (!key) {
-      setActionError('Add your OpenRouter key in Settings to run a panel discussion.');
+    if (!keyStore.hasKey()) {
+      setActionError('Panel discussion unavailable — no OpenRouter key is configured.');
       return;
     }
+    // May be null; api.ts omits the header and the server uses its own key.
+    const key = keyStore.getKey();
     patchItem(materialId, item.action_id, { status: 'debating' });
     try {
       const dec = await api.debateActionItem(debateId, item.action_id, key);

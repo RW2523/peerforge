@@ -326,12 +326,14 @@ export default function DebateControls({ debateId, currentState, isYoloMode = fa
   const canPause = currentState === 'running';
   const canResume = currentState === 'paused';
   const canEnd = currentState === 'running' || currentState === 'paused';
-  const canTriggerTurn = currentState === 'running' && apiKey;
+  // hasKey, not apiKey: apiKey is this BROWSER's key and is null when the
+  // server holds one, so the only Next Turn control in the app was
+  // permanently disabled on a deployment that generates perfectly well.
+  // handleNextTurn below already got this right — the button that reaches
+  // it did not.
+  const canTriggerTurn = currentState === 'running' && hasKey;
   const canExtend = (currentState === 'running' || currentState === 'paused') && policyConfig && (policyConfig.max_rounds || policyConfig.timebox_minutes);
   
-  // Debug: Log button state
-  console.log('🎮 Button States:', { currentState, apiKey: !!apiKey, canTriggerTurn, sendCommand: !!sendCommand });
-
   return (
     <div className={styles.controls}>
       <h3>Controls</h3>
@@ -372,7 +374,7 @@ export default function DebateControls({ debateId, currentState, isYoloMode = fa
             onClick={handleNextTurn}
             disabled={!canTriggerTurn || triggeringTurn}
             className={shouldConclude ? styles.btnConclude : (canTriggerTurn ? styles.btnPrimary : '')}
-            title={shouldConclude ? (policyConfig?.enable_host ? 'Host will provide final conclusion' : 'All rounds complete - End meeting') : (!hasKey ? 'Add OpenRouter API key in Settings' : 'Trigger next agent to speak')}
+            title={shouldConclude ? (policyConfig?.enable_host ? 'Host will provide final conclusion' : 'All rounds complete - End meeting') : (!hasKey ? 'No OpenRouter key is configured' : 'Trigger next agent to speak')}
           >
             {triggeringTurn ? '🤔 Agent thinking...' : shouldConclude ? '🏁 Conclude Meeting' : '▶ Next Turn'} {!triggeringTurn && !shouldConclude && currentState === 'running' && !isYoloMode ? <span style={{opacity: 0.6, fontSize: '0.85em'}}>(Ctrl+Enter)</span> : null}
           </button>
@@ -384,7 +386,7 @@ export default function DebateControls({ debateId, currentState, isYoloMode = fa
             disabled={startingAuto || !hasKey}
             className={styles.btnAuto}
             title={!hasKey
-              ? 'Add OpenRouter API key in Settings'
+              ? 'No OpenRouter key is configured'
               : 'Run the whole session automatically — each panel member speaks in turn until all rounds are complete'}
           >
             {startingAuto ? '⚡ Starting Auto Mode…' : '⚡ Auto Mode'}

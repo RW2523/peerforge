@@ -68,11 +68,15 @@ const MODE_OPTIONS: ModeOption[] = [
 interface Props {
   debateId: string;
   openrouterKey: string;
+  /** Whether generation is possible at all — true when the SERVER holds a
+   *  key even though this browser holds none. Gating on openrouterKey
+   *  alone showed "API Key Required" on a working deployment. */
+  canGenerate?: boolean;
   /** Start with voice mode on (e.g. from the History "Voice" shortcut). */
   initialVoice?: boolean;
 }
 
-export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice = false }: Props) {
+export default function MockDefenseRoom({ debateId, openrouterKey, canGenerate = true, initialVoice = false }: Props) {
   const [mode, setMode]       = useState<ReasoningMode>('medium');
   const [phase, setPhase]     = useState<Phase>('setup');
   const [error, setError]     = useState('');
@@ -124,7 +128,7 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleAnalyzeAndSuggest = useCallback(async () => {
-    if (!openrouterKey) {
+    if (!canGenerate) {
       setError('OpenRouter API key is required. Add it in Settings.');
       setPhase('error');
       return;
@@ -144,7 +148,7 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
       setError(e.message || 'Analysis failed');
       setPhase('error');
     }
-  }, [debateId, openrouterKey, mode]);
+  }, [debateId, openrouterKey, canGenerate, mode]);
 
   const handleGenerateQuestions = useCallback(async () => {
     setError('');
@@ -285,7 +289,7 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
           </p>
         </div>
 
-        {!openrouterKey && (
+        {!canGenerate && (
           <div className={styles.keyWarning}>
             <span className={styles.keyWarningIcon}>🔑</span>
             <div>
@@ -342,8 +346,8 @@ export default function MockDefenseRoom({ debateId, openrouterKey, initialVoice 
         <button
           className={styles.primaryBtn}
           onClick={handleAnalyzeAndSuggest}
-          disabled={!openrouterKey}
-          style={{ opacity: openrouterKey ? 1 : 0.45, cursor: openrouterKey ? 'pointer' : 'not-allowed' }}
+          disabled={!canGenerate}
+          style={{ opacity: canGenerate ? 1 : 0.45, cursor: canGenerate ? 'pointer' : 'not-allowed' }}
         >
           Analyse Research and Build Review Panel
         </button>
