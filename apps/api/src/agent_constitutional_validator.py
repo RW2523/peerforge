@@ -13,7 +13,7 @@ from typing import Tuple, Dict, Any, Optional, List
 
 # Reused from the transcript quality harness so the live guard and the offline
 # harness agree on what counts as substance.
-from .services.transcript_quality import _content_words
+from .services.transcript_quality import _DEFERENCE_OPENER, _content_words
 
 # A locator points INTO a specific document: a page, a numbered section, a
 # table, a figure. It is only checkable if a document was actually supplied.
@@ -234,6 +234,14 @@ class ConstitutionalValidator:
         )
         if fabricated_citation:
             violations.append(fabricated_citation)
+
+        # Rule 4.5: Opening by deferring to the other reviewers
+        deference = self._check_deference_opener(
+            message,
+            anyone_has_spoken=bool(recent_other_messages)
+        )
+        if deference:
+            violations.append(deference)
 
         # Rule 4.55: Reviewing the session setup instead of the work
         session_meta = self._check_session_meta(message, has_materials)
@@ -716,6 +724,49 @@ class ConstitutionalValidator:
                 f"No document was submitted to this session, but the message "
                 f"cites {shown}. There is nothing those refer to. State the gap "
                 f"instead — \"the problem statement does not say whether...\"."
+            ),
+        }
+
+    def _check_deference_opener(
+        self,
+        message: str,
+        anyone_has_spoken: bool = True
+    ) -> Optional[Dict[str, Any]]:
+        """Catch a turn that opens by positioning against the other reviewers.
+
+        Removing the mandated final-turn sentence did not remove the habit, it
+        moved it: five of six turns in the next live session opened
+
+            @"Dr. Ada" and @"Dr. Lee," while I acknowledge ...
+
+        Every reviewer then spends their first sentence on somebody else's
+        point, which is both how the panel converges and why every turn reads
+        alike.
+
+        The pattern is the transcript harness's, so the live guard and the
+        offline gate agree on what a deference opener is. It was measured
+        against 30 openers labelled from real transcripts — 15 deference, 15
+        substantive — at full recall and precision. An opener that names
+        someone and then makes a claim ('@"Dr. Ada" is wrong about the effect
+        size: d = 1.31 is not credible with n = 40') is engagement and is
+        deliberately not matched.
+        """
+        # The first speaker has nobody to defer to.
+        if not anyone_has_spoken:
+            return None
+
+        m = _DEFERENCE_OPENER.search(message)
+        if not m:
+            return None
+
+        return {
+            "rule": "no_deference_opener",
+            "severity": "critical",
+            "details": (
+                f"The turn opens by deferring to other reviewers "
+                f"(\"{' '.join(m.group(0).split())[:70]}\"). Lead with your own "
+                f"claim about the work; name another reviewer afterwards, once "
+                f"your point is on the table."
             ),
         }
 

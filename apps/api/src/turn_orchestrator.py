@@ -2149,6 +2149,16 @@ Requirements:
                             "- Referring to real external literature you actually know is fine.",
                         ])
 
+                    if 'no_deference_opener' in violation_rules:
+                        constraints.extend([
+                            "- Your first sentence must state YOUR claim about the work.",
+                            "- Do NOT open on another reviewer's name, on 'while I "
+                            "agree', or on 'the concerns raised by...'.",
+                            "- Name them from the SECOND sentence onward, once your "
+                            "own point is on the table. Disagreeing outright in the "
+                            "first sentence is fine; deferring in it is not.",
+                        ])
+
                     if 'no_session_meta_commentary' in violation_rules:
                         constraints.extend([
                             "- Do NOT open by saying a document was not supplied. "
@@ -2191,6 +2201,87 @@ Requirements:
                         max_tokens=900
                     )
                     agent_message = response['content']
+
+                    # RE-VALIDATE THE RETRY.
+                    #
+                    # Nothing checked a regenerated message, and that single
+                    # gap caused the same class of bug three separate times:
+                    # a retry for no_repetition introduced "Figure 3"/"Table 2";
+                    # a retry re-cited a section the document does not have;
+                    # and a retry for no_repetition opened by deferring to
+                    # another reviewer while the log showed only a repetition
+                    # violation. Each time the rule was working and the output
+                    # was wrong anyway.
+                    #
+                    # Only the cheap deterministic checks re-run — no LLM call,
+                    # no reasoning stage — and only ONE further attempt, so a
+                    # stubborn model costs at most two extra generations.
+                    recheck = self.constitutional_validator.validate(
+                        message=agent_message,
+                        reasoning=reasoning,
+                        agent_name=agent_name,
+                        agent_role=_agent_role_text(agent_config),
+                        past_messages=past_messages_text,
+                        active_participants=all_participant_names,
+                        recent_other_messages=recent_other_messages,
+                        has_materials=bool(material_context),
+                        absent_locators=_absent_locators(
+                            debate_id, agent_message, material_context
+                        ),
+                    )
+                    still_bad = [
+                        v for v in recheck["violations"]
+                        if v["severity"] == "critical"
+                    ]
+                    if still_bad:
+                        rules = ", ".join(v["rule"] for v in still_bad)
+                        logger.warning(
+                            f"    ⚠️ Regeneration still violates: {rules} — one more attempt"
+                        )
+                        second = self.openrouter_client.chat_completion(
+                            model=model_id,
+                            messages=messages + [{
+                                "role": "system",
+                                "content": "\n".join(
+                                    constraints
+                                    + ["", "Your previous attempt STILL violated: " + rules]
+                                    + [f"- {v['details']}" for v in still_bad[:3]]
+                                ),
+                            }],
+                            temperature=0.7,
+                            max_tokens=900,
+                        )
+                        candidate = (second.get('content') or '').strip()
+                        # Keep the retry only if it is actually better; a worse
+                        # second attempt should not replace the first.
+                        if candidate:
+                            after = self.constitutional_validator.validate(
+                                message=candidate,
+                                reasoning=reasoning,
+                                agent_name=agent_name,
+                                agent_role=_agent_role_text(agent_config),
+                                past_messages=past_messages_text,
+                                active_participants=all_participant_names,
+                                recent_other_messages=recent_other_messages,
+                                has_materials=bool(material_context),
+                                absent_locators=_absent_locators(
+                                    debate_id, candidate, material_context
+                                ),
+                            )
+                            n_after = sum(
+                                1 for v in after["violations"]
+                                if v["severity"] == "critical"
+                            )
+                            if n_after < len(still_bad):
+                                agent_message = candidate
+                                logger.info(
+                                    f"    ✅ Second attempt cleared "
+                                    f"{len(still_bad) - n_after} violation(s)"
+                                )
+                            else:
+                                logger.warning(
+                                    "    ⚠️ Second attempt was no better; keeping the first"
+                                )
 
             else:
                 # `valid` only tracks critical violations, so non-critical ones

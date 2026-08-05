@@ -31,6 +31,95 @@ _AGREEMENT_OPENER = re.compile(
     re.IGNORECASE,
 )
 
+# The same failure in its commoner disguise: opening by positioning against
+# the other reviewers rather than leading with your own point. Removing the
+# mandated final-turn sentence did not remove the habit — it moved it, and
+# five of six turns in a live session then opened
+#   @"Dr. Ada" and @"Dr. Lee," while I acknowledge ...
+# which _AGREEMENT_OPENER (built for "X is correct") scored at 0.00.
+#
+# Three shapes, all measured against 30 openers labelled from real
+# transcripts — 15 deference, 15 substantive — at full recall and precision:
+#   (a) one to three reviewer names, then a concession
+#   (b) a nominalisation of the debate itself ("the concerns raised by...",
+#       "the ongoing discussion about...")
+#   (c) explicit deference formulas ("building on...", "I agree with...")
+#
+# Deliberately NOT matched: an opener that names someone and then makes a
+# claim — '@"Dr. Ada" is wrong about the effect size: d = 1.31 is not
+# credible with n = 40' is engagement, which is what we want.
+_REVIEWER_NAME = (
+    r'(?:@"[^"]{2,40}"'
+    # "@Dr. Ada" — the space is what a naive character class misses, and it is
+    # the form the models actually emit. A pattern fitted only to the quoted
+    # form scored 0.00 on a live run where four of six turns deferred.
+    r'|@(?:Dr|Prof|Mr|Ms|Mrs)\.\s*[A-Z][\w\-]{1,20}'
+    r'|@[\w.\-]{2,30}'
+    r'|(?:Dr|Prof|Mr|Ms|Mrs)\.\s+[A-Z][\w\-]{1,20})'
+)
+_CONCESSION = (
+    r"(?:while|whilst|although|though"
+    r"|I\s+(?:agree|acknowledge|appreciate|concur|see\s+your\s+point|take\s+your\s+points?)"
+    r"|you(?:'re|\s+are)\s+(?:correct|right)"
+    r"|you\s+(?:both\s+)?(?:raised|make|are\s+right)"
+    # "your critique regarding the lack of a comparative intervention is valid"
+    r"|your\s+[\w\s]{0,60}?(?:is|are)\s+(?:indeed\s+)?valid"
+    r"|(?:is|are)\s+(?:indeed\s+)?valid"
+    r"|(?:highlights?|raises?)\s+(?:a\s+)?valid"
+    r"|(?:is|are)\s+(?:essential|important)"
+    r"|that\s+is\s+a\s+fair\s+point|fair\s+point|rightly"
+    r"|valid\s+concerns?|good\s+points?|fair\s+points?)"
+)
+
+# Three branches, compiled separately rather than concatenated into one
+# alternation: a single spliced pattern silently stopped matching branch (b)
+# even though that branch worked in isolation. Separate patterns are also
+# easier to reason about when one of them misfires.
+_DEFERENCE_BRANCHES = (
+    # (a) one to three reviewer names, then a concession
+    re.compile(
+        r'^\s*(?:' + _REVIEWER_NAME + r'[,\s]*(?:and|&|,)?\s*){1,3}[,:\s]*'
+        + _CONCESSION,
+        re.IGNORECASE,
+    ),
+    # (b) a nominalisation of the debate itself
+    re.compile(
+        r'^\s*(?:the\s+)?(?:\w+\s+){0,2}?'
+        r'(?:critique|criticism|concerns?|points?|comments?|observations?'
+        r'|discussion|conversation|debate|dialogue|exchange)\b'
+        r'[^.]{0,90}?(?:\b(?:by|from|raised|put\s+forth|surrounding|about|regarding)\b'
+        r'|has\s+veered)',
+        re.IGNORECASE,
+    ),
+    # (c) explicit deference formulas, including the nameless second person.
+    # "You both raise valid concerns, but..." slipped through branch (a),
+    # which needs a name, and through the concession list, which had "raised"
+    # but not "raise".
+    re.compile(
+        r'^\s*(?:building\s+on|I\s+agree\s+with|following\s+on\s+from'
+        r'|as\s+(?:my\s+)?colleagues?'
+        r'|you\s+(?:both\s+|all\s+)?(?:raise[sd]?|make|are)\b[^.]{0,40}?'
+        r'(?:valid|good|fair|important|right)'
+        r'|(?:that|these|those)\s+(?:is|are)\s+(?:a\s+)?(?:valid|fair|good)\s+point)',
+        re.IGNORECASE,
+    ),
+)
+
+
+class _DeferenceOpener:
+    """Any of the three branches. Exposes .search() so callers read normally."""
+
+    @staticmethod
+    def search(text: str):
+        for pattern in _DEFERENCE_BRANCHES:
+            m = pattern.search(text or "")
+            if m:
+                return m
+        return None
+
+
+_DEFERENCE_OPENER = _DeferenceOpener()
+
 # Names the model was told never to emit.
 _PLACEHOLDER = re.compile(
     r'@(?:Name|Agent|Person|Someone|Participant|Reviewer)\b'
@@ -96,16 +185,18 @@ class QualityReport:
                 f"{self.restatement_rate:.0%} of turns restate a point already "
                 f"made (limit {thresholds.max_restatement_rate:.0%})"
             )
-        if self.self_similarity > thresholds.max_self_similarity:
-            out.append(
-                f"turns share {self.self_similarity:.0%} of their vocabulary "
-                f"(limit {thresholds.max_self_similarity:.0%})"
-            )
-        if self.role_differentiation < thresholds.min_role_differentiation:
-            out.append(
-                f"reviewer lanes are {self.role_differentiation:.0%} distinct "
-                f"(need {thresholds.min_role_differentiation:.0%})"
-            )
+        # self_similarity and role_differentiation are REPORTED but are not
+        # gates. Measured across ten real transcripts, labelled by the two
+        # metrics that do discriminate, their ranges overlap completely:
+        #
+        #   self_similarity       bad 0.132-0.346   good 0.143-0.174
+        #   role_differentiation  bad 0.649-0.832   good 0.758-0.808
+        #
+        # The worst transcript in the set scored the LOWEST self_similarity
+        # (0.132) and the HIGHEST role_differentiation (0.832), because six
+        # reviewers restating one point in different words look lexically
+        # diverse. Failing a session on either produced false failures on the
+        # cleanest run measured. They stay in the report as diagnostics.
         if self.placeholder_rate > thresholds.max_placeholder_rate:
             out.append(
                 f"{self.placeholder_rate:.0%} of turns contain placeholder names "
@@ -127,20 +218,20 @@ class Thresholds:
         self_similarity     0.19-0.35    0.13-0.14
         role_differentiation 0.65-0.75   0.81-0.83
 
-    restatement_rate is the gate that matters and the only one with a wide
-    gap. self_similarity was the old gate at 0.45, which PASSED a transcript
-    where all six turns made the identical point — it measures shared
-    vocabulary, and six reviewers saying one thing in different words score
-    LOW on it. The two are kept as secondary signals, set just outside the
-    observed good range; with four transcripts those margins are thin, so
-    treat a lone self_similarity or role_differentiation failure as a prompt
-    to look, not a verdict.
+    restatement_rate and opener_template_rate are the gates. Re-measured
+    later across TEN transcripts, self_similarity and role_differentiation
+    turned out to have no discriminative power at all — their good and bad
+    ranges overlap completely — so they are reported and not enforced. The
+    earlier calibration of those two was fitted to four transcripts and was
+    wrong; it failed the cleanest session measured.
     """
     max_opener_template_rate: float = 0.5
     max_restatement_rate: float = 0.5
+    max_placeholder_rate: float = 0.2
+    # Kept so callers that report these numbers keep working; they no longer
+    # gate a transcript. See QualityReport.failures for the measurement.
     max_self_similarity: float = 0.17
     min_role_differentiation: float = 0.78
-    max_placeholder_rate: float = 0.2
 
 
 def _content_words(text: str) -> set:
@@ -165,7 +256,10 @@ def analyse(turns: Sequence[Turn]) -> QualityReport:
     # rather than counted as a pass and diluting the rate.
     respondable = texts[1:]
     if respondable:
-        hits = sum(1 for t in respondable if _AGREEMENT_OPENER.search(t))
+        hits = sum(
+            1 for t in respondable
+            if _AGREEMENT_OPENER.search(t) or _DEFERENCE_OPENER.search(t)
+        )
         report.opener_template_rate = hits / len(respondable)
 
     report.placeholder_rate = sum(1 for t in texts if _PLACEHOLDER.search(t)) / len(texts)

@@ -387,8 +387,13 @@ class AgentResponseGenerator:
                 f"  Unique contribution this turn: {unique}\n"
                 f"  Key points: {key_points_str}\n\n"
                 f"{_round_instruction(current_round, max_rounds, schema['dimensions'], _already_raised(conversation_history), bool(material_context))}\n\n"
-                "Generate your review message now. "
-                "Do NOT start with filler phrases. Open with your substantive point."
+                "Generate your review message now.\n"
+                "OPENING: your first sentence must state YOUR claim about the "
+                "work. Do not open on another reviewer — not with their name, "
+                "not with 'while I agree', not with 'the concerns raised by'. "
+                "Name them in your SECOND sentence onward, once your own point "
+                "is on the table. Disagreeing outright in the first sentence "
+                "is fine; deferring in it is not."
             ),
         })
 
@@ -444,8 +449,10 @@ class AgentResponseGenerator:
             if valid:
                 names = ", ".join(f'@"{n}"' for n in valid)
                 disagree_note = (
-                    f"REQUIRED: Directly challenge {names}. "
-                    "Quote or paraphrase their specific claim, then explain the flaw or counter-evidence."
+                    f"REQUIRED: Directly challenge {names} — but state your own "
+                    "position first. Lead with what you think is wrong, THEN "
+                    "attribute the claim and explain the flaw or counter-evidence. "
+                    "Opening on their name produces a turn that reads as deference."
                 )
 
         # The role schema's evidence_req assumes a manuscript exists — e.g.
@@ -495,7 +502,8 @@ VALID PARTICIPANT NAMES (only @mention these exact names — no others, no place
 {names_str}
 
 REVIEWER CONDUCT RULES:
-1. Open with your substantive point — no filler phrases ("Let's dive in", "Good points", etc.)
+1. Open with YOUR substantive point. Not a filler phrase, and not another
+   reviewer's name or a concession to them — those belong after your claim.
 2. {claim_support_rule}
 3. Only use @mentions with names from the VALID list above.
 4. Address challenges directed at you before making your own new point.

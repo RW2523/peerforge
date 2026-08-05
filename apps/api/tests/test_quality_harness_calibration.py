@@ -76,20 +76,40 @@ class TestRestatementRate:
         assert analyse([]).restatement_rate == 0.0
 
 
-class TestThresholdsAreNotDeadWeight:
-    def test_the_old_self_similarity_limit_is_gone(self):
-        """0.45 sat far outside the observed range (0.13-0.35), so it could
-        never fire on real output."""
-        assert Thresholds().max_self_similarity < 0.45
+class TestOnlyDiscriminatingMetricsGate:
+    """
+    Re-measured across TEN real transcripts, labelled by the metrics that do
+    discriminate, self_similarity and role_differentiation overlap completely
+    between good and bad:
 
-    def test_role_differentiation_floor_is_inside_the_observed_range(self):
-        """0.3 was below every real transcript, good or bad."""
-        t = Thresholds()
-        assert 0.75 < t.min_role_differentiation <= 0.83
+        self_similarity       bad 0.132-0.346   good 0.143-0.174
+        role_differentiation  bad 0.649-0.832   good 0.758-0.808
+
+    The worst transcript scored the LOWEST self_similarity and the HIGHEST
+    role_differentiation, because six reviewers restating one point in
+    different words look lexically diverse. An earlier calibration fitted to
+    four transcripts enforced both and failed the cleanest session measured.
+    """
 
     def test_restatement_limit_sits_in_the_measured_gap(self):
         t = Thresholds()
         assert 0.20 < t.max_restatement_rate < 0.80
+
+    def test_self_similarity_does_not_fail_a_transcript(self):
+        r = _report(DISTINCT)
+        r.self_similarity = 0.99
+        assert not r.failures(Thresholds()), (
+            "self_similarity must be reported, not enforced"
+        )
+
+    def test_role_differentiation_does_not_fail_a_transcript(self):
+        r = _report(DISTINCT)
+        r.role_differentiation = 0.0
+        assert not r.failures(Thresholds())
+
+    def test_the_two_gates_still_fail_a_bad_transcript(self):
+        r = _report(PARAPHRASES)
+        assert r.failures(Thresholds())
 
 
 class TestFinalTurnIsNotTemplated:
