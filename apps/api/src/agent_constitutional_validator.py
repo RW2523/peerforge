@@ -7,13 +7,46 @@ LLM outputs to ensure consistency and prevent flip-flopping.
 This is the "safety layer" that catches bad behavior.
 """
 import re
-from typing import Dict, Any, Optional, List
+from typing import Tuple, Dict, Any, Optional, List
 
 
 
 # Reused from the transcript quality harness so the live guard and the offline
 # harness agree on what counts as substance.
 from .services.transcript_quality import _content_words
+
+# A locator points INTO a specific document: a page, a numbered section, a
+# table, a figure. It is only checkable if a document was actually supplied.
+# Deliberately does NOT match external literature — "(McKay et al., 2018)",
+# "Smith 2019" — which a reviewer may legitimately know and cite from memory.
+# Kept flag-free so it can be embedded in a larger pattern; inline (?xi) would
+# be a global flag in the wrong position there.
+#
+# The page branch is bounded to 1-3 digits on purpose. Case-insensitively,
+# "p.\s*\d+" matches the author initial in "(Jones, P. 2019)",
+# "Peterson, A. P. 2019" and "See Smith, P. 2019" — all legitimate external
+# references, all of which would have forced a regeneration. A year is four
+# digits; a page almost never is.
+_LOCATOR_BODY = r"""
+    \b(?:pp?\.\s*\d{1,3}(?!\d)           # p. 12 / pp. 3-5 — see note below
+       |pages?\s+\d{1,3}(?!\d)            # page 15
+       |section\s+\d+(?:\.\d+)*           # Section 2.1
+       |table\s+\d+(?:\.\d+)*             # Table 3
+       |figure\s+\d+(?:\.\d+)*            # Figure 2
+       |appendix\s+[A-Z0-9]\b               # Appendix B
+       |(?:methodology|methods|results|discussion|introduction
+         |conclusion|abstract|literature\s+review)\s+section
+    )
+"""
+
+_DOC_LOCATOR = re.compile(_LOCATOR_BODY, re.IGNORECASE | re.VERBOSE)
+
+# The same locator wrapped in its own bracket — "(p. 12)", "(Methods section,
+# p. 5)" — which must be removed whole rather than leaving "()" behind.
+_PAREN_LOCATOR = re.compile(
+    r"\([^()]{0,80}?" + _LOCATOR_BODY + r"[^()]{0,80}?\)",
+    re.IGNORECASE | re.VERBOSE,
+)
 
 _ADJACENT = re.compile(r"[a-z]{4,}")
 
@@ -88,7 +121,8 @@ class ConstitutionalValidator:
         agent_role: str,
         past_messages: List[str],
         active_participants: List[str],
-        recent_other_messages: Optional[List[str]] = None
+        recent_other_messages: Optional[List[str]] = None,
+        has_materials: bool = True
     ) -> Dict[str, Any]:
         """
         Validate message against constitutional rules
@@ -159,6 +193,14 @@ class ConstitutionalValidator:
             if repetition_violation:
                 violations.append(repetition_violation)
         
+        # Rule 4.5: Citing a document that was never submitted
+        fabricated_citation = self._check_fabricated_citation(
+            message,
+            has_materials
+        )
+        if fabricated_citation:
+            violations.append(fabricated_citation)
+
         # Rule 5: Check role consistency
         role_violation = self._check_role_consistency(
             message,
@@ -448,6 +490,77 @@ class ConstitutionalValidator:
 
         return None
     
+    @staticmethod
+    def strip_fabricated_locators(message: str) -> Tuple[str, int]:
+        """Replace invented document locators with the codebase's own marker.
+
+        Last resort, used only when a constrained regeneration has ALREADY been
+        tried and the model cited a document again. Regeneration was previously
+        unverified: the retry's output went straight into the transcript, so
+        "Figure 1" and "Table 3" survived a firing guard in a live adversarial
+        run. Publishing an invented locator is publishing a false statement
+        about someone's work, so when the model will not stop, say plainly that
+        there was no source rather than repeating its claim.
+
+        '[source not provided]' is the marker the material-grounding prompt
+        already tells agents to use, and transcript_quality counts it as a
+        placeholder — so it stays visible in quality reporting instead of
+        looking like a clean turn.
+        """
+        marker = "[source not provided]"
+        text, paren_hits = _PAREN_LOCATOR.subn(marker, message)
+        text, bare_hits = _DOC_LOCATOR.subn(marker, text)
+        # Two locators in one clause ("the methodology section (p. 12)") leave
+        # the marker twice in a row; collapse those and tidy the spacing.
+        text = re.sub(r"(?:\[source not provided\][\s,]*){2,}", marker + " ", text)
+        text = re.sub(r"\s{2,}", " ", text)
+        text = re.sub(r"\s+([,.;:])", r"\1", text)
+        return text.strip(), paren_hits + bare_hits
+
+    def _check_fabricated_citation(
+        self,
+        message: str,
+        has_materials: bool
+    ) -> Optional[Dict[str, Any]]:
+        """Catch citations of a document that was never submitted.
+
+        Only fires when NO material was supplied to this session, where the
+        judgement is exact rather than probabilistic: if the reviewer was
+        handed no document, every page number and section reference in their
+        output is invented. Measured on three live runs with no upload, the
+        panel produced 33 such locators across 18 turns — "(p. 12)",
+        "Section 2.1, Participant Selection", "on page 15" — and then all
+        anchored on the same fabricated detail.
+
+        When a document DOES exist this stays silent. Verifying a cited page
+        against the real one is not possible here: 391 of 398 material chunks
+        in the live database carry no page_num at all, so a page check would
+        reject almost every legitimate citation. Grounding for that case is
+        provenance.ground_message, which matches text rather than locators.
+        """
+        if has_materials:
+            return None
+
+        found = []
+        for m in _DOC_LOCATOR.finditer(message):
+            token = " ".join(m.group(0).split())
+            if token.lower() not in (f.lower() for f in found):
+                found.append(token)
+
+        if not found:
+            return None
+
+        shown = ", ".join(f'"{f}"' for f in found[:4])
+        return {
+            "rule": "no_fabricated_citation",
+            "severity": "critical",
+            "details": (
+                f"No document was submitted to this session, but the message "
+                f"cites {shown}. There is nothing those refer to. State the gap "
+                f"instead — \"the problem statement does not say whether...\"."
+            ),
+        }
+
     def _check_persona_authenticity(
         self,
         message: str,

@@ -28,7 +28,11 @@ ACADEMIC_REVIEW_FOOTER = """
 
 PEER-REVIEW ENGAGEMENT RULES:
 REQUIRED:
-- Cite specific papers, sections, or data points when making claims
+- Support claims with specific evidence: real literature you actually know, or
+  specifics from the submitted materials. If no document was submitted, work
+  from the problem statement itself — NEVER invent a page, section, table or
+  figure, and never describe what "the authors state" in a paper you have not
+  been given
 - Use @mentions to directly address other reviewers' arguments
 - Introduce NEW angles — never repeat what another reviewer already said
 - Maintain YOUR unique academic voice and lens throughout
@@ -37,7 +41,11 @@ REQUIRED:
 
 FORBIDDEN:
 - Vague praise: "Interesting work", "Great contribution", "I agree with…"
-- Claims without evidence or citation
+- Claims with no support at all
+- INVENTED citations. A fabricated locator is worse than no citation: saying
+  "as noted on p. 12" about a document you were never shown is a false
+  statement about someone's work. "The statement does not say whether…" is a
+  legitimate review point; a made-up page number is not
 - Repeating your own or others' already-made points
 - Politeness that obscures a genuine methodological concern
 
@@ -48,7 +56,9 @@ REVIEW ARC (follow this order across the session):
 4. Literature Gaps — What prior work is ignored or under-cited?
 5. Recommendation — Accept / Minor Revision / Major Revision / Reject, with rationale
 
-CITATION FORMAT: Use inline citations: (Author et al., Year) or [source title, URL]"""
+CITATION FORMAT: Use inline citations — (Author et al., Year) or [source title, URL] —
+only for sources that genuinely exist. Cite a page or section number only when a
+document was actually submitted to this session."""
 
 
 CURATED_TEMPLATES: List[Dict[str, Any]] = [

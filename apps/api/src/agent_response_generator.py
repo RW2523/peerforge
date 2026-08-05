@@ -283,6 +283,7 @@ class AgentResponseGenerator:
             current_round=current_round,
             max_rounds=max_rounds,
             valid_participant_names=valid_participant_names or [],
+            has_materials=bool(material_context),
         )
 
         messages: List[Dict[str, str]] = [
@@ -318,6 +319,42 @@ class AgentResponseGenerator:
             messages.append({
                 "role": "user",
                 "content": _fence_untrusted(material_context),
+            })
+        else:
+            # The anti-fabrication rule above lived ONLY inside the branch that
+            # runs when a document exists — present exactly when there is
+            # something real to cite, absent exactly when there is nothing.
+            # Meanwhile the rest of the prompt still demands citation: the role
+            # schema says "Cite specific methods sections, tables, equations",
+            # the turn instruction says "cite evidence", and both refer to
+            # "the paper". Under that pressure, with no source, the model
+            # invents one. Three live runs produced 33 fabricated locators
+            # across 18 turns — "(p. 12)", "Section 2.1, Participant
+            # Selection", "on page 15" — for a document nobody uploaded, and
+            # every reviewer then anchored on the same invented detail.
+            messages.append({
+                "role": "system",
+                "content": (
+                    "NO DOCUMENT HAS BEEN SUBMITTED FOR THIS SESSION.\n"
+                    "You have the problem statement above and nothing else. "
+                    "There is no manuscript, no page numbers, no numbered "
+                    "sections, no tables and no figures.\n\n"
+                    "CITATION RULES FOR THIS SESSION:\n"
+                    "- NEVER cite a page, section number, table, figure or "
+                    "appendix. Writing '(p. 12)', 'Section 2.1' or 'as noted "
+                    "in the methodology section' is fabrication — there is no "
+                    "document those could refer to.\n"
+                    "- Do NOT describe what 'the authors state', 'the authors "
+                    "acknowledge' or 'the paper reports'. You have not read "
+                    "their paper.\n"
+                    "- Base your review on the problem statement itself and on "
+                    "established standards in your field. Referring to real "
+                    "external literature you actually know is fine.\n"
+                    "- Where a detail you would need is simply absent, say so "
+                    "plainly — 'the statement does not say whether...' is a "
+                    "legitimate and useful review point. An honest gap is "
+                    "worth more than an invented citation."
+                ),
             })
 
         messages.extend(conversation_history)
@@ -371,6 +408,7 @@ class AgentResponseGenerator:
         current_round: int,
         max_rounds: int,
         valid_participant_names: List[str],
+        has_materials: bool = True,
     ) -> str:
         # Stance-change instruction
         if reasoning.get("stance_changed"):
@@ -394,6 +432,30 @@ class AgentResponseGenerator:
                     "Quote or paraphrase their specific claim, then explain the flaw or counter-evidence."
                 )
 
+        # The role schema's evidence_req assumes a manuscript exists — e.g.
+        # "Cite specific methods sections, tables, equations". With no document
+        # supplied, that instruction is an order to invent one, and the model
+        # obliges. Swap it for something achievable rather than leaving a
+        # demand the session cannot satisfy.
+        if has_materials:
+            evidence_requirement = schema["evidence_req"]
+            claim_support_rule = (
+                "Every evaluative claim must cite specific evidence from the "
+                "submitted materials or the conversation."
+            )
+        else:
+            evidence_requirement = (
+                "No document was submitted. Ground each claim in the problem "
+                "statement's own wording or in established standards of your "
+                "field. Never cite a page, section, table or figure — there is "
+                "no document to cite."
+            )
+            claim_support_rule = (
+                "Every evaluative claim must rest on the problem statement, the "
+                "conversation, or named real literature you actually know. "
+                "Never invent a page, section, table or figure."
+            )
+
         # Valid-name guard
         names_str = (
             ", ".join(f'"{n}"' for n in valid_participant_names)
@@ -407,7 +469,7 @@ ROLE-SPECIFIC REVIEW DIMENSIONS:
   When evaluating strengths: {schema['strengths']}
   When evaluating weaknesses: {schema['weaknesses']}
   Recommendation style: {schema['recommendations']}
-  Evidence requirement: {schema['evidence_req']}
+  Evidence requirement: {evidence_requirement}
 
 {stance_note}
 
@@ -418,7 +480,7 @@ VALID PARTICIPANT NAMES (only @mention these exact names — no others, no place
 
 REVIEWER CONDUCT RULES:
 1. Open with your substantive point — no filler phrases ("Let's dive in", "Good points", etc.)
-2. Every evaluative claim must cite specific evidence from the submitted materials or the conversation.
+2. {claim_support_rule}
 3. Only use @mentions with names from the VALID list above.
 4. Address challenges directed at you before making your own new point.
 5. Do not repeat claims already made. Advance the analysis.

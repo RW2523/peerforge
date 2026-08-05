@@ -145,6 +145,23 @@ def _agent_role_text(agent_config: Dict[str, Any]) -> str:
     )
 
 
+def _evidence_clause(material_context: Optional[str]) -> str:
+    """What to say about evidence, given whether a document was actually supplied.
+
+    "Cite evidence" is a reasonable instruction when the reviewer has been
+    handed a manuscript. With nothing to cite it is an instruction to invent,
+    and the models duly invented: three live runs produced 33 fabricated
+    locators across 18 turns for a document nobody uploaded.
+    """
+    if material_context:
+        return " Cite evidence from the submitted materials."
+    return (
+        " No document was submitted — do NOT cite pages, sections, tables or "
+        "figures, and do not describe what 'the authors state'. Where a needed "
+        "detail is absent from the problem statement, say so."
+    )
+
+
 def _build_repetition_blacklist(history_events: List[Dict], current_agent: str) -> str:
     """
     Extract the key points each agent has already raised so the current
@@ -608,6 +625,14 @@ How to respond:
                 participant_turns_remaining = turns_left_in_debate // len(participants)
                 is_final_turn = is_last_round and participant_turns_remaining == 0
             
+            # Load source materials once per turn — shared across pipeline
+            # stages. Loaded HERE rather than at first use because the turn
+            # instruction below must know whether a document exists: it used to
+            # say "cite evidence" and "the paper's main contribution"
+            # unconditionally, which on a session with no upload is an
+            # instruction to invent one.
+            _material_ctx = self._load_material_context(debate_id)
+
             # Determine urgency level and response length
             if max_rounds:
                 if is_final_turn:
@@ -640,13 +665,25 @@ How to respond:
                     length_instruction = f"Time is running out! Express urgency. Be concise (3-4 sentences). Focus on what matters most. Show that you've listened to others in rounds 1-{current_round - 1}."
                 elif current_round == 1:
                     urgency = f"Round {current_round}/{max_rounds} - OPENING REVIEW"
-                    length_instruction = f"First review round of {max_rounds}. Focus on: the paper's main contribution and immediate methodological concerns. Be specific and cite evidence. 150-250 words."
+                    length_instruction = (
+                        f"First review round of {max_rounds}. Focus on: the main contribution "
+                        f"and immediate methodological concerns. Be specific. 150-250 words."
+                        + _evidence_clause(_material_ctx)
+                    )
                 else:
                     urgency = f"Round {current_round}/{max_rounds} - DEEP REVIEW"
-                    length_instruction = f"Round {current_round} of {max_rounds}. Engage with other reviewers' points. Challenge weak arguments, acknowledge strong ones, and advance to the next arc stage (weaknesses, lit gaps). Cite evidence. 150-250 words."
+                    length_instruction = (
+                        f"Round {current_round} of {max_rounds}. Engage with other reviewers' "
+                        f"points. Challenge weak arguments, acknowledge strong ones, and advance "
+                        f"to the next arc stage (weaknesses, lit gaps). 150-250 words."
+                        + _evidence_clause(_material_ctx)
+                    )
             else:
                 urgency = f"Review Turn {total_turns + 1}"
-                length_instruction = "Advance the review arc. Respond to other reviewers with cited evidence. 150-250 words."
+                length_instruction = (
+                    "Advance the review arc. Respond to other reviewers. 150-250 words."
+                    + _evidence_clause(_material_ctx)
+                )
             
             # ── Persona lane + repetition blacklist ──────────────────
             _lane = _PERSONA_LANE.get(
@@ -897,8 +934,6 @@ Talk like a confident expert debating at a bar - opinionated, strategic, direct.
                 "content": conversational_instruction
             })
             
-            # Load source materials once per turn — shared across pipeline stages
-            _material_ctx = self._load_material_context(debate_id)
             if _material_ctx:
                 logger.info(f"    [materials] Loaded material context ({len(_material_ctx)} chars) for {agent_name}")
                 # Inject into legacy prompt messages as well
@@ -1992,7 +2027,10 @@ Requirements:
                 agent_role=_agent_role_text(agent_config),
                 past_messages=past_messages_text,
                 active_participants=all_participant_names,  # All valid names, not just those who spoke
-                recent_other_messages=recent_other_messages
+                recent_other_messages=recent_other_messages,
+                # No document supplied means every page or section reference in
+                # the output is invented — the check is exact in that case.
+                has_materials=bool(material_context),
             )
             
             if not validation["valid"]:
@@ -2039,6 +2077,18 @@ Requirements:
                             f"- Others said: {reasoning.get('what_others_said', 'see above')}"
                         ])
                     
+                    if 'no_fabricated_citation' in violation_rules:
+                        constraints.extend([
+                            "- NO document was submitted to this session.",
+                            "- Remove EVERY page number, section number, table, figure "
+                            "and appendix reference. There is no document they point to.",
+                            "- Do not say what 'the authors state' or 'the paper reports' "
+                            "— you have not been given their paper.",
+                            "- Where you need a detail the problem statement does not give, "
+                            "say so plainly: 'the statement does not say whether...'.",
+                            "- Referring to real external literature you actually know is fine.",
+                        ])
+
                     if 'no_flip_flop' in violation_rules:
                         constraints.append("- Maintain your previous position unless you explicitly justify changes")
                     
@@ -2062,6 +2112,7 @@ Requirements:
                         max_tokens=900
                     )
                     agent_message = response['content']
+
             else:
                 # `valid` only tracks critical violations, so non-critical ones
                 # were logged as a clean pass. Say what was actually found.
@@ -2084,6 +2135,26 @@ Requirements:
                     ]
                 })
             
+            # FINAL BACKSTOP. If nothing was submitted, no page or section
+            # reference may reach the transcript, whatever produced it.
+            #
+            # Scoping this to the citation rule was not enough: a live run
+            # showed turns regenerating for REPETITION and the retry
+            # introducing "Figure 3" and "Table 2", which no one re-checked
+            # because the regenerated message is never validated. The
+            # invariant belongs on the published message, not on one rule's
+            # branch. Regeneration still runs first, because rewritten prose
+            # reads better than a marker — this only catches what it misses.
+            if not material_context:
+                agent_message, stripped = ConstitutionalValidator.strip_fabricated_locators(
+                    agent_message
+                )
+                if stripped:
+                    logger.warning(
+                        f"    ⚠️ {agent_name} cited a document that was never submitted; "
+                        f"replaced {stripped} invented locator(s) with '[source not provided]'"
+                    )
+
             # Complete thinking session and persist summary
             self.thinking_service.complete_thinking_session()
             
