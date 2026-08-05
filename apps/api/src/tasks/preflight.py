@@ -311,6 +311,7 @@ def prepare_participant_preflight(participant_run_id: str, participant_id: str, 
         # the UI guessed, telling users to "enable web search" via a toggle
         # that does not exist anywhere in the product.
         web_research_status = "ok"
+        web_sources_cited = 0
 
         tavily_key = settings.tavily_api_key or ""
         if not WEB_SEARCH_AVAILABLE:
@@ -484,12 +485,21 @@ This is a placeholder prep pack generated without OpenRouter key. In production,
                     # Log if web research was included
                     if web_search_urls:
                         logger.debug(f"    📊 Web research was available ({len(web_search_urls)} URLs)")
-                        # Check if URLs are actually cited in content
-                        citations_found = sum(1 for url in web_search_urls[:3] if url in prep_pack_content)
-                        if citations_found == 0:
-                            logger.warning(f"    ⚠️ WARNING: No web sources were cited in the prep pack content!")
+                        # Across ALL retrieved sources, not just the first
+                        # three, and kept so the rate is measurable rather
+                        # than only visible in a log line nobody reads.
+                        web_sources_cited = sum(
+                            1 for url in web_search_urls if url and url in prep_pack_content
+                        )
+                        if web_sources_cited == 0:
+                            logger.warning(
+                                f"    ⚠️ None of the {len(web_search_urls)} retrieved sources "
+                                f"were cited in the prep pack"
+                            )
                         else:
-                            logger.info(f"    ✓ {citations_found} sources cited in prep pack")
+                            logger.info(
+                                f"    ✓ {web_sources_cited}/{len(web_search_urls)} sources cited"
+                            )
             except Exception as e:
                 logger.error(f"    ❌ OpenRouter error: {str(e)}")
                 prep_pack_content = f"Error calling OpenRouter: {str(e)}\n\nFallback prep pack with {len(material_chunks)} materials and {len(imported_chunks)} imported chunks."
@@ -529,6 +539,7 @@ This is a placeholder prep pack generated without OpenRouter key. In production,
                 'semantic_query_used': semantic_query[:200],
                 'web_research_performed': web_research_performed,
                 'web_research_status': web_research_status,
+                'web_sources_cited': web_sources_cited,
                 'web_research_query': problem_statement[:100] if web_research_performed else None,
                 'web_search_urls': web_search_urls,  # List of URLs searched
                 'web_search_results': web_search_data,  # Full structured results

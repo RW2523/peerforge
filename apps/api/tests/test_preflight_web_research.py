@@ -168,3 +168,86 @@ class TestPreflightReadsIt:
             "policy_config is the canonical home; the create route folds the "
             "top-level field into it"
         )
+
+
+class TestTheMemoActuallyUsesTheSources:
+    """
+    Retrieval worked and the memos ignored it: 0 of 5 sources cited.
+
+    Two causes, and only the second mattered.
+
+      - No role task mentions "web", "URL", "source" or "external literature"
+        anywhere, and the one citation instruction — "cite evidence" — is
+        satisfied by quoting the submitted paper. The literature was pasted in
+        unlabelled with nothing asking the reviewer to use it.
+      - Adding a rule after FORMAT changed almost nothing (0 URLs across 8
+        memos, then 1 of 5 in three of them). Every role prompt defines a
+        numbered memo structure and the model follows THAT; a trailing rule is
+        advice it can skip.
+
+    Making it a REQUIRED SECTION with a named heading and a fixed bullet shape
+    took it to 3 of 5 sources in 9 of 9 memos.
+    """
+
+    def _prompt(self, web=""):
+        from src.services.persona_prompts import get_preflight_prep_prompt
+
+        return get_preflight_prep_prompt(
+            role_label="methodology professor",
+            persona_name="Dr. Ada",
+            debate_title="A trial",
+            problem_statement="Does X cause Y?",
+            materials_context="Section 1. Methods...",
+            imported_context="",
+            web_research_results=web,
+            current_date_str="Monday",
+            current_time_str="10:00",
+        )
+
+    WEB = "1. **A paper**\n   URL: https://example.org/a\n\n2. **Another**\n   URL: https://example.org/b\n"
+
+    def test_the_requirement_is_a_named_output_section(self):
+        p = self._prompt(self.WEB)
+        assert "ADDITIONAL REQUIRED SECTION" in p
+        assert "**External literature consulted**" in p
+
+    def test_it_sits_inside_the_task_not_after_the_format_note(self):
+        """A rule placed after FORMAT was ignored."""
+        p = self._prompt(self.WEB)
+        assert p.index("ADDITIONAL REQUIRED SECTION") < p.index("LENGTH:")
+
+    def test_the_literature_block_is_labelled(self):
+        p = self._prompt(self.WEB)
+        assert "EXTERNAL LITERATURE" in p
+        assert "https://example.org/a" in p
+
+    def test_it_says_to_copy_the_urls_rather_than_compose_them(self):
+        p = self._prompt(self.WEB)
+        assert "copied exactly" in p
+
+    def test_no_citation_is_demanded_when_nothing_was_retrieved(self):
+        """Demanding citations with no sources is an instruction to invent
+        them — the same mistake that produced fabricated page numbers."""
+        p = self._prompt("")
+        assert "ADDITIONAL REQUIRED SECTION" not in p
+        assert "Do not invent URLs" in p
+        assert "No external literature was retrieved" in p
+
+
+class TestCitationRateIsRecorded:
+    def test_the_count_reaches_the_metadata(self):
+        import inspect
+
+        from src.tasks import preflight
+
+        src = inspect.getsource(preflight)
+        assert "'web_sources_cited': web_sources_cited" in src
+
+    def test_it_counts_every_source_not_just_the_first_three(self):
+        import inspect
+
+        from src.tasks import preflight
+
+        src = inspect.getsource(preflight)
+        assert "for url in web_search_urls[:3]" not in src
+        assert "for url in web_search_urls if url and url in prep_pack_content" in src

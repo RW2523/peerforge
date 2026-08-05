@@ -558,6 +558,45 @@ def get_preflight_prep_prompt(
         canonical, PREFLIGHT_ROLE_PROMPTS["skeptical reviewer"]
     )
 
+    # The retrieved literature used to be pasted in unlabelled, with nothing
+    # asking the reviewer to use it. Not one role task mentions "web", "URL",
+    # "source" or "external literature", and the only citation instruction —
+    # "cite evidence" — is satisfied by quoting the submitted paper. Measured:
+    # 0 of 5 retrieved sources appeared in the generated memo.
+    #
+    # Both halves are conditional. Demanding citations when no search ran
+    # would be an instruction to invent them, which is the same mistake that
+    # produced fabricated page numbers elsewhere in this codebase.
+    if web_research_results:
+        web_research_block = f"""EXTERNAL LITERATURE (retrieved for this session — you did not read these
+papers in full; treat the snippets as leads, not as established fact):
+{web_research_results}"""
+        # A rule appended after FORMAT was ignored: every role prompt defines
+        # a numbered memo structure and the model follows that, not trailing
+        # instructions. Measured with the rule as a trailing note: 0 URLs in
+        # 8 memos. So make it a REQUIRED SECTION with a named heading and a
+        # fixed bullet shape — structure the model must emit, not advice it
+        # can skip.
+        citation_requirement = """
+ADDITIONAL REQUIRED SECTION — add this after the numbered items above, using
+this exact heading:
+
+**External literature consulted**
+- Two or three bullets, no more. Each bullet: one sentence on how that source
+  bears on your critique — it corroborates a concern, contradicts the authors'
+  claim, or shows the field's usual standard — then the bare URL in square
+  brackets at the end of the sentence.
+- Example shape: "Comparable trials report effects roughly half this size,
+  which makes the reported d = 1.31 hard to credit [https://example.org/x]."
+- Use ONLY the URLs listed under EXTERNAL LITERATURE above, copied exactly.
+- If a source turned out to be irrelevant, leave it out rather than padding.
+"""
+    else:
+        web_research_block = "(No external literature was retrieved for this preparation.)"
+        citation_requirement = """
+No external literature was retrieved, so cite only the submitted materials.
+Do not invent URLs, papers or author-year references to fill the gap."""
+
     return f"""You are {persona_name}, preparing for an academic peer-review session.
 
 DATE: {current_date_str} at {current_time_str}
@@ -571,13 +610,13 @@ SUBMITTED MATERIALS (uploaded by the author):
 IMPORTED CONTEXT FROM PRIOR SESSIONS:
 {imported_context if imported_context else 'None.'}
 
-{web_research_results if web_research_results else '(No web research was performed for this preparation.)'}
+{web_research_block}
 
 ---
 
 ROLE-SPECIFIC PREPARATION TASK:
 {role_instruction}
-
+{citation_requirement}
 LENGTH: 500–700 words. Be specific, cite evidence, and stay in character as {persona_name}.
 FORMAT: Use numbered sections as defined above. End with your three review-session questions clearly labelled.
 """
