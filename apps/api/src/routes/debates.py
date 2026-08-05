@@ -318,10 +318,17 @@ async def create_debate(
     
     try:
         service = DebateService()
+        # policy_config is where every reader looks for the problem statement,
+        # so fold the top-level field into it. An explicit field wins over one
+        # already inside policy_config; sending neither is still allowed.
+        policy_config = dict(request.policy_config or {})
+        if request.problem_statement:
+            policy_config['problem_statement'] = request.problem_statement
+
         debate = service.create_debate(
             workspace_id=request.workspace_id,
             title=request.title,
-            policy_config=request.policy_config,
+            policy_config=policy_config,
             owner_user_id=current_user.get('user_id')
         )
         

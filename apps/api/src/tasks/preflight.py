@@ -305,7 +305,21 @@ def prepare_participant_preflight(participant_run_id: str, participant_id: str, 
         web_search_urls = []  # Store URLs separately for metadata
         web_search_data = []  # Store full structured results
         
+        # Why web research did or did not happen. The prep pack recorded only
+        # a bare False, so an empty Research tab could not say whether no key
+        # was configured, the search found nothing, or the call failed — and
+        # the UI guessed, telling users to "enable web search" via a toggle
+        # that does not exist anywhere in the product.
+        web_research_status = "ok"
+
         tavily_key = settings.tavily_api_key or ""
+        if not WEB_SEARCH_AVAILABLE:
+            web_research_status = "unavailable"
+        elif not tavily_key:
+            web_research_status = "not_configured"
+        elif not problem_statement:
+            web_research_status = "no_problem_statement"
+
         if WEB_SEARCH_AVAILABLE and problem_statement and tavily_key:
             try:
                 _broadcast_preflight_progress(debate_id, participant_id, 'running', 'Researching topic online')
@@ -345,10 +359,12 @@ def prepare_participant_preflight(participant_run_id: str, participant_id: str, 
                     logger.info(f"    ✅ Tavily returned {len(results)} results")
                     logger.info(f"    🔗 First 3 URLs: {', '.join(web_search_urls[:3])}")
                 else:
+                    web_research_status = "no_results"
                     logger.info(f"    ℹ️ Tavily returned no results")
 
             except Exception as e:
                 import traceback
+                web_research_status = "failed"
                 logger.error(f"    ⚠️ Web search failed: {e}")
                 traceback.print_exc()
                 web_research_results = ""
@@ -512,6 +528,7 @@ This is a placeholder prep pack generated without OpenRouter key. In production,
                 'imported_chunk_ids': imported_chunk_ids,
                 'semantic_query_used': semantic_query[:200],
                 'web_research_performed': web_research_performed,
+                'web_research_status': web_research_status,
                 'web_research_query': problem_statement[:100] if web_research_performed else None,
                 'web_search_urls': web_search_urls,  # List of URLs searched
                 'web_search_results': web_search_data,  # Full structured results

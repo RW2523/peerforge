@@ -28,6 +28,18 @@ class CreateDebateRequest(BaseModel):
     # Bounded here so an over-long title is a readable 422 rather than a
     # Postgres truncation error surfaced to the screen as a 500.
     title: str = Field(..., min_length=1, max_length=500, description="Debate title")
+    # Accepted at the top level because that is how every caller sends it —
+    # the API silently dropped it (pydantic ignores unknown fields), while
+    # everything downstream reads policy_config['problem_statement']. The
+    # result: 0 of 99 live sessions had a problem statement unless they came
+    # through conversational setup, so preflight skipped web research, the
+    # retrieval query fell back to "context summary", and reviewers were shown
+    # "Problem: N/A". The route folds this into policy_config, which stays the
+    # canonical location.
+    problem_statement: Optional[str] = Field(
+        default=None, max_length=10000,
+        description="The research problem the panel is reviewing",
+    )
     policy_config: Optional[Dict[str, Any]] = Field(default=None, description="Policy configuration")
 
 

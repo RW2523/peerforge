@@ -44,6 +44,19 @@ export function PrepPackDialog({
 
   // Extract web research from metadata (structured data)
   const webResearchPerformed = metadata?.web_research_performed || false;
+  // Why it did not run. Preflight records this so the panel can say what is
+  // actually true; it previously told users to "enable web search", a toggle
+  // that does not exist anywhere in the product. The real requirement is a
+  // TAVILY_API_KEY on the server.
+  const webResearchStatus: string = metadata?.web_research_status || 'unknown';
+  const WEB_RESEARCH_REASON: Record<string, string> = {
+    not_configured: 'No web-search key is configured on the server, so agents could not research this topic online.',
+    unavailable: 'The web-search integration is not installed on this server.',
+    no_problem_statement: 'This session has no problem statement, so there was nothing to search for.',
+    no_results: 'The web search ran but returned no usable sources for this topic.',
+    failed: 'The web search was attempted but failed. The preparation was completed without it.',
+    unknown: 'Web research was not performed for this preparation.',
+  };
   const webResearchQuery = metadata?.web_research_query || '';
   const webSearchUrls = metadata?.web_search_urls || [];
   const webSearchResults = metadata?.web_search_results || [];
@@ -280,8 +293,13 @@ export function PrepPackDialog({
                 ) : (
                   <div className={styles.emptyState}>
                     <span className={styles.emptyIcon}>🌐</span>
-                    <p>Web research was not performed for this preparation.</p>
-                    <p className={styles.emptyHint}>Enable web search for agents to research topics online during preflight.</p>
+                    <p>{WEB_RESEARCH_REASON[webResearchStatus] ?? WEB_RESEARCH_REASON.unknown}</p>
+                    {(webResearchStatus === 'not_configured' || webResearchStatus === 'unavailable') && (
+                      <p className={styles.emptyHint}>
+                        This is a server setting, not something to switch on here — the
+                        rest of the preparation is unaffected.
+                      </p>
+                    )}
                   </div>
                 )}
               </section>
