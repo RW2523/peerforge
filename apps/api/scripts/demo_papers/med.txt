@@ -1,0 +1,14 @@
+Wearable Heart-Rate Variability as a Sepsis Early Warning
+
+Section 1. Introduction
+Consumer wearable HRV is tested as an early warning signal for sepsis in a post-surgical ward.
+
+Section 2. Methods
+2.1 Cohort. 88 post-surgical patients; 11 developed sepsis. Wearable removed during imaging, producing gaps not reported in the analysis.
+2.2 Model. Threshold chosen on the same data used to report performance; no held-out set.
+
+Section 3. Results
+Table 1 reports sensitivity 0.82 and specificity 0.61. Figure 3 shows the ROC curve (AUC 0.74).
+
+Section 4. Discussion
+The authors conclude the effect is robust and recommend adoption in practice.

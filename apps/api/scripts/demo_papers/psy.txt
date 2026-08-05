@@ -1,0 +1,14 @@
+Smartphone Mindfulness and Undergraduate Exam Anxiety
+
+Section 1. Introduction
+A six-week app-based mindfulness programme is evaluated against a waitlist for exam anxiety.
+
+Section 2. Methods
+2.1 Participant Selection. Forty undergraduates recruited by flyer from one institution. Allocation by coin flip performed by the first author, who also delivered the intervention. No active control; comparison arm was a waitlist. Not preregistered.
+2.2 Measures. Self-report anxiety scale at baseline and week six. Test-retest reliability not assessed; outcome assessment unblinded.
+
+Section 3. Results
+Table 1 reports group means. Intervention fell 12.4 points versus 2.1 in waitlist (d = 1.31, p = 0.004). Two waitlist participants withdrew and were excluded.
+
+Section 4. Discussion
+The authors conclude the effect is robust and recommend adoption in practice.

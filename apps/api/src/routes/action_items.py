@@ -11,14 +11,14 @@ Flow:
 import json
 import re
 import uuid
-from typing import Literal, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Header, Depends
 from pydantic import BaseModel
 
 from ..database import get_db_connection, get_cursor
 from ..config import resolve_openrouter_key
-from ..auth import require_auth
+from ..auth import authorize_debate, get_current_user, require_auth
 from ..openrouter_client import OpenRouterClient
 from ..meeting_setup_service import MeetingSetupService
 from ..summary_service import SummaryService
@@ -75,7 +75,17 @@ class DecisionResponse(BaseModel):
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
-def _verify_debate(cursor, debate_id: str, workspace_id: str) -> dict:
+def _verify_debate(cursor, debate_id: str, current_user: Dict[str, Any]) -> dict:
+    """Confirm the caller belongs to the debate's workspace, then return it.
+
+    This compared the debate's workspace against the caller's ACTIVE one, so
+    every action item in any of their OTHER courses answered 403 — a teacher
+    with four courses could only reach the one currently selected. The rest of
+    the codebase goes through authorize_debate, which checks membership across
+    all of the caller's workspaces; action items were the last routes still
+    doing their own single-workspace comparison.
+    """
+    authorize_debate(debate_id, current_user)
     cursor.execute(
         "SELECT debate_id, workspace_id, title, policy_config FROM debates WHERE debate_id = %s",
         (debate_id,),
@@ -83,8 +93,6 @@ def _verify_debate(cursor, debate_id: str, workspace_id: str) -> dict:
     row = cursor.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Debate not found")
-    if str(row["workspace_id"]) != workspace_id:
-        raise HTTPException(status_code=403, detail="Access denied to this debate")
     return dict(row)
 
 
@@ -139,7 +147,7 @@ async def extract_action_items(
     debate_id: str,
     material_id: str,
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
-    workspace_id: str = Depends(require_auth),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Extract action items from a transcript material and store them."""
     x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
@@ -148,7 +156,7 @@ async def extract_action_items(
 
     with get_db_connection() as conn:
         cursor = get_cursor(conn)
-        _verify_debate(cursor, debate_id, workspace_id)
+        _verify_debate(cursor, debate_id, current_user)
 
         # Load transcript text: prefer body_text, else stitch its chunks together
         cursor.execute(
@@ -226,10 +234,10 @@ async def extract_action_items(
 # ── List / edit ────────────────────────────────────────────────────────────
 
 @router.get("/debates/{debate_id}/action-items", response_model=List[ActionItem])
-async def list_action_items(debate_id: str, workspace_id: str = Depends(require_auth)):
+async def list_action_items(debate_id: str, current_user: Dict[str, Any] = Depends(get_current_user)):
     with get_db_connection() as conn:
         cursor = get_cursor(conn)
-        _verify_debate(cursor, debate_id, workspace_id)
+        _verify_debate(cursor, debate_id, current_user)
         cursor.execute(
             """
             SELECT action_id, material_id, description, owner, priority, status,
@@ -248,7 +256,7 @@ async def update_action_item(
     debate_id: str,
     action_id: str,
     update: ActionItemUpdate,
-    workspace_id: str = Depends(require_auth),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     fields = []
     params: list = []
@@ -262,7 +270,7 @@ async def update_action_item(
 
     with get_db_connection() as conn:
         cursor = get_cursor(conn)
-        _verify_debate(cursor, debate_id, workspace_id)
+        _verify_debate(cursor, debate_id, current_user)
         params.extend([action_id, debate_id])
         cursor.execute(
             f"""
@@ -334,7 +342,7 @@ async def debate_action_item(
     debate_id: str,
     action_id: str,
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
-    workspace_id: str = Depends(require_auth),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Spawn a short autonomous panel discussion to decide this action item."""
     x_openrouter_key = resolve_openrouter_key(x_openrouter_key)
@@ -343,7 +351,7 @@ async def debate_action_item(
 
     with get_db_connection() as conn:
         cursor = get_cursor(conn)
-        parent = _verify_debate(cursor, debate_id, workspace_id)
+        parent = _verify_debate(cursor, debate_id, current_user)
 
         cursor.execute(
             "SELECT description, status, decision_debate_id FROM transcript_action_items WHERE action_id = %s AND debate_id = %s",
@@ -408,12 +416,12 @@ async def debate_action_item(
 async def get_action_item_decision(
     debate_id: str,
     action_id: str,
-    workspace_id: str = Depends(require_auth),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Poll the decision; finalizes once the child debate has concluded."""
     with get_db_connection() as conn:
         cursor = get_cursor(conn)
-        _verify_debate(cursor, debate_id, workspace_id)
+        _verify_debate(cursor, debate_id, current_user)
         cursor.execute(
             "SELECT status, decision_debate_id, decision, decision_rationale FROM transcript_action_items WHERE action_id = %s AND debate_id = %s",
             (action_id, debate_id),

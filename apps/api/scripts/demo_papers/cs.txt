@@ -1,0 +1,14 @@
+Retrieval-Augmented Generation for Clinical Question Answering
+
+Section 1. Introduction
+A RAG pipeline over a hospital formulary is benchmarked against clinician answers.
+
+Section 2. Methods
+2.1 Corpus. 1,240 formulary documents indexed with a 512-token chunker and a general-purpose embedding model, not a biomedical one.
+2.2 Evaluation. 200 questions scored by two clinicians; inter-rater agreement not reported. No comparison against a non-retrieval baseline.
+
+Section 3. Results
+Table 1 reports 81% exact-match accuracy. Figure 2 shows accuracy by question category; medication interactions score lowest at 62%.
+
+Section 4. Discussion
+The authors conclude the effect is robust and recommend adoption in practice.

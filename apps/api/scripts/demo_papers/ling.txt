@@ -1,0 +1,14 @@
+Automatic Detection of Hedging in Academic Writing
+
+Section 1. Introduction
+A transformer classifier is trained to detect hedging devices across four disciplines.
+
+Section 2. Methods
+2.1 Corpus. 2,000 sentences annotated by one rater; no second rater, so agreement is unmeasured.
+2.2 Splits. Random sentence-level split, so sentences from the same paper appear in both train and test.
+
+Section 3. Results
+Table 1 reports F1 of 0.89 overall. Table 2 breaks results down by discipline; philosophy is lowest at 0.71.
+
+Section 4. Discussion
+The authors conclude the effect is robust and recommend adoption in practice.

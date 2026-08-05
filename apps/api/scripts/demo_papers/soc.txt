@@ -1,0 +1,14 @@
+Remote Work and Reported Loneliness Among Early-Career Staff
+
+Section 1. Introduction
+Survey of 610 early-career employees relating remote-work days to a loneliness scale.
+
+Section 2. Methods
+2.1 Sampling. Convenience sample recruited through two professional networks; response rate 14%.
+2.2 Measures. Single-item loneliness question rather than a validated scale. Cross-sectional; causal language used throughout the discussion.
+
+Section 3. Results
+Table 1 reports r = 0.28 between remote days and loneliness. Table 3 stratifies by living arrangement.
+
+Section 4. Discussion
+The authors conclude the effect is robust and recommend adoption in practice.

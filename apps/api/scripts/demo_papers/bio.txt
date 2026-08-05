@@ -1,0 +1,14 @@
+CRISPR Off-Target Effects in Primary Human Hepatocytes
+
+Section 1. Introduction
+Genome-wide off-target profiling of a therapeutic guide RNA in primary hepatocytes from four donors.
+
+Section 2. Methods
+2.1 Cell Sourcing. Primary hepatocytes from four deceased donors; donor age, sex and disease history not reported.
+2.2 Off-Target Detection. GUIDE-seq performed at a single timepoint (72h). No orthogonal validation by targeted amplicon sequencing.
+
+Section 3. Results
+Table 1 lists 14 candidate off-target sites. Editing efficiency at the on-target locus was 68% (SD 11). One intergenic site showed 3.2% indels.
+
+Section 4. Discussion
+The authors conclude the effect is robust and recommend adoption in practice.

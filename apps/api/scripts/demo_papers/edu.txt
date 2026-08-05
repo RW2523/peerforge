@@ -1,0 +1,14 @@
+Peer Instruction in Large First-Year Physics Cohorts
+
+Section 1. Introduction
+Peer instruction is compared with lecture-only delivery across two cohorts of 400 students.
+
+Section 2. Methods
+2.1 Design. Non-randomised: cohort 2023 received peer instruction, cohort 2022 did not. Instructor differed between cohorts.
+2.2 Outcome. Final exam mark. No pre-test; prior attainment not controlled.
+
+Section 3. Results
+Table 1 shows a 6.1-point higher mean in the peer-instruction cohort (p < 0.001). Figure 1 plots the mark distribution.
+
+Section 4. Discussion
+The authors conclude the effect is robust and recommend adoption in practice.

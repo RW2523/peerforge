@@ -1,0 +1,14 @@
+Photocatalytic Degradation of Microplastics in Freshwater
+
+Section 1. Introduction
+A TiO2-based photocatalyst is evaluated for polyethylene microplastic degradation.
+
+Section 2. Methods
+2.1 Materials. Commercial TiO2 nanoparticles; batch-to-batch variation not characterised.
+2.2 Conditions. Deionised water under UV-C at 25 °C. Natural organic matter, present in any real freshwater, is absent from all runs.
+
+Section 3. Results
+Table 1 reports 34% mass loss over 72 hours. Figure 2 shows FTIR spectra before and after irradiation.
+
+Section 4. Discussion
+The authors conclude the effect is robust and recommend adoption in practice.

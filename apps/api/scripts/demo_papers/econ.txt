@@ -1,0 +1,14 @@
+Minimum Wage Increases and Small-Business Employment
+
+Section 1. Introduction
+A difference-in-differences study of county-level minimum wage rises and small-business headcount.
+
+Section 2. Methods
+2.1 Data. County-level QCEW panel, 2012-2022, restricted to firms under 50 employees.
+2.2 Identification. Difference-in-differences with contiguous-county pairs. Parallel-trends assumption asserted but not tested; no event-study plot.
+
+Section 3. Results
+Table 1 reports a point estimate of -0.4% employment (SE 0.9). Table 2 shows heterogeneity by sector; food service is the only significant cell.
+
+Section 4. Discussion
+The authors conclude the effect is robust and recommend adoption in practice.
