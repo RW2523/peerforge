@@ -154,7 +154,23 @@ async def websocket_debate_room(
             # the receive loop is never blocked by long-running commands (e.g. LLM turns).
             # handle_command catches all exceptions internally and sends error responses.
             while True:
-                data = await websocket.receive_json()
+                # receive_json raises on anything that is not JSON, and that
+                # exception used to escape the loop: the server deregistered the
+                # socket while the client still believed it was connected, so
+                # one malformed frame turned the room into a zombie that
+                # accepted input forever and delivered nothing. A bad frame is
+                # the sender's mistake, not a reason to end the session.
+                try:
+                    data = await websocket.receive_json()
+                except WebSocketDisconnect:
+                    raise
+                except Exception:
+                    await ws_service.manager.send_to_client(websocket, {
+                        "type": "error",
+                        "error": "Message could not be read as JSON. Send a JSON "
+                                 "object with a 'command' field.",
+                    })
+                    continue
                 asyncio.create_task(ws_service.handle_command(websocket, data))
         
         except WebSocketDisconnect:

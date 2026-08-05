@@ -24,7 +24,10 @@ def _decode_debate_cursor(cursor: str) -> tuple:
         created_at, debate_id = raw.split("|", 1)
         return datetime.fromisoformat(created_at), debate_id
     except Exception as exc:
-        raise ValueError(f"Malformed pagination cursor: {cursor!r}") from exc
+        # The cursor itself is deliberately not echoed: it came from the caller
+        # and reflecting it back into an error page is a needless injection
+        # surface, on top of being no help to anyone.
+        raise ValueError("Malformed pagination cursor") from exc
 
 
 class DebateService:

@@ -43,6 +43,8 @@ function RoomPageContent() {
   const searchParams = useSearchParams();
   const { apiKey: openrouterKey } = useOpenRouterKey();
   const [debateId, setDebateId] = useState<string | null>(null);
+  // Why the room is empty, when it is empty for a reason.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [debateTitle, setDebateTitle] = useState<string>('');
   const [debateState, setDebateState] = useState<string>('pending');
   const [isYoloMode, setIsYoloMode] = useState(false);
@@ -106,6 +108,12 @@ function RoomPageContent() {
         })
         .catch(err => {
           console.error('Failed to auto-load debate:', err);
+          const message = String(err?.message ?? '');
+          setLoadError(
+            /404|not found/i.test(message)
+              ? 'That session no longer exists. It may have been deleted, or the link may be wrong.'
+              : `Could not open that session: ${message || 'unknown error'}`
+          );
         });
     }
   }, [searchParams, debateId]);
@@ -343,7 +351,14 @@ function RoomPageContent() {
         {!debateId ? (
           <div className={styles.emptyState}>
             <h2>Review Room</h2>
-            <p>Load an existing review session or create a new one to get started.</p>
+            {/* When a link named a session we could not open, say so. This
+                showed the generic invitation to pick one, which reads as the
+                room having forgotten rather than the session being gone. */}
+            {loadError ? (
+              <p role="alert" className={styles.loadError}>{loadError}</p>
+            ) : (
+              <p>Load an existing review session or create a new one to get started.</p>
+            )}
             <div className={styles.selectorWrapper}>
               <DebateSelector onDebateLoaded={handleDebateLoaded} />
             </div>

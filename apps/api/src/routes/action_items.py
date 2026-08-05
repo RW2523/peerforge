@@ -11,7 +11,7 @@ Flow:
 import json
 import re
 import uuid
-from typing import List, Optional
+from typing import Literal, List, Optional
 
 from fastapi import APIRouter, HTTPException, Header, Depends
 from pydantic import BaseModel
@@ -48,11 +48,21 @@ class ActionItem(BaseModel):
     seq_order: int = 0
 
 
+# Mirrors the CHECK constraints on transcript_action_items. Bare Optional[str]
+# meant any other value reached Postgres and came back as a 500 — including the
+# obvious one, "done", which the constraint did not allow at all until
+# migration 013 added a terminal state.
+ACTION_STATUSES = ("extracted", "debating", "decided", "done", "dismissed")
+ACTION_PRIORITIES = ("low", "medium", "high")
+
+
 class ActionItemUpdate(BaseModel):
     description: Optional[str] = None
     owner: Optional[str] = None
-    priority: Optional[str] = None
-    status: Optional[str] = None
+    priority: Optional[Literal["low", "medium", "high"]] = None
+    status: Optional[
+        Literal["extracted", "debating", "decided", "done", "dismissed"]
+    ] = None
 
 
 class DecisionResponse(BaseModel):

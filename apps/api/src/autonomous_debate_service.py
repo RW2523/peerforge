@@ -33,7 +33,32 @@ class AutonomousDebateService:
         auto_turn_delay: int = 10
     ) -> Dict[str, Any]:
         """Start autonomous debate execution"""
-        
+
+        # Already driving it here? The lease is deliberately re-entrant for this
+        # instance so that resume is not blocked by its own claim, which meant a
+        # second start slipped past it, spawned a second loop, and overwrote the
+        # handle to the first. The orphan kept taking turns and kept billing,
+        # invisibly, and every extra start multiplied it again.
+        existing = self.running_debates.get(debate_id)
+        if existing is not None and not existing.done():
+            logger.info(f"Already driving {debate_id}; not starting a second loop")
+            return {"status": "running", "debate_id": debate_id, "already_running": True}
+
+        # A session that never started has no turn order and no opening state,
+        # so the loop spins producing nothing while reporting success.
+        with get_db_connection() as conn:
+            cursor = get_cursor(conn)
+            cursor.execute("SELECT state FROM debates WHERE debate_id = %s", (debate_id,))
+            row = cursor.fetchone()
+            cursor.close()
+        if not row:
+            raise ValueError(f"Debate {debate_id} not found")
+        if (row["state"] or "").lower() not in ("running", "paused"):
+            raise ValueError(
+                f"This session is {row['state']}. Start it before enabling "
+                "autonomous mode."
+            )
+
         # Update debate status
         with get_db_connection() as conn:
             cursor = get_cursor(conn)
@@ -173,7 +198,12 @@ class AutonomousDebateService:
         finally:
             from .services.debate_lease import lease
             lease.release(debate_id)
-            if debate_id in self.running_debates:
+            # Only clear the handle if it is still OURS. Deleting unconditionally
+            # let a finishing loop erase the registration of the loop that had
+            # replaced it, so the survivor became invisible: it kept taking
+            # turns while autonomous-status reported is_running false.
+            current = self.running_debates.get(debate_id)
+            if current is asyncio.current_task():
                 del self.running_debates[debate_id]
     
     def _get_debate_status(self, debate_id: str) -> Optional[str]:

@@ -261,3 +261,110 @@ def test_prior_claims_survive_a_speaker_name_with_a_full_stop():
     assert len(raised) == 1
     assert 'inter-rater reliability' in raised[0], raised
     assert raised[0] not in ('Prof.', 'Dr.')
+
+
+# ── Autonomous mode ─────────────────────────────────────────────────────────
+
+def test_autonomous_refuses_a_session_that_never_started(server_openrouter_key):
+    """
+    A session with no turn order has nothing to drive, but this returned 200
+    "running" and the loop span producing nothing while reporting success.
+
+    Takes server_openrouter_key so the key check does not answer first — the
+    state check is what this test is about.
+    """
+    debate_id = _debate('never started')
+    client.post(f'/debates/{debate_id}/participants', json={'participants': [
+        {'name': 'Dr A', 'role_description': 'methodology professor',
+         'model_id': 'openai/gpt-4o-mini', 'system_prompt': 'x'},
+    ]})
+    r = client.post(f'/api/debates/{debate_id}/start-autonomous',
+                    json={'auto_turn_delay_seconds': 15})
+    assert r.status_code == 400, f'-> {r.status_code} {r.text[:200]}'
+    assert 'Start it before' in r.json()['detail']
+
+
+# ── Input that used to 500 ──────────────────────────────────────────────────
+
+def test_a_malformed_cursor_is_a_client_error_and_is_not_echoed():
+    """
+    This was a 500 whose body carried the internal error text and the caller's
+    own cursor reflected back at them.
+    """
+    r = client.get(f'/debates?workspace_id={WS}&cursor=not-a-real-cursor')
+    assert r.status_code == 400, f'-> {r.status_code} {r.text[:200]}'
+    assert 'not-a-real-cursor' not in r.text, 'the cursor was echoed back'
+
+
+@pytest.mark.parametrize('field,value', [
+    ('status', 'done'),
+    ('status', 'dismissed'),
+    ('priority', 'high'),
+])
+def test_action_items_accept_the_values_the_database_allows(field, value):
+    """'done' had no representation at all, so an item could never be finished."""
+    from src.routes.action_items import ActionItemUpdate
+    assert ActionItemUpdate(**{field: value})
+
+
+@pytest.mark.parametrize('field,value', [
+    ('status', 'finished'),
+    ('priority', 'urgent'),
+])
+def test_action_items_reject_values_the_database_would_refuse(field, value):
+    """
+    Bare Optional[str] let anything through to Postgres, and the constraint
+    violation came back as a 500.
+    """
+    import pydantic
+    from src.routes.action_items import ActionItemUpdate
+    with pytest.raises(pydantic.ValidationError):
+        ActionItemUpdate(**{field: value})
+
+
+# ── Transcript ordering ─────────────────────────────────────────────────────
+
+def test_the_transcript_reads_oldest_first():
+    """
+    The query ordered DESC while the docstring promised sequence order, and the
+    UI rendered it as delivered — so the Full Transcript read backwards.
+    """
+    import json as _json
+    debate_id = _debate('ordering')
+    with get_db_connection() as conn:
+        cur = get_cursor(conn)
+        for n in (1, 2, 3):
+            cur.execute(
+                """INSERT INTO events (event_id, debate_id, event_type, sequence_number,
+                                       created_at, content, sender_type)
+                   VALUES (gen_random_uuid(), %s, 'agent_message', %s, NOW(), %s, 'agent')""",
+                (debate_id, n, _json.dumps({'agent_name': f'R{n}', 'text': f'turn {n}'})),
+            )
+        conn.commit()
+
+    rows = client.get(f'/debates/{debate_id}/events').json()
+    seqs = [r['sequence_number'] for r in rows if r.get('type') == 'agent_message']
+    assert seqs == sorted(seqs), f'transcript is not chronological: {seqs}'
+
+
+# ── Non-object WebSocket frames ─────────────────────────────────────────────
+
+def test_a_non_object_command_frame_is_answered_not_swallowed():
+    """
+    A JSON array parses fine and then explodes on .get() above the try block,
+    so the command vanished with no ack and no error.
+    """
+    import asyncio
+    from src.websocket_service import ws_service
+
+    sent = []
+
+    class FakeSocket:
+        async def send_json(self, msg):
+            sent.append(msg)
+
+    asyncio.get_event_loop_policy().new_event_loop().run_until_complete(
+        ws_service.handle_command(FakeSocket(), ['not', 'an', 'object'])
+    )
+    assert sent, 'a non-object frame produced no response at all'
+    assert sent[0]['type'] == 'error'

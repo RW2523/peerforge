@@ -41,15 +41,29 @@ export default function HistoryPage() {
     
     try {
       // Use proper API endpoint
-      const response = await api.listDebates(workspaceId, 50);
-      setDebates(response.items || []);
+      // Walk the cursor rather than taking the newest 50 and calling the tab
+      // "All". With more sessions than that, the rest were simply unreachable
+      // from this page — 119 of 169 in one measurement — and nothing said so.
+      const collected: any[] = [];
+      let cursor: string | null | undefined = undefined;
+      // Bounded so a server that never stops returning a cursor cannot spin
+      // the browser forever.
+      for (let page = 0; page < 40; page++) {
+        const response: any = await api.listDebates(workspaceId, 100, cursor ?? undefined);
+        collected.push(...(response.items || []));
+        cursor = response.next_cursor;
+        if (!cursor) break;
+      }
+      setDebates(collected);
     } catch (err) {
       console.error('Failed to load debates:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to load debates';
-      
-      // Provide helpful error message if backend is not running
+
       if (errorMessage.includes('Failed to fetch') || errorMessage.includes('fetch')) {
-        setError('Unable to connect to backend server. Please ensure the API server is running on http://localhost:8000');
+        // Name the address this build actually calls. Hardcoding localhost:8000
+        // sent people to check a server that was never involved.
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        setError(`Could not reach the API at ${apiUrl}. Check that it is running and reachable from this browser.`);
       } else {
         setError(errorMessage);
       }

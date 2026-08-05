@@ -20,11 +20,18 @@ PLACEHOLDER_JWT_SECRET = "your-jwt-secret-here"
 
 
 def _check(name: str, ok: bool, blocking: bool, detail: str, fix: str = "") -> Dict[str, Any]:
+    """
+    One readiness line.
+
+    `detail` describes the FAILURE, and it was printed regardless of `ok` — so a
+    passing check read as a problem beside "ok": true, and an operator scanning
+    the page could not tell which lines needed action. A passing check says so.
+    """
     return {
         "name": name,
         "ok": ok,
         "severity": ("blocking" if blocking else "degraded") if not ok else "ok",
-        "detail": detail,
+        "detail": detail if not ok else "OK",
         "fix": fix if not ok else "",
     }
 
@@ -101,7 +108,16 @@ async def readiness() -> Dict[str, Any]:
     checks.append(_check(
         "embeddings", embed_ok, blocking=False,
         detail=embed_detail,
-        fix="Give the worker an OPENROUTER_API_KEY so uploaded material can be embedded.",
+        fix=(
+            # Told the operator to set a key that was already set. When one is
+            # configured, an unembedded chunk means the job did not run or
+            # failed, and the worker log is where the answer is.
+            "Check the Celery worker is running with -Q celery,materials and read "
+            "celery.log: material was accepted but its embedding job did not "
+            "complete."
+            if (settings.openrouter_api_key or "").strip()
+            else "Set OPENROUTER_API_KEY so uploaded material can be embedded."
+        ),
     ))
 
     blocking = [c for c in checks if c["severity"] == "blocking"]

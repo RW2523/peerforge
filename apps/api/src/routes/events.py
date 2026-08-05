@@ -65,14 +65,20 @@ async def get_debate_events(
             query += " AND sequence_number > %s"
             params.append(since)
         
-        query += " ORDER BY sequence_number DESC"  # Get newest first for polling
-        
+        # DESC + LIMIT selects the most RECENT n, which is what a limit should
+        # mean. The rows are reversed before returning so the caller receives
+        # them in sequence order, as this function's docstring has always
+        # promised — the frontend rendered them as delivered, so the Full
+        # Transcript read newest-first, which is backwards for a conversation.
+        query += " ORDER BY sequence_number DESC"
+
         if limit:
             query += f" LIMIT {limit}"
         
         cursor.execute(query, tuple(params))
-        events = cursor.fetchall()
-        
+        # Back into chronological order for the reader.
+        events = list(reversed(cursor.fetchall()))
+
         # Transform events to match WSEventEnvelope format
         return [{
             'event_id': event['event_id'],

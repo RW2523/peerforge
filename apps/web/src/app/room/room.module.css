@@ -592,3 +592,9 @@
   color: var(--text-2, #64748b);
   font-size: 0.9rem;
 }
+
+/* Shown when a link pointed at a session that could not be opened. */
+.loadError {
+  color: var(--danger, #b91c1c);
+  font-weight: 500;
+}

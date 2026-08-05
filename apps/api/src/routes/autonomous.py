@@ -37,12 +37,16 @@ async def start_autonomous(
             detail="OpenRouter API key required. Please add your API key in Settings."
         )
     
-    result = await autonomous_service.start_autonomous_debate(
-        debate_id=debate_id,
-        openrouter_api_key=api_key,
-        auto_turn_delay=request.auto_turn_delay_seconds
-    )
-    
+    try:
+        result = await autonomous_service.start_autonomous_debate(
+            debate_id=debate_id,
+            openrouter_api_key=api_key,
+            auto_turn_delay=request.auto_turn_delay_seconds
+        )
+    except ValueError as exc:
+        # "not started yet" and "no such session" are the caller's situation.
+        raise HTTPException(status_code=400, detail=str(exc))
+
     return result
 
 

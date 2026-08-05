@@ -254,27 +254,33 @@ async def upload_materials(
     job_ids = []
     stale_storage_keys: List[str] = []
 
+    # Read and validate EVERY file before anything is written or deleted.
+    #
+    # A new primary file replaces the existing main research file, and that
+    # delete used to run first — so uploading a PDF the extractor cannot read
+    # destroyed the manuscript already stored, returned 400, and left the
+    # researcher with nothing and no undo. Validation is cheap; their thesis is
+    # not.
+    staged = []
+    for upload_file in files:
+        file_contents = await upload_file.read()
+        is_valid, mime_type, error_msg = TextExtractor.validate_file(
+            file_contents, upload_file.filename, allow_audio=(category == 'transcript')
+        )
+        if not is_valid:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File '{upload_file.filename}' validation failed: {error_msg}. "
+                       f"Nothing was changed.",
+            )
+        staged.append((upload_file, file_contents, len(file_contents), mime_type))
+
     try:
-        # A new primary file fully replaces any existing main research file(s).
+        # Safe now: every file has been read and accepted.
         if is_primary:
             stale_storage_keys = _delete_existing_main_research_files(cursor, debate_id)
 
-        for upload_file in files:
-            # Read file contents
-            file_contents = await upload_file.read()
-            file_size = len(file_contents)
-
-            # Validate file — audio is permitted only for transcripts
-            is_valid, mime_type, error_msg = TextExtractor.validate_file(
-                file_contents, upload_file.filename, allow_audio=(category == 'transcript')
-            )
-
-            if not is_valid:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"File '{upload_file.filename}' validation failed: {error_msg}"
-                )
-
+        for upload_file, file_contents, file_size, mime_type in staged:
             # Audio files become 'audio' materials (transcribed before chunking)
             is_audio = mime_type in TextExtractor.AUDIO_TYPES
             material_kind = 'audio' if is_audio else 'file'

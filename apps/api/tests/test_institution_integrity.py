@@ -70,6 +70,32 @@ def _invite(org_id, actor, actor_email, email, role, workspace_id=None):
                        headers=_h(actor, actor_email))
 
 
+
+def _seed_invitation(org_id, email, role, workspace_id=None):
+    """
+    Write an invitation straight to the table.
+
+    The endpoint now refuses to invite someone already on the roster, which
+    closes this attack one step earlier. The redemption guard is still the
+    thing under test here — an invitation can predate the membership it would
+    overwrite — so reach it directly rather than through the endpoint.
+    """
+    import secrets
+    from datetime import datetime, timedelta, timezone
+    token = secrets.token_urlsafe(32)
+    with get_db_connection() as conn:
+        cur = get_cursor(conn)
+        cur.execute(
+            """INSERT INTO invitations (invite_id, org_id, workspace_id, email,
+                                        invited_role, token, expires_at, created_at)
+               VALUES (gen_random_uuid(), %s, %s, %s, %s, %s, %s, NOW())""",
+            (org_id, workspace_id, email, role, token,
+             datetime.now(timezone.utc) + timedelta(days=7)),
+        )
+        conn.commit()
+    return token
+
+
 # ── The last administrator ──────────────────────────────────────────────────
 
 def test_redeeming_an_invitation_cannot_strip_the_last_admin(auth_on):
@@ -83,9 +109,7 @@ def test_redeeming_an_invitation_cannot_strip_the_last_admin(auth_on):
     admin, admin_email = _uid(), f'admin-{_uid()[:8]}@integrity.edu'
     org_id, workspace_id = _org_with_course(admin, admin_email)
 
-    r = _invite(org_id, admin, admin_email, admin_email, 'student', workspace_id)
-    assert r.status_code in (200, 201), r.text
-    token = r.json()['token']
+    token = _seed_invitation(org_id, admin_email, 'student', workspace_id)
 
     r = client.post(f'/invitations/{token}/accept', headers=_h(admin, admin_email))
     assert r.status_code == 409, (
@@ -107,8 +131,8 @@ def test_a_second_admin_makes_the_demotion_allowed(auth_on):
     r = _invite(org_id, admin, admin_email, other_email, 'org_admin', workspace_id)
     client.post(f'/invitations/{r.json()["token"]}/accept', headers=_h(other, other_email))
 
-    r = _invite(org_id, admin, admin_email, admin_email, 'student', workspace_id)
-    r = client.post(f'/invitations/{r.json()["token"]}/accept', headers=_h(admin, admin_email))
+    token = _seed_invitation(org_id, admin_email, 'student', workspace_id)
+    r = client.post(f'/invitations/{token}/accept', headers=_h(admin, admin_email))
     assert r.status_code == 200, r.text
 
 

@@ -104,12 +104,16 @@ async def list_debates(
         )
     except HTTPException:
         raise
+    except ValueError as e:
+        # A bad cursor is the caller's mistake. This was a 500 that echoed the
+        # internal error text, so a mistyped link read as a server crash.
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"Error listing debates: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list debates: {str(e)}"
+            detail="Failed to list debates"
         )
 
 

@@ -195,6 +195,16 @@ class WebSocketService:
     
     async def handle_command(self, websocket: WebSocket, message: Dict[str, Any]):
         """Process command messages from client."""
+        # A JSON array or bare string parses fine and then explodes on .get(),
+        # above the try block below — so the command vanished with no ack and
+        # no error, and the client waited forever.
+        if not isinstance(message, dict):
+            await self.manager.send_to_client(websocket, {
+                "type": "error",
+                "error": "Expected a JSON object with a 'command' field.",
+            })
+            return
+
         command = message.get('command')
         request_id = message.get('request_id', 'unknown')
         
@@ -262,7 +272,7 @@ class WebSocketService:
             with get_db_connection() as conn:
                 cursor = get_cursor(conn)
                 cursor.execute("""
-                    SELECT event_id, event_type, sequence_number, created_at, content, sender_id
+                    SELECT event_id, event_type, sequence_number, created_at, content, sender_id, sender_type
                     FROM events
                     WHERE debate_id = %s AND sequence_number > %s
                     ORDER BY sequence_number ASC
@@ -283,9 +293,19 @@ class WebSocketService:
                         payload,
                         sequence_number=event['sequence_number'],
                         event_id=event['event_id'],
-                        sender_type='system' if not event.get('sender_id') else 'user',
+                        # Read from the row rather than inferred. Guessing from
+                        # sender_id relabelled every AI reviewer turn as human
+                        # on reload, because reviewer messages carry no
+                        # sender_id — provenance flipped on a page refresh.
+                        sender_type=event.get('sender_type')
+                            or ('agent' if event['event_type'] == 'agent_message' else 'system'),
                         sender_id=event.get('sender_id')
                     )
+                    # The envelope stamps occurred_at with "now", so replaying
+                    # history rewrote every past event to the moment of joining
+                    # and the session's timeline collapsed into one instant.
+                    if event.get('created_at'):
+                        envelope['occurred_at'] = event['created_at'].isoformat()
                     await self.manager.send_to_client(websocket, envelope)
         except Exception as e:
             logger.error(f"Failed to send historical events: {e}")

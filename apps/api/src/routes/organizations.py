@@ -168,6 +168,10 @@ def _assert_seat_available(cursor, org_id: str, count_pending: bool = True) -> N
     if not row:
         return  # No seat record yet — treat as unmetered (trial).
     purchased = row["seats_purchased"]
+    # 0 is the trial default every organization is created with, so it means
+    # "unmetered" here rather than "no seats". The escape hatch it creates is
+    # closed where it belongs — in update_seats, which must not let an admin
+    # downgrade TO 0 to shed a cap they have already committed against.
     if not purchased:
         return
 
@@ -504,6 +508,24 @@ async def create_invitation(
 
     with get_db_connection() as conn:
         cursor = get_cursor(conn)
+
+        # The bulk endpoint skips addresses already on the roster; this one did
+        # not, so inviting an existing member created a second row for the same
+        # person and they appeared twice in the cohort. Say so instead.
+        cursor.execute(
+            """SELECT org_role FROM organization_members
+               WHERE org_id = %s AND LOWER(email) = LOWER(%s)""",
+            (org_id, str(request.email)),
+        )
+        already = cursor.fetchone()
+        if already:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"{request.email} is already a member of this organization "
+                       f"as {already['org_role']}. Change their role instead of "
+                       "inviting them again.",
+            )
+
         # Only billable roles consume a seat. Checking before looking at the
         # invited role meant an organization at capacity could not add a
         # professor, TA or administrator - none of whom occupy a seat at all.
@@ -1087,7 +1109,8 @@ async def get_seats(
         "seats_committed": used + pending,
         "billable_roles": list(BILLABLE_ROLES),
         "members_by_role": breakdown,
-        "seats_available": max(0, purchased - used - pending) if purchased else None,
+        "seats_available": (max(0, purchased - used - pending)
+                            if purchased is not None else None),
         "period_end": row["period_end"].isoformat() if row and row["period_end"] else None,
     }
 
@@ -1109,6 +1132,16 @@ async def update_seats(
         # Outstanding invitations are seats already promised. Comparing against
         # `used` alone let an admin set a cap below what was committed and be
         # told everything was fine, with the failure landing later on a student.
+        # `request.seats_purchased and …` short-circuited on 0, so setting the
+        # allocation to zero skipped this guard entirely and silently returned
+        # the organization to unmetered trial with members already on it.
+        if request.seats_purchased == 0 and committed:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"{committed} seats are already committed. Removing the "
+                       "allocation entirely would put this organization back on "
+                       "an unmetered trial. Remove the members first.",
+            )
         if request.seats_purchased and request.seats_purchased < committed:
             detail = f"{used} seats are in use"
             if pending:

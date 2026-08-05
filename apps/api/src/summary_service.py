@@ -214,7 +214,13 @@ class SummaryService:
                 text = content.get('text', content.get('message', ''))
                 is_chair = content.get('is_host_conclusion', False)
                 prefix = "[Review Chair Final]" if is_chair else f"[{agent}]"
-                lines.append(f"{prefix}: {text[:400]}{'...' if len(text) > 400 else ''}")
+                # Reviews run 700-1200 characters, so a 400-character cut threw
+                # away most of every one of them — including the recommendation
+                # each reviewer had been instructed to close with. The summary
+                # was then written from openings alone and asserted conclusions
+                # nobody had reached. Keep the whole review; a handful of turns
+                # is nowhere near any model's context limit.
+                lines.append(f"{prefix}: {text}")
 
         return "\n".join(lines)
     
