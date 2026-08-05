@@ -106,8 +106,51 @@ _DEFERENCE_BRANCHES = (
 )
 
 
+# Branch (d) — the STRUCTURAL catch, for concessions the word list has not
+# met yet.
+#
+# The list-based branches keep needing another entry: "while", then "you're
+# correct", then "I see your point", then "you're highlighting". Each new
+# model phrasing costs a round trip. The shape underneath does not change —
+# name the reviewer, restate what they said, then pivot to your own point —
+# so match the SHAPE: one to three names, then a pivot inside the opening.
+#
+# A rebuttal also names someone and may contain "but", so an opener that
+# disagrees BEFORE the pivot is excluded. Only markers aimed at the other
+# reviewer count; generic words about the paper ("lack", "absent", "fails")
+# are exactly what a deference opener concedes about, and treating those as
+# rebuttal silently lost seven true positives when it was tried.
+_OPENING_WINDOW = 150
+_PIVOT = re.compile(
+    r'\b(?:but|however|yet|nevertheless|nonetheless|still)\b', re.IGNORECASE
+)
+_REBUTTAL = re.compile(
+    r"\b(?:wrong|incorrect|mistaken|disagree\w*|misread\w*|misstat\w*"
+    r"|not\s+credible|implausible|overstat\w*|is\s+not\s+supported)\b",
+    re.IGNORECASE,
+)
+_NAME_PREFIX = re.compile(
+    rf'\s*(?:{_REVIEWER_NAME}[,\s]*(?:and|&|,)?\s*){{1,3}}'
+)
+
+
+def _pivots_after_naming(text: str):
+    """Names a reviewer, concedes, then pivots — without rebutting first."""
+    head = (text or "")[:_OPENING_WINDOW]
+    named = _NAME_PREFIX.match(head)
+    if not named:
+        return None
+    rest = head[named.end():]
+    pivot = _PIVOT.search(rest)
+    if not pivot:
+        return None
+    if _REBUTTAL.search(rest[:pivot.start()]):
+        return None
+    return named
+
+
 class _DeferenceOpener:
-    """Any of the three branches. Exposes .search() so callers read normally."""
+    """Any of the four branches. Exposes .search() so callers read normally."""
 
     @staticmethod
     def search(text: str):
@@ -115,7 +158,7 @@ class _DeferenceOpener:
             m = pattern.search(text or "")
             if m:
                 return m
-        return None
+        return _pivots_after_naming(text)
 
 
 _DEFERENCE_OPENER = _DeferenceOpener()

@@ -134,3 +134,73 @@ class TestRetryIsRevalidated:
             "a worse second attempt must not replace the first"
         )
         assert src.count("one more attempt") == 1, "exactly one extra attempt"
+
+
+class TestStructuralBranch:
+    """
+    The word list kept needing another entry.
+
+    "while" -> "you're correct" -> "I see your point" -> "you're highlighting",
+    each one found by running a session and each costing a round trip. The
+    shape underneath never changed: name the reviewer, restate what they said,
+    pivot to your own point. Branch (d) matches the shape instead of the
+    vocabulary.
+
+    A rebuttal also names someone and may contain "but", so an opener that
+    disagrees BEFORE the pivot is excluded — and only markers aimed at the
+    other reviewer count. An earlier attempt treated generic words about the
+    paper ("lack", "absent", "fails") as rebuttal and silently lost seven
+    true positives, because conceding about the paper is exactly what a
+    deference opener does.
+    """
+
+    NOVEL_CONCESSIONS = [
+        # The phrasing that slipped the word list in a live run.
+        '@"Dr. Sarah", you\'re highlighting the significant reduction in anxiety, but I\'m concerned about self-report bias.',
+        '@Dr. Lee, you note the effect size is large, but the design cannot support a causal reading of it.',
+        '@Dr. Ada, your framing of the power question is helpful, but it sidesteps the allocation problem.',
+        '@Dr. Ada, your emphasis on blinding is well taken, however the sample size is the deeper issue.',
+        '@Dr. Lee and @Dr. Ada, your points about measurement land, yet neither addresses attrition.',
+    ]
+
+    REBUTTALS = [
+        '@Dr. Ada, you are wrong about the effect size, but I will grant the write-up is clear.',
+        '@Dr. Lee, that reading misreads the table, but the deeper issue is the missing control.',
+        '@Dr. Ada, I disagree with your reading of Table 1, but the sample size worries me more.',
+        '@Dr. Ada, your claim is not credible given n = 40, but the framing is at least honest.',
+    ]
+
+    # Observed live: addressing the panel while ASSERTING, not conceding.
+    CHALLENGES = [
+        "You're both fixating too much on the surface outcomes without questioning the foundations.",
+        "You're both missing a critical aspect of this study: the originality of the contribution.",
+    ]
+
+    @pytest.mark.parametrize("text", NOVEL_CONCESSIONS)
+    def test_catches_concessions_the_word_list_never_saw(self, text):
+        assert _DEFERENCE_OPENER.search(text) is not None, text
+
+    @pytest.mark.parametrize("text", REBUTTALS)
+    def test_a_rebuttal_containing_but_is_not_deference(self, text):
+        assert _DEFERENCE_OPENER.search(text) is None, text
+
+    @pytest.mark.parametrize("text", CHALLENGES)
+    def test_challenging_the_panel_is_not_deference(self, text):
+        assert _DEFERENCE_OPENER.search(text) is None, text
+
+    def test_a_pivot_far_past_the_opening_does_not_count(self):
+        """Only the opening is judged; a "but" in the third sentence is
+        ordinary prose."""
+        text = ("@Dr. Ada, the allocation was performed by the first author who also "
+                "delivered the intervention, which is a concealment failure on its own terms. "
+                + ("Filler sentence about the design. " * 6) + "but that is secondary.")
+        assert _DEFERENCE_OPENER.search(text) is None
+
+    def test_no_name_no_structural_match(self):
+        assert _DEFERENCE_OPENER.search("The design cannot support causal claims, but the write-up is clear.") is None
+
+    def test_the_word_list_branches_still_work(self):
+        """Branch (d) supplements the lists; it must not have replaced them."""
+        assert _DEFERENCE_OPENER.search('@"Dr. Ada," while I acknowledge the results, the design is weak.') is not None
+        assert _DEFERENCE_OPENER.search('The concerns raised by Prof. Adeyemi are indeed valid, as noted.') is not None
+        assert _DEFERENCE_OPENER.search('You both raise valid concerns, but the sample size matters more.') is not None
