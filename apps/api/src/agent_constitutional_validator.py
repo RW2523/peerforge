@@ -220,19 +220,31 @@ class ConstitutionalValidator:
         if active_participants:
             engagement_violation = self._check_engagement(
                 message,
-                active_participants
+                active_participants,
+                anyone_has_spoken=bool(recent_other_messages)
             )
             if engagement_violation:
                 violations.append(engagement_violation)
         
-        # Determine severity.
-        # NOTE: only "critical" affects `valid`, so a "high" violation is
-        # recorded and then ignored — no regeneration, and the caller logs
-        # "validation passed". no_repetition is critical for that reason:
-        # repetition is exactly what the constrained-regeneration path in
-        # turn_orchestrator was written to handle. The other "high" rules
-        # (persona authenticity, role consistency, engagement) are still
-        # advisory-only by this same mechanism.
+        # Determine severity. Only "critical" affects `valid`, so anything
+        # below it is recorded and then ignored — no regeneration, and the
+        # caller logs a pass.
+        #
+        # Which severity a rule gets was decided by measuring it against 111
+        # real turns rather than by how bad it sounds:
+        #
+        #   no_self_contradiction    0%   -> critical
+        #   role_consistency         0%   -> critical
+        #   persona_authenticity     1%   -> critical
+        #   must_address_others     44%   -> stays advisory
+        #
+        # must_address_others is not escalated on purpose. At 44% it would
+        # force a regeneration on nearly half of all turns, and inspection of
+        # those turns shows they are fine: they open with the reviewer's own
+        # substantive point, which is exactly what the round-1 instruction in
+        # agent_response_generator tells them to do. Escalating it would make
+        # two parts of the system fight each other. It stays a signal, not a
+        # verdict.
         critical_violations = [v for v in violations if v["severity"] == "critical"]
         
         result = {
@@ -348,7 +360,7 @@ class ConstitutionalValidator:
             if not has_explanation:
                 return {
                     "rule": "no_self_contradiction",
-                    "severity": "high",
+                    "severity": "critical",
                     "details": "Agent contradicts themselves without explanation"
                 }
         
@@ -376,7 +388,7 @@ class ConstitutionalValidator:
             if not has_disagreement and reasoning.get("should_disagree_with"):
                 return {
                     "rule": "role_consistency",
-                    "severity": "medium",
+                    "severity": "critical",
                     "details": f"{agent_role} should disagree but message is too agreeable"
                 }
         
@@ -388,7 +400,7 @@ class ConstitutionalValidator:
             if not has_future_focus:
                 return {
                     "rule": "role_consistency",
-                    "severity": "medium",
+                    "severity": "critical",
                     "details": "Visionary should focus on future implications"
                 }
         
@@ -397,27 +409,61 @@ class ConstitutionalValidator:
     def _check_engagement(
         self,
         message: str,
-        active_participants: List[str]
+        active_participants: List[str],
+        anyone_has_spoken: bool = True
     ) -> Optional[Dict[str, Any]]:
-        """Check if agent engages with others"""
-        
-        # Check for @mentions or references to others
-        has_mention = any(f"@{name}" in message or f'@"{name}"' in message for name in active_participants)
-        
-        # Check for indirect references
-        reference_phrases = [
+        """Check whether the agent engages with what others have said.
+
+        Measured against 111 real turns, the original fired on 79% of them —
+        a rule that objects to four turns in five is describing its own
+        thresholds, not the output. Two causes:
+
+          - it demanded an "@name" or one of eight hard-coded phrases, so
+            "Prof. Adeyemi's concern about sampling overlooks..." — engagement
+            by name, in the ordinary register of a review — counted as none;
+          - it fired on the FIRST speaker of a debate, who has nobody to
+            engage with. 24 of the 88 hits were that.
+
+        Naming another reviewer at all now counts, which is what the rule was
+        always trying to detect.
+        """
+        if not anyone_has_spoken or not active_participants:
+            return None
+
+        lowered = message.lower()
+
+        # An @mention, or the participant's name used in the ordinary way.
+        def _names_of(participant: str):
+            parts = [p for p in participant.replace('"', "").split() if len(p) > 2]
+            return {participant.lower(), *(p.lower() for p in parts)}
+
+        has_mention = False
+        for name in active_participants:
+            if f"@{name}" in message or f'@"{name}"' in message:
+                has_mention = True
+                break
+            # Surname alone is how reviewers actually refer to each other.
+            if any(len(n) > 3 and n in lowered for n in _names_of(name)):
+                has_mention = True
+                break
+
+        reference_phrases = (
             "you said", "you mentioned", "your point", "as you noted",
-            "building on", "responding to", "agree with", "disagree with"
-        ]
-        has_reference = any(phrase in message.lower() for phrase in reference_phrases)
-        
+            "building on", "responding to", "agree with", "disagree with",
+            "as noted by", "raised by", "pointed out", "argues that",
+            "the concern about", "the point about", "others have",
+            "my colleague", "the panel", "earlier reviewer", "previous reviewer",
+            "contrary to", "in response to", "counter to",
+        )
+        has_reference = any(phrase in lowered for phrase in reference_phrases)
+
         if not has_mention and not has_reference:
             return {
                 "rule": "must_address_others",
                 "severity": "medium",
                 "details": "Agent should engage with other participants"
             }
-        
+
         return None
     
     def _check_repetition(
@@ -633,9 +679,12 @@ class ConstitutionalValidator:
 
         parts = []
         for item in absent_locators[:3]:
-            present = ", ".join(item["present"]) or "none"
+            present = ", ".join(item["present"])
+            # Only name what the document explicitly labels. Listing an empty
+            # or noisy set would invite the retry to cite whatever it saw.
             parts.append(
-                f"{item['family']} {item['cited']} (document has: {present})"
+                f"{item['family']} {item['cited']}"
+                + (f" (it has: {present})" if present else "")
             )
         return {
             "rule": "no_contradicted_citation",
@@ -669,7 +718,7 @@ class ConstitutionalValidator:
         if found_generic_phrases:
             return {
                 "rule": "persona_authenticity",
-                "severity": "high",
+                "severity": "critical",
                 "details": f"Message uses generic phrases that any agent could say: {', '.join(found_generic_phrases)}. Must use unique character voice for {agent_name} ({agent_role})."
             }
         
@@ -678,7 +727,7 @@ class ConstitutionalValidator:
         if re.search(agreement_but_pattern, message_lower, re.IGNORECASE):
             return {
                 "rule": "persona_authenticity",
-                "severity": "high",
+                "severity": "critical",
                 "details": f"Message starts with agreement then adds 'but/however' - this is formulaic. {agent_name} should take a clear stance, not hedge."
             }
         

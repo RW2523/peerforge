@@ -47,6 +47,15 @@ def _with_doc(text):
     return patch.object(LI, "_chunk_text_for", lambda debate_id: (text, 1))
 
 
+BARE_NUMBERED = (
+    "1 Introduction\n"
+    "Exam anxiety affects undergraduates.\n\n"
+    "2 Methods\n2.1 Participant Selection\nForty undergraduates were recruited.\n\n"
+    "2.2 Measures\nSelf-report at baseline.\n\n"
+    "3 Results\nTable 2 reports the means.\n"
+)
+
+
 class TestIndex:
     def test_bare_numbered_headings_count_as_present(self):
         """The document writes "2.1 Participant Selection" without the word
@@ -54,6 +63,31 @@ class TestIndex:
         with _with_doc(STRUCTURED):
             index = LI.build_index("d")
         assert "2.1" in index["section"] and "2.2" in index["section"]
+
+    def test_top_level_headings_with_no_dot_count_as_present(self):
+        """THE BUG THIS DESIGN EXISTS TO PREVENT.
+
+        The first version recognised headings via a dotted pattern, so
+        "1 Introduction" and "2 Methods" were never indexed — while "2.1" WAS,
+        which made the family look populated and turned three of five truthful
+        citations into accusations of fabrication. Missing a real fabrication
+        costs a citation nobody checks; a false accusation replaces a
+        reviewer's correct sentence with a marker saying they invented it.
+        """
+        with _with_doc(BARE_NUMBERED):
+            for truthful in ("Section 1 introduces the problem.",
+                             "Section 2 describes the methods.",
+                             "Section 2.1 covers recruitment.",
+                             "Section 3 reports results.",
+                             "Table 2 has the means."):
+                assert LI.find_absent_locators("d", truthful) == [], (
+                    f"false accusation on a truthful citation: {truthful}"
+                )
+
+    def test_still_catches_fabrication_in_a_bare_numbered_document(self):
+        with _with_doc(BARE_NUMBERED):
+            assert LI.find_absent_locators("d", "Section 9 is about ethics.")
+            assert LI.find_absent_locators("d", "Table 7 lists the cohort.")
 
     def test_families_absent_from_the_document_stay_empty(self):
         with _with_doc(STRUCTURED):
@@ -194,10 +228,10 @@ class TestWiredIntoTheTurn:
 
 class TestChunkBoundariesDoNotCreateFalsePositives:
     """
-    The obvious way this feature goes wrong: a heading split across two chunks
-    so neither contains it whole, making a legitimate citation read as
-    fabricated. TextChunker is paragraph-aware with a 200-char overlap, which
-    should prevent it — verified here rather than assumed.
+    The obvious way this feature goes wrong: document text lost in chunking,
+    so a real citation reads as fabricated. Verified against the real chunker
+    rather than assumed — see test_chunking_coverage.py for the data-loss bug
+    this exposed.
     """
 
     def test_headings_survive_many_chunk_boundaries(self):
@@ -211,13 +245,24 @@ class TestChunkBoundariesDoNotCreateFalsePositives:
 
         chunks = TextChunker.chunk_text(doc, "mat-x", {})
         assert len(chunks) > 5, "test needs several boundaries to be meaningful"
-
         joined = "\n".join(c["chunk_text"] for c in chunks)
-        found = {m.lower() for m in LI._FAMILY_PATTERNS["section"].findall(joined)}
-        found |= {m.lower() for m in LI._BARE_HEADING.findall(joined)}
 
-        expected = {str(i) for i in range(1, 13)} | {f"{i}.1" for i in range(1, 13)}
-        assert expected <= found, f"headings lost at chunk boundaries: {sorted(expected - found)}"
+        with _with_doc(joined):
+            for i in range(1, 13):
+                for cite in (f"Section {i} says so.", f"Section {i}.1 says so."):
+                    assert LI.find_absent_locators("d", cite) == [], (
+                        f"chunking lost structure: {cite}"
+                    )
+            for cite in ("Table 1 reports the means.", "Table 2 reports the variances."):
+                assert LI.find_absent_locators("d", cite) == []
 
-        tables = {m.lower() for m in LI._FAMILY_PATTERNS["table"].findall(joined)}
-        assert tables == {"1", "2"}
+    def test_a_table_block_paragraph_does_not_lose_its_heading(self):
+        """The chunker dropped 198 chars of this shape, heading included."""
+        from src.utils.chunking import TextChunker
+
+        doc = "a" * 600 + ". " + "Section 7 Data Analysis " + "b" * 380 + "c" * 900
+        chunks = TextChunker.chunk_text(doc, "mat-x", {})
+        joined = "\n".join(c["chunk_text"] for c in chunks)
+
+        with _with_doc(joined):
+            assert LI.find_absent_locators("d", "Section 7 covers the analysis.") == []

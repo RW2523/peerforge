@@ -128,7 +128,13 @@ class TextChunker:
         chunks = []
         start = 0
         text_len = len(text)
-        
+
+        # An overlap approaching chunk_size advances the window by a character
+        # at a time — 3000 chars of punctuation became 2002 chunks. Half the
+        # chunk is the most that can overlap and still make progress; the
+        # 200/1000 default is unaffected.
+        overlap = max(0, min(overlap, chunk_size // 2))
+
         while start < text_len:
             end = min(start + chunk_size, text_len)
             
@@ -145,8 +151,23 @@ class TextChunker:
             if chunk_text:
                 chunks.append(chunk_text)
             
-            # Move start with overlap
-            start = max(start + chunk_size - overlap, end)
+            # Move start with overlap.
+            #
+            # This was max(start + chunk_size - overlap, end), which SKIPS the
+            # span between end and start+800 whenever a sentence break lands
+            # early — i.e. whenever a paragraph has a break past the halfway
+            # mark followed by a run with no sentence punctuation. That is the
+            # shape of a table block, an affiliation list or a caption
+            # cluster. Measured: 198 characters of a 1901-char paragraph
+            # present in the document and in no chunk at all, taking a section
+            # heading with them. The overlap was also never applied, since the
+            # max() almost always chose the larger left-hand term.
+            #
+            # Step back by the overlap, but never past the previous start, and
+            # never forward past end — so chunks always abut at worst and no
+            # input can fall between them.
+            next_start = end - overlap
+            start = next_start if next_start > start else end
         
         return chunks
     
