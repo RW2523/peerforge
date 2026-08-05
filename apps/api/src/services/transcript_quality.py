@@ -79,6 +79,8 @@ class QualityReport:
     placeholder_rate: float = 0.0
     # Renamed from grounding_rate, which claimed more than it measured.
     citation_form_rate: float = 0.0
+    # Share of turns that restate a point an earlier turn already made.
+    restatement_rate: float = 0.0
     repeated_phrases: List[str] = field(default_factory=list)
 
     def failures(self, thresholds: "Thresholds") -> List[str]:
@@ -88,6 +90,11 @@ class QualityReport:
             out.append(
                 f"{self.opener_template_rate:.0%} of turns open by endorsing another "
                 f"reviewer (limit {thresholds.max_opener_template_rate:.0%})"
+            )
+        if self.restatement_rate > thresholds.max_restatement_rate:
+            out.append(
+                f"{self.restatement_rate:.0%} of turns restate a point already "
+                f"made (limit {thresholds.max_restatement_rate:.0%})"
             )
         if self.self_similarity > thresholds.max_self_similarity:
             out.append(
@@ -112,13 +119,27 @@ class Thresholds:
     """
     Set from observed behaviour, not aspiration.
 
-    The pre-fix transcript scored 0.80 on opener templates; the post-fix one
-    scored 0.00. 0.5 sits well clear of the good case while still catching a
-    regression to the old behaviour.
+    Recalibrated against four real transcripts — two where every reviewer
+    restated the same point, two after the repetition and citation fixes:
+
+                            bad          good
+        restatement_rate    0.80-1.00    0.00-0.20
+        self_similarity     0.19-0.35    0.13-0.14
+        role_differentiation 0.65-0.75   0.81-0.83
+
+    restatement_rate is the gate that matters and the only one with a wide
+    gap. self_similarity was the old gate at 0.45, which PASSED a transcript
+    where all six turns made the identical point — it measures shared
+    vocabulary, and six reviewers saying one thing in different words score
+    LOW on it. The two are kept as secondary signals, set just outside the
+    observed good range; with four transcripts those margins are thin, so
+    treat a lone self_similarity or role_differentiation failure as a prompt
+    to look, not a verdict.
     """
     max_opener_template_rate: float = 0.5
-    max_self_similarity: float = 0.45
-    min_role_differentiation: float = 0.3
+    max_restatement_rate: float = 0.5
+    max_self_similarity: float = 0.17
+    min_role_differentiation: float = 0.78
     max_placeholder_rate: float = 0.2
 
 
@@ -156,6 +177,28 @@ def analyse(turns: Sequence[Turn]) -> QualityReport:
     words = [_content_words(t) for t in texts]
     pairs = [_jaccard(a, b) for a, b in zip(words, words[1:])]
     report.self_similarity = sum(pairs) / len(pairs) if pairs else 0.0
+
+    # How many turns restate a point an EARLIER turn already made.
+    #
+    # self_similarity above is pairwise Jaccard on consecutive turns, which is
+    # why it passed a transcript where all six reviewers made the identical
+    # point: they used different words for it, and Jaccard divides by the
+    # union so verbose restatements score low. This measures containment
+    # against the shorter side and looks at every earlier turn, not just the
+    # previous one — the same measure the live repetition guard uses, where it
+    # separated real restatements (0.38-0.68) from genuinely new critiques
+    # (0.00-0.07).
+    restated = 0
+    for i in range(1, len(words)):
+        if not words[i]:
+            continue
+        best = max(
+            (len(words[i] & w) / min(len(words[i]), len(w)) for w in words[:i] if w),
+            default=0.0,
+        )
+        if best > 0.35:
+            restated += 1
+    report.restatement_rate = restated / (len(words) - 1) if len(words) > 1 else 0.0
 
     report.role_differentiation = _role_differentiation(turns, words)
     report.repeated_phrases = _repeated_phrases(texts)

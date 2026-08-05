@@ -89,6 +89,23 @@ class TestIndex:
             assert LI.find_absent_locators("d", "Section 9 is about ethics.")
             assert LI.find_absent_locators("d", "Table 7 lists the cohort.")
 
+    def test_reported_set_lists_only_explicit_headings(self):
+        """The presence pool is deliberately generous — every standalone number
+        in the text. Enumerating THAT in the violation told the model the paper
+        "has: 1, 1.31, 12.4, 40", which invites the retry to cite Section 40.
+        The message must name only what the document explicitly labels."""
+        doc = (
+            "Section 1. Introduction\nSection 2. Methods\n"
+            "2.1 Participant Selection. Forty (40) undergraduates.\n"
+            "Section 3. Results\nThe arm fell 12.4 points (d = 1.31).\n"
+            "Table 1 reports means.\n"
+        )
+        with _with_doc(doc):
+            out = LI.find_absent_locators("d", "As stated in Section 9, allocation was concealed.")
+        assert out and out[0]["cited"] == "9"
+        assert set(out[0]["present"]) <= {"1", "2", "2.1", "3"}
+        assert "40" not in out[0]["present"] and "12.4" not in out[0]["present"]
+
     def test_families_absent_from_the_document_stay_empty(self):
         with _with_doc(STRUCTURED):
             index = LI.build_index("d")

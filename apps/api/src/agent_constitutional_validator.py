@@ -51,6 +51,39 @@ _PAREN_LOCATOR = re.compile(
 _ADJACENT = re.compile(r"[a-z]{4,}")
 
 
+# A page inside a parenthetical that also carries an author-year is a
+# reference to OTHER literature — "(Smith, 2019, p. 44)", "(see Cohen 1988,
+# pp. 20-25)". A reviewer may legitimately know that page from memory; it is
+# not a claim about the document under review, which is what the fabricated-
+# citation rule exists to catch. A regex cannot tell which document a bare
+# "p. 44" belongs to, but a neighbouring four-digit year is strong evidence
+# that this one belongs to somebody else's.
+_EXTERNAL_REF = re.compile(
+    r"\([^()]{0,120}?\b(?:1[89]|20)\d{2}\b[^()]{0,120}?\)"
+)
+
+
+# Complaining that no document was supplied is not a review finding. The
+# reader set the session up and already knows. When the no-document prompt
+# branch was added, five of six turns opened with "the absence of submitted
+# documentation significantly undermines..." — the panel reviewing its own
+# inputs instead of the research. Naming a SPECIFIC missing detail ("the
+# design does not say whether allocation was concealed") is useful and is
+# deliberately not matched here.
+_SESSION_META = re.compile(
+    r"(?ix)"
+    r"\b(?:absence|lack|without|no|missing|failure\s+to\s+(?:provide|submit))\b"
+    r"[^.]{0,40}?"
+    r"\b(?:submitted|provided|supplied|available|accompanying)?\s*"
+    r"(?:document|documentation|manuscript|materials?|paper|submission)s?\b"
+)
+
+
+def _external_ref_spans(text: str):
+    """Character ranges covered by an author-year parenthetical."""
+    return [(m.start(), m.end()) for m in _EXTERNAL_REF.finditer(text)]
+
+
 def _adjacent_pairs(text: str) -> set:
     """Adjacent content-word pairs — a cheap stand-in for phrasing."""
     words = [w for w in _ADJACENT.findall(text.lower())]
@@ -201,6 +234,11 @@ class ConstitutionalValidator:
         )
         if fabricated_citation:
             violations.append(fabricated_citation)
+
+        # Rule 4.55: Reviewing the session setup instead of the work
+        session_meta = self._check_session_meta(message, has_materials)
+        if session_meta:
+            violations.append(session_meta)
 
         # Rule 4.6: Citing part of a document that does not exist in it
         contradicted = self._check_contradicted_citation(absent_locators)
@@ -560,8 +598,28 @@ class ConstitutionalValidator:
         looking like a clean turn.
         """
         marker = "[source not provided]"
-        text, paren_hits = _PAREN_LOCATOR.subn(marker, message)
-        text, bare_hits = _DOC_LOCATOR.subn(marker, text)
+
+        # An author-year parenthetical is somebody else's paper, not the
+        # submitted one. Detection already exempts these; the strip has to as
+        # well, or the backstop rewrites "(Smith, 2019, p. 44)" — a reference
+        # the reviewer may legitimately know — into a placeholder.
+        external = _external_ref_spans(message)
+
+        def _sub_outside(pattern, source):
+            spans = _external_ref_spans(source)
+            out, last, hits = [], 0, 0
+            for m in pattern.finditer(source):
+                if any(a <= m.start() and m.end() <= b for a, b in spans):
+                    continue
+                out.append(source[last:m.start()])
+                out.append(marker)
+                last = m.end()
+                hits += 1
+            out.append(source[last:])
+            return "".join(out), hits
+
+        text, paren_hits = _sub_outside(_PAREN_LOCATOR, message)
+        text, bare_hits = _sub_outside(_DOC_LOCATOR, text)
         # Two locators in one clause ("the methodology section (p. 12)") leave
         # the marker twice in a row; collapse those and tidy the spacing.
         text = re.sub(r"(?:\[source not provided\][\s,]*){2,}", marker + " ", text)
@@ -636,8 +694,13 @@ class ConstitutionalValidator:
         if has_materials:
             return None
 
+        external = _external_ref_spans(message)
+
         found = []
         for m in _DOC_LOCATOR.finditer(message):
+            # Skip a locator sitting inside an author-year reference.
+            if any(start <= m.start() and m.end() <= end for start, end in external):
+                continue
             token = " ".join(m.group(0).split())
             if token.lower() not in (f.lower() for f in found):
                 found.append(token)
@@ -653,6 +716,42 @@ class ConstitutionalValidator:
                 f"No document was submitted to this session, but the message "
                 f"cites {shown}. There is nothing those refer to. State the gap "
                 f"instead — \"the problem statement does not say whether...\"."
+            ),
+        }
+
+    def _check_session_meta(
+        self,
+        message: str,
+        has_materials: bool
+    ) -> Optional[Dict[str, Any]]:
+        """Catch a turn that reviews the session setup instead of the work.
+
+        Only meaningful when nothing was submitted — with a document in hand,
+        "the materials lack a power analysis" is a real finding about the
+        work. Without one, "the absence of submitted documentation undermines
+        this review" tells the reader something they already know and costs
+        them a turn of actual review.
+
+        Scoped to the OPENING, because a passing mention mid-argument is
+        usually fine; it is leading with it that replaces the review.
+        """
+        if has_materials:
+            return None
+
+        opening = message[:200]
+        m = _SESSION_META.search(opening)
+        if not m:
+            return None
+
+        return {
+            "rule": "no_session_meta_commentary",
+            "severity": "critical",
+            "details": (
+                f"The turn opens by complaining that no document was supplied "
+                f"(\"{m.group(0).strip()}\"). That is not a review finding — "
+                f"review the research described in the problem statement, and "
+                f"name specific missing details only where they block a "
+                f"specific judgement."
             ),
         }
 

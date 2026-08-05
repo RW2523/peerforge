@@ -119,7 +119,7 @@ class TestPromptNoLongerDemandsTheImpossible:
         from src.agent_response_generator import AgentResponseGenerator
 
         src = inspect.getsource(AgentResponseGenerator.generate_response)
-        assert "NO DOCUMENT HAS BEEN SUBMITTED" in src
+        assert "Review the WORK, not the format of this session" in src
         head, _, tail = src.partition("if material_context:")
         assert "else:" in tail, "the no-materials case has no branch at all"
 
@@ -139,7 +139,7 @@ class TestPromptNoLongerDemandsTheImpossible:
         from src import turn_orchestrator
 
         clause = inspect.getsource(turn_orchestrator._evidence_clause)
-        assert "No document was submitted" in clause
+        assert "Do not cite pages, sections, tables or figures." in clause
         trigger = inspect.getsource(turn_orchestrator.TurnOrchestrator.trigger_next_turn)
         assert "Cite evidence. 150-250 words." not in trigger, (
             "the turn instruction still demands citation unconditionally"
@@ -331,4 +331,119 @@ class TestEveryCitationDemandIsConditional:
 
         src = inspect.getsource(turn_orchestrator.TurnOrchestrator.trigger_next_turn)
         assert "if not _material_ctx:" in src
-        assert "there is nothing to quote" in src
+        assert "do not cite a locator" in src
+
+
+class TestExternalReferencesAreNotFabrication:
+    """
+    "(Smith, 2019, p. 44)" is a page in somebody else's paper, which a
+    reviewer may legitimately know. It is not a claim about the document under
+    review, which is what the rule exists to catch. A regex cannot tell which
+    document a bare "p. 44" belongs to, but a neighbouring four-digit year is
+    strong evidence it belongs to someone else.
+    """
+
+    EXTERNAL = [
+        "This is addressed in (Smith, 2019, p. 44).",
+        "See (Cohen 1988, pp. 20-25) for the conventions.",
+        "The meta-analysis (Goyal et al., 2014, Table 2) pooled 47 trials.",
+        "Prior work (McKay et al., 2018) covers representation.",
+    ]
+    OWN_DOCUMENT = [
+        "As noted in the methodology section (p. 12), sampling was convenience.",
+        "The authors state in Section 2.1 that participants came from one site.",
+        "See Table 3 for the confusion matrix.",
+        "As stated on page 15, further research is needed.",
+    ]
+
+    @pytest.mark.parametrize("text", EXTERNAL)
+    def test_detector_ignores_them(self, validator, text):
+        assert validator._check_fabricated_citation(text, has_materials=False) is None
+
+    @pytest.mark.parametrize("text", EXTERNAL)
+    def test_strip_leaves_them_intact(self, text):
+        cleaned, n = ConstitutionalValidator.strip_fabricated_locators(text)
+        assert n == 0 and cleaned == text
+
+    @pytest.mark.parametrize("text", OWN_DOCUMENT)
+    def test_claims_about_the_submitted_document_still_caught(self, validator, text):
+        assert validator._check_fabricated_citation(text, has_materials=False) is not None
+
+    def test_a_fabrication_beside_a_real_reference_is_still_caught(self):
+        v = ConstitutionalValidator.__new__(ConstitutionalValidator)
+        text = ("Unlike (Smith, 2019, p. 44), the authors give no power "
+                "analysis; see Section 2.1 of the submission.")
+        out = v._check_fabricated_citation(text, has_materials=False)
+        assert out is not None
+        assert "Section 2.1" in out["details"]
+        assert "44" not in out["details"]
+
+
+class TestSessionMetaCommentary:
+    """
+    A regression the no-document prompt branch introduced.
+
+    Telling the panel plainly that nothing was submitted made the ABSENCE the
+    subject: five of six turns opened with "the absence of submitted
+    documentation significantly undermines...". The reader set the session up
+    and already knows; each such opening costs a turn of actual review.
+
+    Consolidating the wording from seven mentions down to one barely moved it
+    (5/6 to 5/6), which is the recurring lesson here — a prompt asks, a check
+    enforces. With the rule live: 0/6.
+
+    Naming a SPECIFIC missing detail is deliberately still allowed; that is a
+    real finding.
+    """
+
+    META_OPENINGS = [
+        "The absence of submitted documentation significantly undermines the ability to evaluate this.",
+        "The lack of submitted documentation creates an insurmountable barrier to assessing integrity.",
+        "Without the submitted materials, I cannot properly assess the contribution here.",
+        "The failure to provide documentation makes a rigorous review impossible.",
+    ]
+    SPECIFIC_GAPS = [
+        "The problem statement lacks critical details regarding the sampling strategy.",
+        "The design does not say whether allocation was concealed.",
+        "Test-retest reliability is never reported for the anxiety instrument.",
+        "No preregistration means the primary outcome may have been chosen post hoc.",
+        "There is no active control, so expectancy effects are unaddressed.",
+        "The primary issue is the lack of a clear operational framework for validity.",
+    ]
+
+    @pytest.mark.parametrize("text", META_OPENINGS)
+    def test_reviewing_the_session_instead_of_the_work_is_caught(self, validator, text):
+        out = validator._check_session_meta(text, has_materials=False)
+        assert out is not None
+        assert out["severity"] == "critical"
+        assert out["rule"] == "no_session_meta_commentary"
+
+    @pytest.mark.parametrize("text", SPECIFIC_GAPS)
+    def test_naming_a_specific_gap_is_allowed(self, validator, text):
+        assert validator._check_session_meta(text, has_materials=False) is None
+
+    def test_silent_when_a_document_exists(self, validator):
+        """With a document in hand, "the materials lack a power analysis" is a
+        real finding about the work."""
+        for text in self.META_OPENINGS:
+            assert validator._check_session_meta(text, has_materials=True) is None
+
+    def test_only_the_opening_counts(self, validator):
+        """A passing mention mid-argument is fine; leading with it is what
+        replaces the review."""
+        buried = (
+            "The design gives no active control, so expectancy effects are "
+            "entirely unaddressed and the large effect size is uninterpretable. "
+            "A power analysis is absent too. " + ("Filler. " * 20) +
+            "This is worsened by the absence of submitted documentation."
+        )
+        assert validator._check_session_meta(buried, has_materials=False) is None
+
+    def test_regeneration_has_constraint_text(self):
+        import inspect
+        from src import turn_orchestrator
+
+        src = inspect.getsource(
+            turn_orchestrator.TurnOrchestrator._generate_with_constitutional_pipeline
+        )
+        assert "'no_session_meta_commentary' in violation_rules" in src

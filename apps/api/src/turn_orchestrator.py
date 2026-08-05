@@ -173,11 +173,7 @@ def _evidence_clause(material_context: Optional[str]) -> str:
     """
     if material_context:
         return " Cite evidence from the submitted materials."
-    return (
-        " No document was submitted — do NOT cite pages, sections, tables or "
-        "figures, and do not describe what 'the authors state'. Where a needed "
-        "detail is absent from the problem statement, say so."
-    )
+    return " Do not cite pages, sections, tables or figures."
 
 
 def _specifics_clause(material_context: Optional[str]) -> str:
@@ -745,9 +741,8 @@ How to respond:
             # so override at the point of use instead.
             if not _material_ctx:
                 _lane += (
-                    "\n  NOTE: no document was submitted to this session. Where this "
-                    "lane tells you to quote or point to a section, table, figure or "
-                    "sentence, there is nothing to quote — name the gap instead."
+                    "\n  (Where this lane says to quote a section, table or figure, "
+                    "give the substance of the point instead — do not cite a locator.)"
                 )
 
             _blacklist = _build_repetition_blacklist(history_events, agent_name)
@@ -2152,6 +2147,16 @@ Requirements:
                             "- Where you need a detail the problem statement does not give, "
                             "say so plainly: 'the statement does not say whether...'.",
                             "- Referring to real external literature you actually know is fine.",
+                        ])
+
+                    if 'no_session_meta_commentary' in violation_rules:
+                        constraints.extend([
+                            "- Do NOT open by saying a document was not supplied. "
+                            "The reader set this session up and already knows.",
+                            "- Review the research described in the problem statement: "
+                            "its design, its claims, its likely weaknesses.",
+                            "- Name a missing detail only where it blocks a specific "
+                            "judgement, and name the detail — not 'the documentation'.",
                         ])
 
                     if 'no_contradicted_citation' in violation_rules:
