@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import re
 import logging
-from typing import Any
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,52 @@ def _repair(raw: str) -> str:
     return raw
 
 
+def _salvage_truncated_array(raw: str) -> Optional[list]:
+    """Recover the complete objects from an array that stopped mid-item.
+
+    Walks the text tracking bracket depth and string state, remembering the
+    index just past each top-level object that closed cleanly. Everything up
+    to the last of those is valid JSON; the partial tail is dropped.
+    """
+    text = raw.lstrip()
+    if not text.startswith("["):
+        return None
+
+    depth = 0
+    in_string = False
+    escaped = False
+    last_complete = None
+
+    for i, ch in enumerate(text):
+        if escaped:
+            escaped = False
+            continue
+        if in_string and ch == "\\":
+            escaped = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch in "[{":
+            depth += 1
+        elif ch in "]}":
+            depth -= 1
+            # depth back to 1 after a '}' means a top-level element closed
+            if depth == 1 and ch == "}":
+                last_complete = i + 1
+
+    if last_complete is None:
+        return None
+
+    try:
+        items = json.loads(text[:last_complete] + "]")
+    except json.JSONDecodeError:
+        return None
+    return items if items else None
+
+
 def parse_llm_json(raw: str, stage: str = "unknown") -> Any:
     """
     Strip fences, parse JSON, and repair on failure.
@@ -89,6 +135,27 @@ def parse_llm_json(raw: str, stage: str = "unknown") -> Any:
         result = json.loads(repaired)
         logger.warning("[%s] JSON repaired successfully", stage)
         return result
+    except json.JSONDecodeError:
+        pass
+
+    # Third attempt — salvage a TRUNCATED ARRAY.
+    #
+    # Appending closing brackets cannot fix output that stopped mid-object,
+    # which is exactly what hitting max_tokens produces. Observed live:
+    # question generation asked for 15 detailed questions, ran out of room
+    # partway through one, and the whole 65-second call failed with a 400 —
+    # discarding the fourteen complete questions that came before it.
+    salvaged = _salvage_truncated_array(cleaned)
+    if salvaged is not None:
+        logger.warning(
+            "[%s] JSON was truncated; salvaged %d complete item(s)",
+            stage, len(salvaged),
+        )
+        return salvaged
+
+    try:
+        json.loads(cleaned)
+        return json.loads(cleaned)
     except json.JSONDecodeError as exc:
         # Log first 500 chars of the bad output for diagnosis
         logger.error(

@@ -682,25 +682,34 @@ How to respond:
                 if is_final_turn:
                     urgency = "🔴 YOUR FINAL TURN - NO MORE CHANCES TO SPEAK"
                     outcomes_str = f"the desired outcomes: {', '.join(desired_outcomes)}" if desired_outcomes else "the goals of this discussion"
+                    # Two ways this block has gone wrong, both measured:
+                    #   - it once mandated a verbatim opening sentence, so
+                    #     every final turn began identically;
+                    #   - replacing that with "open with your verdict" was no
+                    #     better: when the panel agrees, all three then open
+                    #     with the same word. A live run scored 100%
+                    #     restatement with T4/T5/T6 all starting "Reject.".
+                    # The verdict must be unmistakable but must not be the
+                    # opening, and the explanation stays in this comment —
+                    # earlier it was inside the prompt string, where the model
+                    # read a paragraph about a bug in its own instructions.
                     length_instruction = f"""THIS IS YOUR LAST TURN. You will not speak again unless the host extends the session.
 
-State a definitive recommendation — Accept / Minor Revision / Major Revision / Reject — and justify it in 2-3 sentences.
+Open with the ONE concern from your own remit that most drives your decision —
+the specific finding another reviewer could not have written. Do not open with
+your verdict, and do not open by summarising the discussion.
 
-Say it in YOUR OWN WORDS. This block used to mandate a verbatim opening
-sentence, so every reviewer's final turn began identically and the closing
-round read as one voice repeated three times; the quality harness scored a
-real session at 100% restatement because of it. Open with your verdict, not
-with a formula.
+Then state your recommendation explicitly on its own line:
+    RECOMMENDATION: Accept | Minor Revision | Major Revision | Reject
 
-Your justification must:
-- rest on YOUR remit, not on a summary of the whole discussion
-- name at least one specific point another reviewer made and say whether it
-  changed your position
-- give the authors something actionable — what would have to change
+Then, in 2-3 sentences:
+- say what would have to change for that verdict to improve
+- name one specific point another reviewer made and whether it moved you
 - reference {outcomes_str}
 
-A verdict without a reason, or a reason that any of the other reviewers could
-equally have written, is not a useful final turn."""
+Reviewers may well agree on the verdict. They must not agree on the reason:
+if your justification could be swapped with another reviewer's without anyone
+noticing, it is not a useful final turn."""
                 elif rounds_remaining <= 1:
                     urgency = f"⚡ FINAL ROUND ({current_round}/{max_rounds}) - Next turn is your LAST"
                     length_instruction = f"You're in the final round! Next turn will be your last opportunity to speak. Keep it brief (3-4 sentences). Start converging toward a position based on what you've heard in previous {current_round - 1} rounds."

@@ -147,7 +147,10 @@ def generate_questions(
             )},
         ],
         temperature=0.4,
-        max_tokens=4000,
+        # 15 questions each carrying question_text, expected_answer, follow_up
+        # and a source excerpt runs to roughly 250 tokens apiece, so 4000 sat
+        # right on the edge and a live run was truncated mid-object.
+        max_tokens=8000,
         _debate_id=debate_id,
         _stage="question_generation",
     )

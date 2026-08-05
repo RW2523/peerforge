@@ -221,7 +221,18 @@ async def trigger_question_generation(
             "mode_used": mode,
         }
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        # A malformed model response is not a bad request. The caller sent a
+        # valid one and waited ~65 seconds for it; reporting 400 told them to
+        # fix something on their side and they had no way to know it was
+        # worth simply retrying.
+        message = str(exc)
+        if "invalid JSON" in message or "returned" in message:
+            logger.warning("Question generation got unusable model output: %s", message[:200])
+            raise HTTPException(
+                status_code=502,
+                detail="The model returned unusable output for this session. Try again.",
+            )
+        raise HTTPException(status_code=400, detail=message)
     except Exception as exc:
         logger.exception("Question generation failed for %s", debate_id)
         raise HTTPException(status_code=500, detail=str(exc))
