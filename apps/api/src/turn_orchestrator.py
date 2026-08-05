@@ -682,25 +682,25 @@ How to respond:
                 if is_final_turn:
                     urgency = "🔴 YOUR FINAL TURN - NO MORE CHANCES TO SPEAK"
                     outcomes_str = f"the desired outcomes: {', '.join(desired_outcomes)}" if desired_outcomes else "the goals of this discussion"
-                    length_instruction = f"""⚠️ THIS IS YOUR ABSOLUTE LAST TURN. You will NOT speak again unless the host extends.
+                    length_instruction = f"""THIS IS YOUR LAST TURN. You will not speak again unless the host extends the session.
 
-**MANDATORY FORMAT - START WITH:**
-"Given this is my final turn (Round {max_rounds}/{max_rounds}), I'll conclude by stating my decision: [CLEAR YES/NO or SPECIFIC CHOICE]"
+State a definitive recommendation — Accept / Minor Revision / Major Revision / Reject — and justify it in 2-3 sentences.
 
-**THEN provide your reasoning (2-3 sentences):**
-- Explain WHY you made this decision based on the discussion
-- Reference {outcomes_str}
-- Show you LISTENED to others and synthesized their points
-- Make it ACTIONABLE and DECISIVE
+Say it in YOUR OWN WORDS. This block used to mandate a verbatim opening
+sentence, so every reviewer's final turn began identically and the closing
+round read as one voice repeated three times; the quality harness scored a
+real session at 100% restatement because of it. Open with your verdict, not
+with a formula.
 
-**CRITICAL: You MUST declare a CONCRETE RESULT after considering the full debate:**
-✅ GOOD: "After hearing everyone's perspectives, my final decision: Coffee is superior because..."
-✅ GOOD: "Having weighed all arguments, I recommend Option A: The data clearly shows..."
-✅ GOOD: "Considering what @ExpertAnalyst and @Critic said, my stance: Legacy should be primary..."
-❌ BAD: "I conclude by saying both have merit..." (TOO VAGUE)
-❌ BAD: "In conclusion, there are many factors..." (NO DECISION)
+Your justification must:
+- rest on YOUR remit, not on a summary of the whole discussion
+- name at least one specific point another reviewer made and say whether it
+  changed your position
+- give the authors something actionable — what would have to change
+- reference {outcomes_str}
 
-**Your decision should reflect that you've progressed through {max_rounds} rounds of discussion.**"""
+A verdict without a reason, or a reason that any of the other reviewers could
+equally have written, is not a useful final turn."""
                 elif rounds_remaining <= 1:
                     urgency = f"⚡ FINAL ROUND ({current_round}/{max_rounds}) - Next turn is your LAST"
                     length_instruction = f"You're in the final round! Next turn will be your last opportunity to speak. Keep it brief (3-4 sentences). Start converging toward a position based on what you've heard in previous {current_round - 1} rounds."

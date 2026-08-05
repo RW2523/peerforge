@@ -283,3 +283,50 @@ class TestChunkBoundariesDoNotCreateFalsePositives:
 
         with _with_doc(joined):
             assert LI.find_absent_locators("d", "Section 7 covers the analysis.") == []
+
+
+class TestTrailingPeriodBlindSpot:
+    """
+    A live end-to-end run marked a TRUTHFUL citation as fabricated.
+
+    _STANDALONE_NUMBER ended in (?![\\d.]), which rejects a trailing full stop.
+    A document that writes its headings as "Section 3. Results" therefore
+    registered neither 3 nor 4, and a reviewer citing Section 4 was told it is
+    "[not in the submitted document]" — the exact false accusation the
+    three-valued design exists to prevent.
+
+    The same lookahead bug had been fixed in strip_contradicted_locators hours
+    earlier and was not checked here.
+    """
+
+    DOC = (
+        "Section 1. Introduction\n"
+        "Section 2. Methods\n"
+        "2.1 Participant Selection. Forty undergraduates.\n"
+        "Section 3. Results\nTable 1 reports means.\n"
+        "Section 4. Discussion\n"
+    )
+
+    def test_headings_written_with_a_trailing_period_are_indexed(self):
+        with _with_doc(self.DOC):
+            sections = LI.build_index("d")["section"]
+        for n in ("1", "2", "3", "4", "2.1"):
+            assert n in sections, f"Section {n}. was not indexed"
+
+    @pytest.mark.parametrize("text", [
+        "The claim in Section 4 that the app causes a durable reduction is overstated.",
+        "As noted in Section 3, the effect was large.",
+        "Section 2.1 describes recruitment.",
+        "Table 1 reports the means.",
+    ])
+    def test_truthful_citations_are_not_accused(self, text):
+        with _with_doc(self.DOC):
+            assert LI.find_absent_locators("d", text) == [], text
+
+    @pytest.mark.parametrize("text", [
+        "Section 9 does not exist.",
+        "Table 7 shows nothing.",
+    ])
+    def test_fabrications_are_still_caught(self, text):
+        with _with_doc(self.DOC):
+            assert LI.find_absent_locators("d", text) != [], text

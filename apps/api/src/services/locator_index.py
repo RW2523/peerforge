@@ -55,7 +55,14 @@ _FAMILY_PATTERNS: Dict[str, re.Pattern] = {
 # counts as present if it appears ANYWHERE in the document as a standalone
 # number — heading, cross-reference, table cell, list item, running text.
 # Only a locator whose number occurs nowhere at all is called absent.
-_STANDALONE_NUMBER = re.compile(r"(?<![\w.])(\d+(?:\.\d+)*)(?![\d.])")
+# (?![\d.]) rejected a TRAILING FULL STOP, so a document that writes its
+# headings as "Section 3. Results" registered neither 3 nor 4 — and a
+# reviewer citing Section 4 was told, in a real end-to-end run, that it is
+# "[not in the submitted document]". The same lookahead bug was fixed in
+# the strip regex hours earlier and not checked here. Reject a following
+# digit, or a period that begins a longer dotted number; allow a period
+# that ends a sentence.
+_STANDALONE_NUMBER = re.compile(r"(?<![\w.])(\d+(?:\.\d+)*)(?!\d)(?!\.\d)")
 
 # A line that opens with a dotted number is a heading, not prose.
 _DOTTED_HEADING = re.compile(r"(?m)^\s*(\d+(?:\.\d+)+)\s+\S")

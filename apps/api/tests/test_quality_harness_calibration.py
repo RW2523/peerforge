@@ -90,3 +90,41 @@ class TestThresholdsAreNotDeadWeight:
     def test_restatement_limit_sits_in_the_measured_gap(self):
         t = Thresholds()
         assert 0.20 < t.max_restatement_rate < 0.80
+
+
+class TestFinalTurnIsNotTemplated:
+    """
+    The final-turn instruction mandated a verbatim opening:
+
+        "Given this is my final turn (Round N/N), I'll conclude by stating my
+         decision: ..."
+
+    Every reviewer reaches a final turn, so the closing round read as one
+    voice repeated three times. A live end-to-end session scored 100%
+    restatement largely because of it.
+    """
+
+    def test_no_verbatim_opening_is_mandated(self):
+        import inspect
+        from src import turn_orchestrator
+
+        src = inspect.getsource(turn_orchestrator.TurnOrchestrator.trigger_next_turn)
+        assert "MANDATORY FORMAT" not in src
+        assert "Given this is my final turn" not in src
+
+    def test_it_still_demands_a_definitive_verdict(self):
+        import inspect
+        from src import turn_orchestrator
+
+        src = inspect.getsource(turn_orchestrator.TurnOrchestrator.trigger_next_turn)
+        assert "Accept / Minor Revision / Major Revision / Reject" in src
+
+    def test_the_generic_debate_examples_are_gone(self):
+        """Leftovers from a non-academic app: "Coffee is superior",
+        "@ExpertAnalyst"."""
+        import inspect
+        from src import turn_orchestrator
+
+        src = inspect.getsource(turn_orchestrator.TurnOrchestrator.trigger_next_turn)
+        assert "Coffee is superior" not in src
+        assert "ExpertAnalyst" not in src
