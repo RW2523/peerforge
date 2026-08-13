@@ -60,3 +60,5 @@ tsconfig.tsbuildinfo
 
 # Local Cloudflare tunnel binary (37MB, not source)
 cloudflared
+# ...and the copies left by tunnel restarts (36MB binaries)
+cloudflared.*
