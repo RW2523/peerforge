@@ -25,10 +25,23 @@ if ! docker ps --format '{{.Names}}' | grep -q '^arinar-db$'; then
   sleep 10
 fi
 
+# ── 0. Log rotation (keep every log under 20MB) ────────────────
+for f in "$LOGS"/*.log; do
+  [ -f "$f" ] && [ "$(stat -c%s "$f")" -gt 20971520 ] && : > "$f" && log "truncated $(basename "$f")"
+done
+
 # ── 2. Backend API (port 8000) ──────────────────────────────────
-# Restart only after 3 consecutive failed health checks (a busy server that is
-# slow to answer once must not be killed mid-request).
-if curl -sf -m 15 http://localhost:8000/health > /dev/null; then
+# Dead process → restart immediately. Alive but failing health checks →
+# restart only after 3 consecutive failures (a busy server that is slow to
+# answer once must not be killed mid-request).
+if ! pgrep -f 'uvicorn src.main:app' > /dev/null; then
+  log "backend process missing — starting"
+  echo 0 > "$OPS/.api-fails"
+  cd "$API_DIR"
+  nohup .venv/bin/python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 \
+    >> "$LOGS/api.log" 2>&1 9>&- &
+  sleep 5
+elif curl -sf -m 15 http://localhost:8000/health > /dev/null; then
   echo 0 > "$OPS/.api-fails"
 else
   FAILS=$(( $(cat "$OPS/.api-fails" 2>/dev/null || echo 0) + 1 ))
@@ -41,7 +54,7 @@ else
     sleep 2
     cd "$API_DIR"
     nohup .venv/bin/python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 \
-      >> "$LOGS/api.log" 2>&1 &
+      >> "$LOGS/api.log" 2>&1 9>&- &
     sleep 5
   fi
 fi
@@ -51,7 +64,7 @@ if ! pgrep -f 'cloudflared.*localhost:8000' > /dev/null; then
   log "starting backend tunnel"
   rm -f "$LOGS/cf-backend.log"
   nohup "$CF" tunnel --url http://localhost:8000 --no-autoupdate \
-    >> "$LOGS/cf-backend.log" 2>&1 &
+    >> "$LOGS/cf-backend.log" 2>&1 9>&- &
   for i in $(seq 1 30); do
     grep -q 'trycloudflare.com' "$LOGS/cf-backend.log" 2>/dev/null && break
     sleep 2
@@ -91,7 +104,7 @@ if ! curl -sf -m 5 -o /dev/null http://localhost:3001; then
   pkill -f 'next-server' 2>/dev/null || true
   sleep 2
   cd "$WEB_DIR"
-  nohup npx next start -p 3001 >> "$LOGS/web.log" 2>&1 &
+  nohup npx next start -p 3001 >> "$LOGS/web.log" 2>&1 9>&- &
   sleep 5
 fi
 
@@ -100,7 +113,7 @@ if ! pgrep -f 'cloudflared.*localhost:3001' > /dev/null; then
   log "starting frontend tunnel"
   rm -f "$LOGS/cf-frontend.log"
   nohup "$CF" tunnel --url http://localhost:3001 --no-autoupdate \
-    >> "$LOGS/cf-frontend.log" 2>&1 &
+    >> "$LOGS/cf-frontend.log" 2>&1 9>&- &
   for i in $(seq 1 30); do
     grep -q 'trycloudflare.com' "$LOGS/cf-frontend.log" 2>/dev/null && break
     sleep 2
