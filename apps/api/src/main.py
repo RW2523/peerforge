@@ -1,5 +1,5 @@
 """PeerForge API entry point"""
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, Request
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .routes import (
@@ -27,6 +27,36 @@ app.add_middleware(
     allow_headers=["*", "X-OpenRouter-Key"],
     expose_headers=["*"],
 )
+
+# Malformed identifiers (e.g. a non-UUID debate id in the URL) surface from the
+# DB driver as DataError; return 404 instead of a 500.
+import psycopg2
+from fastapi.responses import JSONResponse
+
+
+@app.exception_handler(psycopg2.DataError)
+async def handle_db_data_error(request: Request, exc: psycopg2.DataError):
+    return JSONResponse(status_code=404, content={"detail": "Resource not found"})
+
+
+# Placeholder values a client may send when the user has no personal key.
+_ABSENT_KEY_VALUES = {"", "null", "undefined", "server-managed"}
+
+
+@app.middleware("http")
+async def inject_server_openrouter_key(request: Request, call_next):
+    """Substitute the server's OpenRouter key when the client has none (BYOK optional)."""
+    if settings.openrouter_api_key:
+        client_key = request.headers.get("x-openrouter-key")
+        if client_key is None or client_key.strip().lower() in _ABSENT_KEY_VALUES:
+            headers = [
+                (k, v) for k, v in request.scope["headers"]
+                if k != b"x-openrouter-key"
+            ]
+            headers.append((b"x-openrouter-key", settings.openrouter_api_key.encode()))
+            request.scope["headers"] = headers
+    return await call_next(request)
+
 
 # Include routers
 app.include_router(health.router, tags=["health"])

@@ -1,6 +1,7 @@
 """Turn orchestration endpoints"""
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, status, Depends, Header
+from fastapi.concurrency import run_in_threadpool
 from typing import Dict, Any
 from ..auth import get_current_user, check_workspace_access
 from ..debate_service import DebateService
@@ -51,7 +52,9 @@ async def trigger_next_turn(
     
     try:
         orchestrator = TurnOrchestrator(x_openrouter_key)
-        result = orchestrator.trigger_next_turn(debate_id)
+        # Run the blocking LLM pipeline in a worker thread so the event loop
+        # (health checks, other users' requests, WebSockets) stays responsive.
+        result = await run_in_threadpool(orchestrator.trigger_next_turn, debate_id)
         
         return {
             "event_id": result['event_id'],
@@ -130,7 +133,7 @@ async def conclude_debate_with_host(
     
     try:
         orchestrator = HostOrchestrator(x_openrouter_key)
-        result = orchestrator.trigger_conclusion(debate_id)
+        result = await run_in_threadpool(orchestrator.trigger_conclusion, debate_id)
 
         # Populate HOST-assigned document sections (e.g. Executive Summary,
         # Conclusion) with the chair's conclusion. Best-effort — never fails

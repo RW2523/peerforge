@@ -1,0 +1,7 @@
+logs/
+uitest/
+.api-fails
+.backend-url
+.frontend-url
+.watchdog.lock
+current-urls.txt

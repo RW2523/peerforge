@@ -9,6 +9,9 @@ const nextConfig = {
     config.resolve.alias = {
       ...config.resolve.alias,
       '@popperjs/core': require.resolve('@popperjs/core/dist/cjs/popper.js'),
+      // pdfjs-dist optionally requires the native 'canvas' package (Node-only);
+      // it isn't installed and isn't needed in the browser build.
+      canvas: false,
     };
     return config;
   },

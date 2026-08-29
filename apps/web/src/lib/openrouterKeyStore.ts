@@ -5,15 +5,19 @@
 
 export type KeyPersistence = 'memory' | 'session' | 'local';
 
+// Sentinel returned when the user has no personal key. The backend swaps it
+// for the server's OPENROUTER_API_KEY, so users never have to enter a key.
+export const SERVER_MANAGED_KEY = 'server-managed';
+
 class OpenRouterKeyStore {
   private memoryKey: string | null = null;
   private memoryManagementKey: string | null = null;
 
   getKey(): string | null {
-    // Priority: memory > sessionStorage > localStorage
+    // Priority: memory > sessionStorage > localStorage > server-managed key
     if (this.memoryKey) return this.memoryKey;
 
-    if (typeof window === 'undefined') return null;
+    if (typeof window === 'undefined') return SERVER_MANAGED_KEY;
 
     const sessionKey = sessionStorage.getItem('openrouter_api_key');
     if (sessionKey) return sessionKey;
@@ -21,7 +25,7 @@ class OpenRouterKeyStore {
     const localKey = localStorage.getItem('openrouter_api_key');
     if (localKey) return localKey;
 
-    return null;
+    return SERVER_MANAGED_KEY;
   }
 
   setKey(key: string, persistence: KeyPersistence = 'memory'): void {

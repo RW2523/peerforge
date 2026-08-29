@@ -1406,7 +1406,7 @@ Your question (15 words max):"""
                         try:
                             # Find ALL unreplied DMs sent TO this agent
                             cursor.execute("""
-                                SELECT DISTINCT content->>'from_agent' as sender, content->>'message' as message
+                                SELECT content->>'from_agent' as sender, content->>'message' as message
                                 FROM events
                                 WHERE debate_id = %s 
                                   AND event_type = 'private_message'

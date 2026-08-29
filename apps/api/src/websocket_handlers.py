@@ -85,6 +85,10 @@ class WebSocketCommandHandlers:
         print(f"   Request ID: {request_id}")
 
         openrouter_key = payload.get('openrouter_key')
+        # Fall back to the server-managed key when the client has none (BYOK optional).
+        if not openrouter_key or openrouter_key in ('null', 'undefined', 'server-managed'):
+            from .config import settings
+            openrouter_key = settings.openrouter_api_key
         if not openrouter_key:
             print("❌ ERROR: No OpenRouter key in payload!")
             await self.manager.send_to_client(
